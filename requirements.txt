@@ -1,0 +1,5 @@
+git+https://github.com/sgl-project/sglang.git@refs/pull/16818/head#subdirectory=python
+accelerate
+rich
+packaging
+ninja
