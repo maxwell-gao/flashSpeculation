@@ -1,0 +1,87 @@
+\clearpage
+\appendix
+\section{Appendix}
+
+\subsection{Training Implementation}
+\label{appd:implementation}
+The draft models are optimized for 6 epochs using AdamW with a learning rate of $6 \times 10^{-4}$, a gradient clipping threshold of 1.0, and a cosine schedule with a warmup ratio of 0.04. We train on our training data mixture with a maximum sequence length of 3072 tokens (4096 for Qwen3-Coder); for each sequence, 512 anchor positions are randomly sampled. The hyperparameter $\gamma$ for the loss decay in \autoref{eq:loss-decay} is set to 7 for block size 16, 5 for block size 10, and 4 for block size 8 models.
+
+Training can be performed either online or offline. In online training, target hidden features are computed on the fly during each training step. In offline training, target hidden features are precomputed and cached, then loaded during draft model optimization to reduce computational overhead.
+
+\subsection{Diffusion Drafter without Target Feature}
+\begin{table}[h!]
+\centering
+\caption{ A 5-layer block diffusion draft model \emph{without} target context features. The draft model achieves only modest acceptance length speedup.}
+\label{tab:naive_diffusion}
+\small
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{c cccc}
+\toprule
+\multirow{2}{*}{Temp}
+& GSM8K
+& Math500
+& AIME24
+& AIME25 \\
+& \scriptsize Speedup / $\tau$
+& \scriptsize Speedup / $\tau$
+& \scriptsize Speedup / $\tau$
+& \scriptsize Speedup / $\tau$ \\
+\midrule
+0
+& 2.83 / 3.38
+& 3.73 / 4.61
+& 3.43 / 4.12
+& 3.35 / 4.07 \\
+1
+& 2.76 / 3.29
+& 3.31 / 4.12
+& 2.66 / 3.23
+& 2.65 / 3.24 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Further Ablations}
+\subsubsection{Loss Decay}
+
+We ablate the position-dependent loss decay introduced in \autoref{sec:training}. Specifically, we compare the default setting with exponentially decaying token weights against a variant trained with uniform token weighting within each draft block. This study isolates the effect of emphasizing early-token accuracy during training. Results in \autoref{fig:ablation_acc} show that applying loss decay leads faster and better convergency.
+
+\begin{figure}[h!]
+    \centering
+    \includegraphics[width=0.9\linewidth]{figures/acceptance_length_vs_epoch.pdf}
+    \caption{The loss decay makes training converge faster and better.}
+    \label{fig:ablation_acc}
+\end{figure}
+
+
+\subsubsection{Random Sampling of Masked Blocks}
+\begin{table}[h]
+\centering
+\caption{Randomly sample anchor tokens to construct masked blocks during training effectively augments the training data and leads to higher acceptance length and better speedup. Both draft models use three layers and extract five hidden features from the target model. The block size is 16. We use the 100K data introduced in \autoref{sec:exp-ablation} to train both models.}
+\label{tab:ablation_sample_block}
+\resizebox{\columnwidth}{!}{
+\small
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{l|cc|cc|cc}
+\toprule
+Setting 
+& \multicolumn{2}{c|}{Math500} 
+& \multicolumn{2}{c|}{HumanEval} 
+& \multicolumn{2}{c}{MT-Bench} \\
+\cmidrule(lr){2-3} \cmidrule(lr){4-5} \cmidrule(lr){6-7}
+& Speedup & $\tau$ 
+& Speedup & $\tau$
+& Speedup & $\tau$ \\
+\midrule
+Standard 
+& 4.13x & 4.94 
+& 3.29x & 3.86 
+& 2.13x & 2.80 \\
+\textbf{Sample} 
+& \textbf{4.69x} & \textbf{5.64} 
+& \textbf{3.90x} & \textbf{4.61} 
+& \textbf{2.38x} & \textbf{3.18} \\
+\bottomrule
+\end{tabular}
+}
+\end{table}
