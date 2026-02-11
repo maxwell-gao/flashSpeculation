@@ -1,3 +1,4 @@
+#!/usr/bin/env bash
 export CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7
 
 mkdir -p logs
@@ -25,7 +26,7 @@ for task in "${TASKS[@]}"; do
   torchrun \
     --nproc_per_node=8 \
     --master_port=29600 \
-    benchmark.py \
+    scripts/benchmark.py \
     --dataset "$DATASET_NAME" \
     --max-samples "$MAX_SAMPLES" \
     --model-name-or-path Qwen/Qwen3-4B \

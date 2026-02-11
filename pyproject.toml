@@ -1,0 +1,47 @@
+[project]
+name = "DG-TTT"
+version = "0.1.0"
+description = "Draft-Guided Test-Time Training for Context Learning"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.11"
+dependencies = [
+    "torch>=2.9.0",
+    "transformers>=4.57.0",
+    "accelerate",
+    "datasets>=3.0,<3.6",
+    "pyarrow>=14,<19",
+    "peft",
+    "rich",
+    "loguru",
+    "numpy",
+    "tqdm",
+    "packaging",
+    "ninja",
+    "requests",
+]
+
+[project.optional-dependencies]
+sglang = [
+    "sglang @ git+https://github.com/sgl-project/sglang.git@refs/pull/16818/head#subdirectory=python",
+]
+flash-attn = [
+    "flash-attn",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.metadata]
+allow-direct-references = true
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/dg_ttt"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W"]

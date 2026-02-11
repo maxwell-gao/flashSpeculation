@@ -9,8 +9,8 @@ import torch
 from rich import print
 from tqdm import tqdm
 from transformers import AutoModelForCausalLM, AutoTokenizer, DynamicCache
-from model import DFlashDraftModel, sample, load_and_process_dataset, extract_context_feature
-import distributed as dist
+from dg_ttt.model import DFlashDraftModel, sample, load_and_process_dataset, extract_context_feature
+from dg_ttt import distributed as dist
 
 def cuda_time() -> float:
     torch.cuda.synchronize()

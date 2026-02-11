@@ -1,9 +1,24 @@
-.vscode
-.DS_Store
-__pycache__
+# Python
+__pycache__/
 **/*.pyc
+*.egg-info/
+dist/
+build/
+.eggs/
 
+# uv / venv
+.venv/
+.python-version
+uv.lock
+
+# IDE
+.vscode/
+.idea/
+.DS_Store
+
+# Project
 data*/
 jobs/
 wandb/
 logs/
+*.log
