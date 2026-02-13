@@ -1,5 +1,3 @@
-
-
 PROMPT = "Can you solve the following math problem? "
 BASE = " Put your final answer within \\boxed{{}}."
 COT = " Please reason step by step, and put your final answer within \\boxed{{}}."

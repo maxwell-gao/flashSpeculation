@@ -1,5 +1,3 @@
-
-
 def remove_boxed(s):
     left = "\\boxed{"
     try:

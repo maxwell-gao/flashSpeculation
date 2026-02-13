@@ -48,6 +48,7 @@ def postprocess_on_manifold_wrapper(model, u=0.5, num_timesteps=20, layer_idx=No
 # =========================
 def addition_intervention(w=None, alphas=None, postprocess_fn=None):
     if postprocess_fn is None:
+
         def postprocess_fn(x):
             return x
 

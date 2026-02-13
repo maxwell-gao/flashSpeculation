@@ -50,8 +50,10 @@ def run_sklearn_logreg(X_train, y_train, X_test, y_test, parallel=True, n_jobs=-
 def run_sklearn_logreg_batched(X_train, y_train, X_test, y_test, device=None, **kwargs):
     assert len(X_train.shape) == len(X_test.shape) == 3
     assert len(y_train.shape) == len(y_test.shape) == 1
+
     def pt_to_np(x):
         return x.detach().cpu().numpy() if torch.is_tensor(x) else x
+
     X_train, y_train, X_test, y_test = pt_to_np(X_train), pt_to_np(y_train), pt_to_np(X_test), pt_to_np(y_test)
     metrics_batch = Parallel(n_jobs=-1)(
         delayed(run_sklearn_logreg)(X_train[i], y_train, X_test[i], y_test, **kwargs) for i in range(X_train.shape[0])
@@ -263,9 +265,11 @@ def scalar_probing(device="cuda:0"):
             val_aucs, test_aucs = run_sklearn_logreg_batched(
                 X_train_diffusion, y_train, X_test_diffusion, y_test, device=device
             )
+
             # save results
             def format_aucs(aucs):
                 return {idx: auc.item() for idx, auc in zip(top_batch_idxs, aucs)}
+
             results["val_aucs"] = format_aucs(val_aucs)
             results["test_aucs"] = format_aucs(test_aucs)
             results["layers"] = layers
