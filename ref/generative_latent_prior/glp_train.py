@@ -22,6 +22,7 @@ from glp.utils_acts import MemmapReader
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+
 @dataclass
 class TrainConfig:
     # model
@@ -52,6 +53,7 @@ class TrainConfig:
     wandb_project: Optional[str] = None
     wandb_run_name: Optional[str] = None
 
+
 class ActDataset(Dataset):
     def __init__(self, reader: MemmapReader | list[MemmapReader]):
         reader = [reader] if not isinstance(reader, (list, ListConfig)) else reader
@@ -64,17 +66,14 @@ class ActDataset(Dataset):
         batch = {}
         # handle multi_layer model
         # folders should be of the form layer_<idx>
-        # also need to set multi_layer_n_layers in glp_kwargs 
+        # also need to set multi_layer_n_layers in glp_kwargs
         # for this to actually be used by denoiser
         layer_match = re.search(r"layer_(\d+)", str(self.reader[0].data_dir))
         if layer_match:
             batch["layer_idx"] = int(layer_match.group(1))
         # prepare latents
         # latents should be saved as (dim,)
-        latents = [
-            torch.tensor(reader[idx])[None, :]
-            for r, reader in enumerate(self.reader)
-        ]
+        latents = [torch.tensor(reader[idx])[None, :] for r, reader in enumerate(self.reader)]
         # handle special multi-reader case
         # e.g., concat different features from different readers
         # not currently used but useful for conditional modeling
@@ -85,6 +84,7 @@ class ActDataset(Dataset):
         batch["activations"] = latents
         return batch
 
+
 class ActivationCollator:
     def __init__(self, normalizer: Normalizer):
         self.normalizer = normalizer
@@ -93,15 +93,16 @@ class ActivationCollator:
     def __call__(self, rows):
         batch = {}
         # handle multi_layer model
-        if 'layer_idx' in rows[0]:
-            layer_idx = torch.tensor([row['layer_idx'] for row in rows], dtype=torch.long)
-            batch['layer_idx'] = layer_idx
+        if "layer_idx" in rows[0]:
+            layer_idx = torch.tensor([row["layer_idx"] for row in rows], dtype=torch.long)
+            batch["layer_idx"] = layer_idx
         else:
             layer_idx = None
         # prepare latents
-        latents = torch.stack([row['activations'] for row in rows], dim=0)
-        batch['latents'] = self.normalizer.normalize(latents, layer_idx=layer_idx)
+        latents = torch.stack([row["activations"] for row in rows], dim=0)
+        batch["latents"] = self.normalizer.normalize(latents, layer_idx=layer_idx)
         return batch
+
 
 def load_activation_dataset(
     dataset_paths: str | list[str],
@@ -111,11 +112,12 @@ def load_activation_dataset(
     for path in dataset_paths:
         path = Path(path)
         dtype_path = path / "dtype.txt"
-        dtype = np.dtype(dtype_path.read_text().strip().replace('np.', ''))
+        dtype = np.dtype(dtype_path.read_text().strip().replace("np.", ""))
         reader = MemmapReader(path, dtype)
         dataset = ActDataset(reader=reader)
         datasets.append(dataset)
     return ConcatDataset(datasets)
+
 
 def get_activation_dataloader(
     dataset,
@@ -133,9 +135,11 @@ def get_activation_dataloader(
         pin_memory=False,
     )
 
+
 def linear_scheduler(step, max_steps, initial_factor, final_factor):
     alpha = step / max_steps
     return alpha * final_factor + (1 - alpha) * initial_factor
+
 
 def linear_scheduler_with_warmup(step, *, warmup_steps, max_steps, initial_factor, final_factor):
     if step < warmup_steps:
@@ -145,10 +149,12 @@ def linear_scheduler_with_warmup(step, *, warmup_steps, max_steps, initial_facto
     else:
         return linear_scheduler(step - warmup_steps, max_steps - warmup_steps, 1.0, final_factor)
 
+
 def cosine_scheduler(step, max_steps, initial_factor, final_factor):
     alpha = step / max_steps
     cosine_out = 0.5 * (1 + math.cos(math.pi * alpha))
     return final_factor + (initial_factor - final_factor) * cosine_out
+
 
 def cosine_scheduler_with_warmup(step, *, warmup_steps, max_steps, initial_factor, final_factor):
     if step < warmup_steps:
@@ -157,6 +163,7 @@ def cosine_scheduler_with_warmup(step, *, warmup_steps, max_steps, initial_facto
         return final_factor
     else:
         return cosine_scheduler(step - warmup_steps, max_steps - warmup_steps, 1.0, final_factor)
+
 
 def main(device="cuda:0"):
     config_base = OmegaConf.structured(TrainConfig())
@@ -188,6 +195,7 @@ def main(device="cuda:0"):
     wandb_run = None
     if config.wandb_enabled:
         import wandb
+
         wandb_run = wandb.init(
             entity=config.wandb_entity,
             project=config.wandb_project,
@@ -224,13 +232,13 @@ def main(device="cuda:0"):
                 max_steps=total_num_steps,
                 initial_factor=config.lr_scheduler["initial_factor"],
                 final_factor=config.lr_scheduler["final_factor"],
-            )
+            ),
         )
 
     # training loop
     train_steps = 0
     num_gradient_steps = 0
-    
+
     for epoch in range(config.num_epochs):
         model.train()
         gradient_steps_in_epoch = epoch_size // config.gradient_accumulation_steps
@@ -254,9 +262,7 @@ def main(device="cuda:0"):
                 num_gradient_steps += 1
 
                 if config.gradient_clipping_threshold > 0.0:
-                    torch.nn.utils.clip_grad_norm_(
-                        model.parameters(), config.gradient_clipping_threshold
-                    )
+                    torch.nn.utils.clip_grad_norm_(model.parameters(), config.gradient_clipping_threshold)
 
                 optimizer.step()
                 optimizer.zero_grad()
@@ -279,7 +285,7 @@ def main(device="cuda:0"):
                                 "train/loss": avg_loss,
                                 "train/learning_rate": scheduler.get_last_lr()[0],
                             },
-                            step=num_gradient_steps
+                            step=num_gradient_steps,
                         )
 
                 if config.save_every_n_steps and num_gradient_steps % config.save_every_n_steps == 0:
@@ -293,12 +299,13 @@ def main(device="cuda:0"):
         # save epoch checkpoint
         if config.save_epochs and (epoch + 1) in set(config.save_epochs):
             save_checkpoint(model, output_path / "checkpoints", f"epoch_{epoch + 1}")
-        
+
         # always save latest checkpoint
         save_checkpoint(model, output_path, "final", optimizer, scheduler, save_opt_state=config.save_opt_state)
 
     if wandb_run is not None:
         wandb.finish()
+
 
 def save_checkpoint(model, output_path, checkpoint_name, optimizer=None, scheduler=None, save_opt_state=False):
     model.save_pretrained(path=output_path, name=checkpoint_name)
@@ -308,6 +315,7 @@ def save_checkpoint(model, output_path, checkpoint_name, optimizer=None, schedul
             torch.save(optimizer.state_dict(), output_path / "optimizer_state.pt")
         if scheduler is not None:
             torch.save(scheduler.state_dict(), output_path / "scheduler_state.pt")
+
 
 if __name__ == "__main__":
     main()

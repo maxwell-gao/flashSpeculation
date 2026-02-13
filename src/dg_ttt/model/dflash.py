@@ -19,6 +19,7 @@ from transformers.modeling_outputs import CausalLMOutputWithPast
 from transformers.cache_utils import Cache
 from .utils import build_target_layer_ids, extract_context_feature, sample
 
+
 def apply_rotary_pos_emb(q, k, cos, sin, position_ids=None, unsqueeze_dim=1):
     cos = cos.unsqueeze(unsqueeze_dim)
     sin = sin.unsqueeze(unsqueeze_dim)
@@ -26,6 +27,7 @@ def apply_rotary_pos_emb(q, k, cos, sin, position_ids=None, unsqueeze_dim=1):
     q_embed = (q * cos[..., -q_len:, :]) + (rotate_half(q) * sin[..., -q_len:, :])
     k_embed = (k * cos) + (rotate_half(k) * sin)
     return q_embed, k_embed
+
 
 class Qwen3DFlashAttention(nn.Module):
     """Multi-headed attention from 'Attention Is All You Need' paper"""
@@ -38,7 +40,7 @@ class Qwen3DFlashAttention(nn.Module):
         self.num_key_value_groups = config.num_attention_heads // config.num_key_value_heads
         self.scaling = self.head_dim**-0.5
         self.attention_dropout = config.attention_dropout
-        self.is_causal = False  
+        self.is_causal = False
         self.q_proj = nn.Linear(
             config.hidden_size, config.num_attention_heads * self.head_dim, bias=config.attention_bias
         )
@@ -101,6 +103,7 @@ class Qwen3DFlashAttention(nn.Module):
         attn_output = self.o_proj(attn_output)
         return attn_output, attn_weights
 
+
 class Qwen3DFlashDecoderLayer(GradientCheckpointingLayer):
     def __init__(self, config: Qwen3Config, layer_idx: int):
         super().__init__()
@@ -144,6 +147,7 @@ class Qwen3DFlashDecoderLayer(GradientCheckpointingLayer):
         hidden_states = residual + hidden_states
         return hidden_states
 
+
 class DFlashDraftModel(Qwen3PreTrainedModel):
     config_class = Qwen3Config
     _no_split_modules = ["Qwen3DFlashDecoderLayer"]
@@ -154,7 +158,9 @@ class DFlashDraftModel(Qwen3PreTrainedModel):
         self.layers = nn.ModuleList(
             [Qwen3DFlashDecoderLayer(config, layer_idx) for layer_idx in range(config.num_hidden_layers)]
         )
-        self.target_layer_ids = self.config.dflash_config.get("target_layer_ids", build_target_layer_ids(config.num_target_layers, config.num_hidden_layers))
+        self.target_layer_ids = self.config.dflash_config.get(
+            "target_layer_ids", build_target_layer_ids(config.num_target_layers, config.num_hidden_layers)
+        )
         self.norm = Qwen3RMSNorm(config.hidden_size, eps=config.rms_norm_eps)
         self.rotary_emb = Qwen3RotaryEmbedding(config)
         self.fc = nn.Linear(len(self.target_layer_ids) * config.hidden_size, config.hidden_size, bias=False)
@@ -188,7 +194,7 @@ class DFlashDraftModel(Qwen3PreTrainedModel):
                 **kwargs,
             )
         return self.norm(hidden_states)
-    
+
     @torch.inference_mode()
     def spec_generate(
         self,
@@ -198,7 +204,7 @@ class DFlashDraftModel(Qwen3PreTrainedModel):
         stop_token_ids: list[int],
         temperature: float,
     ):
-        self.eval() 
+        self.eval()
         num_input_tokens = input_ids.shape[1]
         max_length = num_input_tokens + max_new_tokens
 
@@ -225,7 +231,7 @@ class DFlashDraftModel(Qwen3PreTrainedModel):
         )
 
         output_ids[:, :num_input_tokens] = input_ids
-        output_ids[:, num_input_tokens:num_input_tokens+1] = sample(output.logits, temperature)
+        output_ids[:, num_input_tokens : num_input_tokens + 1] = sample(output.logits, temperature)
         target_hidden = extract_context_feature(output.hidden_states, self.target_layer_ids)
 
         # Decode stage
@@ -235,14 +241,16 @@ class DFlashDraftModel(Qwen3PreTrainedModel):
             block_output_ids = output_ids[:, start : start + block_size].clone()
             block_position_ids = position_ids[:, start : start + block_size]
             noise_embedding = target.model.embed_tokens(block_output_ids)
-            draft_logits = target.lm_head(self(
-                target_hidden=target_hidden,
-                noise_embedding=noise_embedding,
-                position_ids=position_ids[:, past_key_values_draft.get_seq_length(): start + block_size],
-                past_key_values=past_key_values_draft,
-                use_cache=True,
-                is_causal=False,
-            )[:, -block_size+1:, :])
+            draft_logits = target.lm_head(
+                self(
+                    target_hidden=target_hidden,
+                    noise_embedding=noise_embedding,
+                    position_ids=position_ids[:, past_key_values_draft.get_seq_length() : start + block_size],
+                    past_key_values=past_key_values_draft,
+                    use_cache=True,
+                    is_causal=False,
+                )[:, -block_size + 1 :, :]
+            )
             past_key_values_draft.crop(start)
             block_output_ids[:, 1:] = sample(draft_logits)
 
@@ -260,8 +268,10 @@ class DFlashDraftModel(Qwen3PreTrainedModel):
             output_ids[:, start + acceptance_length + 1] = posterior[:, acceptance_length]
             start += acceptance_length + 1
             past_key_values_target.crop(start)
-            target_hidden = extract_context_feature(output.hidden_states, self.target_layer_ids)[:, :acceptance_length + 1, :]
-            acceptance_lengths.append(acceptance_length+1)
+            target_hidden = extract_context_feature(output.hidden_states, self.target_layer_ids)[
+                :, : acceptance_length + 1, :
+            ]
+            acceptance_lengths.append(acceptance_length + 1)
             if stop_token_ids is not None and any(
                 stop_token_id in output_ids[:, num_input_tokens:] for stop_token_id in stop_token_ids
             ):
@@ -273,5 +283,5 @@ class DFlashDraftModel(Qwen3PreTrainedModel):
             stop_token_indices = torch.isin(output_ids[0][num_input_tokens:], stop_token_ids).nonzero(as_tuple=True)[0]
             if stop_token_indices.numel() > 0:
                 output_ids = output_ids[:, : num_input_tokens + stop_token_indices[0] + 1]
-                
+
         return output_ids

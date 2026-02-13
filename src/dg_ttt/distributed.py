@@ -2,6 +2,7 @@ import os
 import warnings
 from typing import Any, List, Optional
 from torch import distributed as dist
+
 __all__ = [
     "init",
     "is_initialized",
@@ -14,6 +15,8 @@ __all__ = [
     "gather",
     "all_gather",
 ]
+
+
 def init() -> None:
     if "RANK" not in os.environ:
         warnings.warn("Environment variable `RANK` is not set. Skipping distributed initialization.")

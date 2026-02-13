@@ -22,7 +22,7 @@ def eval_gpqa(fname):
     for i in range(total):
         base_correct += safe_grade((df["std_completion"][i]), df["correct_answer"][i])
         temp_correct += safe_grade((df["naive_completion"][i]), df["correct_answer"][i])
-        mcmc_correct += safe_grade((df["mcmc_completion"][i][len(df["question"][i]):]), df["correct_answer"][i])
+        mcmc_correct += safe_grade((df["mcmc_completion"][i][len(df["question"][i]) :]), df["correct_answer"][i])
 
     return base_correct, temp_correct, mcmc_correct, total
 
@@ -54,6 +54,7 @@ def gpqa_results(fnames):
         "mcmc_acc": mcmc_acc,
     }
 
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("folder", type=str)
@@ -62,4 +63,3 @@ if __name__ == "__main__":
     folder = Path(args.folder)
     fnames = sorted(str(p) for p in folder.glob("*.csv"))
     gpqa_results(fnames)
-

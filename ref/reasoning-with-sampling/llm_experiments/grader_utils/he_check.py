@@ -23,7 +23,7 @@ def stream_jsonl(filename: str) -> Iterable[Dict]:
     """
     if filename.endswith(".gz"):
         with open(filename, "rb") as gzfp:
-            with gzip.open(gzfp, 'rt') as fp:
+            with gzip.open(gzfp, "rt") as fp:
                 for line in fp:
                     if any(not x.isspace() for x in line):
                         yield json.loads(line)
@@ -39,25 +39,23 @@ def write_jsonl(filename: str, data: Iterable[Dict], append: bool = False):
     Writes an iterable of dictionaries to jsonl
     """
     if append:
-        mode = 'ab'
+        mode = "ab"
     else:
-        mode = 'wb'
+        mode = "wb"
     filename = os.path.expanduser(filename)
     if filename.endswith(".gz"):
         with open(filename, mode) as fp:
-            with gzip.GzipFile(fileobj=fp, mode='wb') as gzfp:
+            with gzip.GzipFile(fileobj=fp, mode="wb") as gzfp:
                 for x in data:
-                    gzfp.write((json.dumps(x) + "\n").encode('utf-8'))
+                    gzfp.write((json.dumps(x) + "\n").encode("utf-8"))
     else:
         with open(filename, mode) as fp:
             for x in data:
-                fp.write((json.dumps(x) + "\n").encode('utf-8'))
+                fp.write((json.dumps(x) + "\n").encode("utf-8"))
 
 
 def estimate_pass_at_k(
-    num_samples: Union[int, List[int], np.ndarray],
-    num_correct: Union[List[int], np.ndarray],
-    k: int
+    num_samples: Union[int, List[int], np.ndarray], num_correct: Union[List[int], np.ndarray], k: int
 ) -> np.ndarray:
     """
     Estimates pass@k of each problem and returns them in an array.
@@ -96,7 +94,6 @@ def evaluate_functional_correctness(
 
     # Check the generated samples against test suites.
     with ThreadPoolExecutor(max_workers=n_workers) as executor:
-
         futures = []
         completion_id = Counter()
         n_samples = 0
@@ -130,8 +127,7 @@ def evaluate_functional_correctness(
     correct = np.array(correct)
 
     ks = k
-    pass_at_k = {f"pass@{k}": estimate_pass_at_k(total, correct, k).mean()
-                 for k in ks if (total >= k).all()}
+    pass_at_k = {f"pass@{k}": estimate_pass_at_k(total, correct, k).mean() for k in ks if (total >= k).all()}
 
     # Finally, save the results in one file:
     def combine_results():

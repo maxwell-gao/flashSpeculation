@@ -3,11 +3,13 @@ from tqdm import tqdm
 
 from diffusers import FlowMatchEulerDiscreteScheduler
 
+
 # ==========================
 #  Flow Matching Functions
 # ==========================
 def fm_scheduler():
     return FlowMatchEulerDiscreteScheduler()
+
 
 def fm_prepare(scheduler, model_input, noise, u=None, generator=None):
     """
@@ -35,6 +37,7 @@ def fm_prepare(scheduler, model_input, noise, u=None, generator=None):
     target = noise - model_input
     return noisy_model_input, target, timesteps, {"sigmas": sigmas, "noise": noise, "u": u}
 
+
 def fm_clean_estimate(scheduler, latents, noise_pred, timesteps):
     assert isinstance(scheduler, FlowMatchEulerDiscreteScheduler), "Only FlowMatchEulerDiscreteScheduler is supported"
     step_indices = [(scheduler.timesteps == t).nonzero().item() for t in timesteps]
@@ -43,16 +46,12 @@ def fm_clean_estimate(scheduler, latents, noise_pred, timesteps):
     pred_x0 = latents - sigma * noise_pred
     return pred_x0
 
+
 # ==========================
 #   Generic Sampling Code
 # ==========================
 @torch.no_grad()
-def sample(
-    model,
-    latents,
-    num_timesteps=20,
-    **kwargs
-):
+def sample(model, latents, num_timesteps=20, **kwargs):
     """
     Generate activations from pure noise.
     We recommend setting `num_timesteps` based on your priorities:
@@ -64,22 +63,13 @@ def sample(
     model.scheduler.timesteps = model.scheduler.timesteps.to(latents.device)
     for i, timestep in tqdm(enumerate(model.scheduler.timesteps)):
         timesteps = timestep.repeat(latents.shape[0], 1)
-        noise_pred = model.denoiser(
-            latents=latents,
-            timesteps=timesteps,
-            **kwargs
-        )
+        noise_pred = model.denoiser(latents=latents, timesteps=timesteps, **kwargs)
         latents = model.scheduler.step(noise_pred, timestep, latents, return_dict=False)[0]
     return latents
 
+
 @torch.no_grad()
-def sample_on_manifold(
-    model, 
-    latents, 
-    num_timesteps=20, 
-    start_timestep=None,
-    **kwargs
-):
+def sample_on_manifold(model, latents, num_timesteps=20, start_timestep=None, **kwargs):
     """
     Post-process activations into their on-manifold counterpart.
     See the `sample` function above for recommendations on `num_timesteps`.
@@ -95,10 +85,6 @@ def sample_on_manifold(
         elif start_timestep is not None and timestep > start_timestep:
             continue
         timesteps = timestep[None, ...]
-        noise_pred = model.denoiser(
-            latents=latents,
-            timesteps=timesteps.repeat(latents.shape[0], 1, 1),
-            **kwargs
-        )
+        noise_pred = model.denoiser(latents=latents, timesteps=timesteps.repeat(latents.shape[0], 1, 1), **kwargs)
         latents = model.scheduler.step(noise_pred, timesteps, latents, return_dict=False)[0]
     return latents

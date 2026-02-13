@@ -13,6 +13,7 @@ from types import SimpleNamespace
 
 from glp import flow_matching
 
+
 # ==========================
 #     Normalizer Class
 # ==========================
@@ -21,7 +22,7 @@ class Normalizer(nn.Module):
         super().__init__()
         self.mean = nn.Buffer(mean)
         self.var = nn.Buffer(var)
-    
+
     def get_layer_stat(self, stat, layer_idx=None):
         if stat.ndim > 1 and stat.shape[0] != 1:
             assert layer_idx is not None, "Layer index must be provided for multi-layer normalization"
@@ -39,19 +40,21 @@ class Normalizer(nn.Module):
         mean = self.get_layer_stat(self.mean, layer_idx)
         var = self.get_layer_stat(self.var, layer_idx)
         return (rep.to(mean.device) - mean) / torch.sqrt(var)
-    
+
     def denormalize(self, rep, layer_idx=None):
         mean = self.get_layer_stat(self.mean, layer_idx)
         var = self.get_layer_stat(self.var, layer_idx)
         return rep.to(var.device) * torch.sqrt(var) + mean
-    
+
     def check_normalized(self, rep, atol=2.0):
         # the tolerance is lenient to catch egregious cases
         rep_mean = rep.view(-1, rep.shape[-1]).mean(dim=0)
         rep_var = rep.view(-1, rep.shape[-1]).var(dim=0, unbiased=False)
         ref_mean = torch.zeros(rep.shape[-1], device=rep.device, dtype=rep.dtype)
         ref_var = torch.ones(rep.shape[-1], device=rep.device, dtype=rep.dtype)
-        is_normalized = torch.isclose(rep_mean, ref_mean, atol=atol).all() and torch.isclose(rep_var, ref_var, atol=atol).all()
+        is_normalized = (
+            torch.isclose(rep_mean, ref_mean, atol=atol).all() and torch.isclose(rep_var, ref_var, atol=atol).all()
+        )
         if not is_normalized:
             print(
                 f"WARNING: Latents may not be normalized "
@@ -70,26 +73,28 @@ class Normalizer(nn.Module):
         path = Path(path)
         torch.save({"mean": self.mean, "var": self.var}, path / f"rep_statistics.pt")
 
+
 # ==========================
 #     Denoiser Classes
 # ==========================
 def timestep_embedding(timesteps, dim, max_period=10000, repeat_only=False):
     """
-    Create sinusoidal timestep embeddings.    
+    Create sinusoidal timestep embeddings.
     Reference: https://github.com/facebookresearch/DiT/blob/ed81ce2229091fd4ecc9a223645f95cf379d582b/models.py#L41
     """
     if not repeat_only:
         half = dim // 2
-        freqs = torch.exp(
-            -math.log(max_period) * torch.arange(start=0, end=half, dtype=torch.float32) / half
-        ).to(device=timesteps.device)
+        freqs = torch.exp(-math.log(max_period) * torch.arange(start=0, end=half, dtype=torch.float32) / half).to(
+            device=timesteps.device
+        )
         args = timesteps[:, None].float() * freqs[None]
         embedding = torch.cat([torch.cos(args), torch.sin(args)], dim=-1)
         if dim % 2:
             embedding = torch.cat([embedding, torch.zeros_like(embedding[:, :1])], dim=-1)
     else:
-        embedding = repeat(timesteps, 'b -> b d', d=dim)
+        embedding = repeat(timesteps, "b -> b d", d=dim)
     return embedding
+
 
 class TransformerMLPBlock(nn.Module):
     def __init__(
@@ -126,6 +131,7 @@ class TransformerMLPBlock(nn.Module):
         x = self.down_proj(x)
         return x + resid_x
 
+
 class TransformerMLPDenoiser(nn.Module):
     def __init__(
         self,
@@ -142,13 +148,9 @@ class TransformerMLPDenoiser(nn.Module):
         self.n_layers = n_layers
         self.multi_layer_n_layers = multi_layer_n_layers
 
-        self.layers = nn.ModuleList([
-            TransformerMLPBlock(
-                d_model=d_model,
-                d_mlp=d_mlp,
-                d_input=d_input
-            ) for _ in range(n_layers)
-        ])
+        self.layers = nn.ModuleList(
+            [TransformerMLPBlock(d_model=d_model, d_mlp=d_mlp, d_input=d_input) for _ in range(n_layers)]
+        )
         self.in_proj = nn.Linear(d_input, d_model)
         self.out_proj = nn.Linear(d_model, d_input)
 
@@ -189,6 +191,7 @@ class TransformerMLPDenoiser(nn.Module):
         x = self.out_proj(x)
         return x
 
+
 class Denoiser(nn.Module):
     def __init__(self, **kwargs):
         super().__init__()
@@ -196,11 +199,15 @@ class Denoiser(nn.Module):
         self.device, self.dtype = None, None
 
     def forward(self, latents, layer_idx=None, **kwargs):
-        layer_idx = torch.full((latents.shape[0],), layer_idx, device=latents.device) if isinstance(layer_idx, int) else layer_idx
+        layer_idx = (
+            torch.full((latents.shape[0],), layer_idx, device=latents.device)
+            if isinstance(layer_idx, int)
+            else layer_idx
+        )
         # move device and dtype
         device, dtype = latents.device, latents.dtype
         latents = latents.to(device=self.device, dtype=self.dtype)
-        # reshape to (batch*seq, dim) 
+        # reshape to (batch*seq, dim)
         # since denoiser does single-token modeling
         b, s, d = latents.shape
         latents = einops.rearrange(latents, "b s d -> (b s) d")
@@ -209,12 +216,12 @@ class Denoiser(nn.Module):
         latents = einops.rearrange(latents, "(b s) d -> b s d", b=b, s=s)
         latents = latents.to(device=device, dtype=dtype)
         return latents
-    
+
     def save_pretrained(self, path, name=None):
         path = Path(path)
         name = name or "mlp"
         save_file(self.state_dict(), path / f"{name}.safetensors")
-        
+
     def load_pretrained(self, path, name=None):
         path = Path(path)
         name = name or "mlp"
@@ -226,6 +233,7 @@ class Denoiser(nn.Module):
         self.device = param.device if param is not None else None
         self.dtype = param.dtype if param is not None else None
         return result
+
 
 # ==========================
 #    GLP Wrapper Class
@@ -252,12 +260,12 @@ class GLP(nn.Module):
     def forward(
         self,
         *,
-        latents: torch.FloatTensor,                       # (batch, seq, dim)
-        u: torch.FloatTensor | float | None = None,       # (batch,) or scalar
+        latents: torch.FloatTensor,  # (batch, seq, dim)
+        u: torch.FloatTensor | float | None = None,  # (batch,) or scalar
         layer_idx: torch.LongTensor | int | None = None,  # (batch,) or scalar
         loss_kwargs: dict = {},
         generator: torch.Generator | None = None,
-        **kwargs
+        **kwargs,
     ) -> SimpleNamespace:
         # prepare extra params
         assert latents.ndim == 3, f"Expected (batch, seq, dim), got shape {latents.shape}"
@@ -268,19 +276,10 @@ class GLP(nn.Module):
         # prepare flow matching inputs and target
         noise = torch.randn(latents.shape, dtype=latents.dtype, generator=generator).to(latents.device)
         noisy_latents, target, timesteps, meta = flow_matching.fm_prepare(
-            self.scheduler,
-            latents,
-            noise,
-            u=u,
-            generator=generator
+            self.scheduler, latents, noise, u=u, generator=generator
         )
         # compute denoiser forward pass
-        outputs = self.denoiser(
-            latents=noisy_latents,
-            timesteps=timesteps,
-            layer_idx=layer_idx,
-            **kwargs
-        )
+        outputs = self.denoiser(latents=noisy_latents, timesteps=timesteps, layer_idx=layer_idx, **kwargs)
         # compute loss
         loss = torch.nn.functional.mse_loss(outputs, target, **loss_kwargs)
         return SimpleNamespace(
@@ -289,14 +288,12 @@ class GLP(nn.Module):
             loss=loss,
         )
 
+
 def load_glp(weights_folder, device="cuda:0", checkpoint="final"):
     if not os.path.exists(f"{weights_folder}/{checkpoint}"):
         # speed up downloading the main checkpoint
         ignore_patterns = ["checkpoints/*"] if checkpoint == "final" else None
-        local_dir = snapshot_download(
-            repo_id=weights_folder,
-            ignore_patterns=ignore_patterns
-        )
+        local_dir = snapshot_download(repo_id=weights_folder, ignore_patterns=ignore_patterns)
         weights_folder = local_dir
     config = OmegaConf.load(f"{weights_folder}/config.yaml")
     config.rep_statistic = f"{weights_folder}/rep_statistics.pt"

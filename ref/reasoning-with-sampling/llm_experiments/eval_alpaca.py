@@ -13,43 +13,40 @@ def fnames_to_json(fnames, output_fname, tag):
             df = pd.read_csv(fname)
             for i in range(len(df)):
                 prompt = df["instruction"][i]
-                
-                if tag=="mcmc":
-                    response =  df["mcmc_completion"][i][len(prompt):]
-                elif tag=="std":
+
+                if tag == "mcmc":
+                    response = df["mcmc_completion"][i][len(prompt) :]
+                elif tag == "std":
                     response = df["std_completion"][i]
-                elif tag=="naive":
+                elif tag == "naive":
                     response = df["naive_completion"][i]
-                  
-                line = {
-                    "instruction": prompt,
-                    "output": response,
-                    "generator": output_fname + "_" + tag
-                }
+
+                line = {"instruction": prompt, "output": response, "generator": output_fname + "_" + tag}
 
                 fout.write(json.dumps(line) + "\n")
 
     return output_file
 
+
 def jsonl_to_json(fname):
     data = []
     jsonl_path = fname
     json_path = jsonl_path[:-6] + ".json"
-    
+
     with open(jsonl_path, "r") as f:
         for line in f:
             data.append(json.loads(line))
-    
+
     # Save as JSON array
     with open(json_path, "w") as f:
         json.dump(data, f, indent=2)
+
 
 def collate_alpaca(fnames, output_fname):
     tags = ["std", "naive", "mcmc"]
     for tag in tags:
         output_file = fnames_to_json(fnames, output_fname, tag)
         jsonl_to_json(output_file)
-
 
 
 if __name__ == "__main__":
@@ -61,6 +58,3 @@ if __name__ == "__main__":
     folder = Path(args.folder)
     fnames = sorted(str(p) for p in folder.glob("*.csv"))
     collate_alpaca(fnames, args.output_fname)
-
-
-    

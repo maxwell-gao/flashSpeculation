@@ -20,6 +20,7 @@ from sglang.test.test_utils import (
     popen_launch_server,
 )
 
+
 def _is_blackwell() -> bool:
     if envs.IS_BLACKWELL.get():
         return True
@@ -88,10 +89,7 @@ def _send_generate_batch(
     resp.raise_for_status()
     out = resp.json()
     if not isinstance(out, list):
-        raise RuntimeError(
-            "Expected a list response for batched /generate, but got "
-            f"type={type(out).__name__}."
-        )
+        raise RuntimeError(f"Expected a list response for batched /generate, but got type={type(out).__name__}.")
     return out
 
 
@@ -209,9 +207,7 @@ def _run_bench_requests(
             "(DFLASH may not have been enabled)."
         )
 
-    spec_accept_length = (
-        float(statistics.mean(spec_accept_lengths)) if spec_accept_lengths else None
-    )
+    spec_accept_length = float(statistics.mean(spec_accept_lengths)) if spec_accept_lengths else None
 
     return BenchMetrics(
         latency_s=float(latency),
@@ -328,9 +324,9 @@ def main() -> None:
     print(f"Loading dataset: {args.dataset_name}...")
     dataset = load_and_process_dataset(args.dataset_name)
     required_questions = max_questions + max_concurrency
-    
+
     if len(dataset) < required_questions:
-         print(f"Warning: Dataset has {len(dataset)} items, but need up to {required_questions}. Reusing items.")
+        print(f"Warning: Dataset has {len(dataset)} items, but need up to {required_questions}. Reusing items.")
 
     tokenizer = AutoTokenizer.from_pretrained(args.target_model)
 
@@ -338,8 +334,8 @@ def main() -> None:
     # Build prompts list
     for i in range(max(len(dataset), required_questions)):
         item = dataset[i % len(dataset)]
-        user_content = item["turns"][0] # Extract the formatted turn
-        
+        user_content = item["turns"][0]  # Extract the formatted turn
+
         # Apply chat template
         prompt_text = tokenizer.apply_chat_template(
             [{"role": "user", "content": user_content}],
@@ -356,7 +352,7 @@ def main() -> None:
     baseline_toks: dict[tuple[str, int], Optional[float]] = {}
     dflash_toks: dict[tuple[str, int], Optional[float]] = {}
     dflash_accept_len: dict[tuple[str, int], Optional[float]] = {}
-    
+
     tp = args.tp_size  # Fixed TP size
 
     for backend in attention_backends:
@@ -375,9 +371,7 @@ def main() -> None:
             "--max-running-requests",
             str(args.max_running_requests),
         ]
-        common_server_args.extend(
-            ["--cuda-graph-bs", *[str(i) for i in range(1, 33)], "--cuda-graph-max-bs", "32"]
-        )
+        common_server_args.extend(["--cuda-graph-bs", *[str(i) for i in range(1, 33)], "--cuda-graph-max-bs", "32"])
         if args.disable_radix_cache:
             common_server_args.append("--disable-radix-cache")
 
@@ -404,9 +398,7 @@ def main() -> None:
                 for conc in concurrencies:
                     n = num_questions_by_conc[conc]
                     _flush_cache(baseline_url)
-                    print(
-                        f"[warmup] run 1 warmup batch (size={conc}) after /flush_cache; excluded from metrics."
-                    )
+                    print(f"[warmup] run 1 warmup batch (size={conc}) after /flush_cache; excluded from metrics.")
                     metrics = _run_bench_requests(
                         baseline_url,
                         prompts=prompts[: n + conc],
@@ -456,9 +448,7 @@ def main() -> None:
             for conc in concurrencies:
                 n = num_questions_by_conc[conc]
                 _flush_cache(dflash_url)
-                print(
-                    f"[warmup] run 1 warmup batch (size={conc}) after /flush_cache; excluded from metrics."
-                )
+                print(f"[warmup] run 1 warmup batch (size={conc}) after /flush_cache; excluded from metrics.")
                 metrics = _run_bench_requests(
                     dflash_url,
                     prompts=prompts[: n + conc],
@@ -508,12 +498,8 @@ def main() -> None:
         md_lines.append(f"## Backend: `{backend}`")
         md_lines.append("")
 
-        baseline_values = {
-            c: baseline_toks.get((backend, c), None) for c in concurrencies
-        }
-        dflash_values = {
-            c: dflash_toks.get((backend, c), None) for c in concurrencies
-        }
+        baseline_values = {c: baseline_toks.get((backend, c), None) for c in concurrencies}
+        dflash_values = {c: dflash_toks.get((backend, c), None) for c in concurrencies}
         speedup_values: dict[int, Optional[float]] = {}
         for c in concurrencies:
             b = baseline_values.get(c, None)
@@ -529,7 +515,7 @@ def main() -> None:
             )
         )
         md_lines.append("")
-        
+
         md_lines.append("### DFLASH output tok/s")
         md_lines.append(
             _format_table(
@@ -554,10 +540,7 @@ def main() -> None:
         md_lines.append(
             _format_table(
                 concurrencies=concurrencies,
-                values={
-                    c: dflash_accept_len.get((backend, c), None)
-                    for c in concurrencies
-                },
+                values={c: dflash_accept_len.get((backend, c), None) for c in concurrencies},
                 float_fmt=".3f",
             )
         )

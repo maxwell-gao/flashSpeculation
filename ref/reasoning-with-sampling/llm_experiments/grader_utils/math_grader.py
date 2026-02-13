@@ -3,6 +3,7 @@ Answer checker API that uses sympy to simplify expressions and check for equalit
 
 Call grade_answer(given_answer: str, ground_truth: str).
 """
+
 import re
 import sympy
 from pylatexenc import latex2text
@@ -22,10 +23,7 @@ def _sympy_parse(expr: str):
     py_expr = expr.replace("^", "**")
     return sympy_parser.parse_expr(
         py_expr,
-        transformations=(
-            sympy_parser.standard_transformations
-            + (sympy_parser.implicit_multiplication_application,)
-        ),
+        transformations=(sympy_parser.standard_transformations + (sympy_parser.implicit_multiplication_application,)),
     )
 
 
@@ -264,8 +262,7 @@ def grade_answer(given_answer: str, ground_truth: str) -> bool:
     given_elems = split_tuple(given_normalized)
 
     if len(ground_truth_elems) > 1 and (
-        ground_truth_normalized[0] != given_normalized[0]
-        or ground_truth_normalized[-1] != given_normalized[-1]
+        ground_truth_normalized[0] != given_normalized[0] or ground_truth_normalized[-1] != given_normalized[-1]
     ):
         is_correct = False
     elif len(ground_truth_elems) != len(given_elems):

@@ -25,7 +25,6 @@ def eval_math(fname):
         temp_correct += safe_grade(df["naive_answer"][i], df["correct_answer"][i])
         mcmc_correct += safe_grade(df["mcmc_answer"][i], df["correct_answer"][i])
 
-
     return base_correct, temp_correct, mcmc_correct, total
 
 
@@ -58,6 +57,7 @@ def math_results(fnames):
         "temp_acc": temp_acc,
         "mcmc_acc": mcmc_acc,
     }
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()

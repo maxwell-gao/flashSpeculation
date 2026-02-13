@@ -12,9 +12,11 @@ from transformers import AutoModelForCausalLM, AutoTokenizer, DynamicCache
 from dg_ttt.model import DFlashDraftModel, sample, load_and_process_dataset, extract_context_feature
 from dg_ttt import distributed as dist
 
+
 def cuda_time() -> float:
     torch.cuda.synchronize()
     return time.perf_counter()
+
 
 @torch.inference_mode()
 def dflash_generate(
@@ -52,7 +54,7 @@ def dflash_generate(
     )
 
     output_ids[:, :num_input_tokens] = input_ids
-    output_ids[:, num_input_tokens:num_input_tokens+1] = sample(output.logits, temperature)
+    output_ids[:, num_input_tokens : num_input_tokens + 1] = sample(output.logits, temperature)
     if block_size > 1:
         target_hidden = extract_context_feature(output.hidden_states, model.target_layer_ids)
 
@@ -69,14 +71,16 @@ def dflash_generate(
         block_position_ids = position_ids[:, start : start + block_size]
         if block_size > 1:
             noise_embedding = target.model.embed_tokens(block_output_ids)
-            draft_logits = target.lm_head(model(
-                target_hidden=target_hidden,
-                noise_embedding=noise_embedding,
-                position_ids=position_ids[:, past_key_values_draft.get_seq_length(): start + block_size],
-                past_key_values=past_key_values_draft,
-                use_cache=True,
-                is_causal=False,
-            )[:, -block_size+1:, :])
+            draft_logits = target.lm_head(
+                model(
+                    target_hidden=target_hidden,
+                    noise_embedding=noise_embedding,
+                    position_ids=position_ids[:, past_key_values_draft.get_seq_length() : start + block_size],
+                    past_key_values=past_key_values_draft,
+                    use_cache=True,
+                    is_causal=False,
+                )[:, -block_size + 1 :, :]
+            )
             past_key_values_draft.crop(start)
             block_output_ids[:, 1:] = sample(draft_logits)
             if draft_prefill:
@@ -96,12 +100,14 @@ def dflash_generate(
         output_ids[:, start : start + acceptance_length + 1] = block_output_ids[:, : acceptance_length + 1]
         output_ids[:, start + acceptance_length + 1] = posterior[:, acceptance_length]
 
-        acceptance_lengths.append(acceptance_length+1)
+        acceptance_lengths.append(acceptance_length + 1)
         start += acceptance_length + 1
         past_key_values_target.crop(start)
         if block_size > 1:
-            target_hidden = extract_context_feature(output.hidden_states, model.target_layer_ids)[:, :acceptance_length + 1, :]
-        
+            target_hidden = extract_context_feature(output.hidden_states, model.target_layer_ids)[
+                :, : acceptance_length + 1, :
+            ]
+
         if stop_token_ids is not None and any(
             stop_token_id in output_ids[:, num_input_tokens:] for stop_token_id in stop_token_ids
         ):
@@ -154,6 +160,7 @@ def main() -> None:
     def has_flash_attn():
         try:
             import flash_attn
+
             return True
         except ImportError:
             logger.warning("flash_attn is not installed. Falling back to torch.sdpa. The speedup will be lower.")
@@ -161,17 +168,25 @@ def main() -> None:
 
     installed_flash_attn = has_flash_attn()
 
-    target = AutoModelForCausalLM.from_pretrained(
-        args.model_name_or_path,
-        attn_implementation="flash_attention_2" if installed_flash_attn else "sdpa",
-        dtype=torch.bfloat16,
-    ).to(device).eval()
+    target = (
+        AutoModelForCausalLM.from_pretrained(
+            args.model_name_or_path,
+            attn_implementation="flash_attention_2" if installed_flash_attn else "sdpa",
+            dtype=torch.bfloat16,
+        )
+        .to(device)
+        .eval()
+    )
 
-    draft_model = DFlashDraftModel.from_pretrained(
-        args.draft_name_or_path,
-        attn_implementation="flash_attention_2" if installed_flash_attn else "sdpa",
-        dtype=torch.bfloat16,
-    ).to(device).eval()
+    draft_model = (
+        DFlashDraftModel.from_pretrained(
+            args.draft_name_or_path,
+            attn_implementation="flash_attention_2" if installed_flash_attn else "sdpa",
+            dtype=torch.bfloat16,
+        )
+        .to(device)
+        .eval()
+    )
 
     block_size = args.block_size if args.block_size is not None else draft_model.block_size
 
@@ -188,7 +203,9 @@ def main() -> None:
         messages = []
         for turn_index, user_content in enumerate(instance["turns"]):
             messages.append({"role": "user", "content": user_content})
-            input_text = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True, enable_thinking=False)
+            input_text = tokenizer.apply_chat_template(
+                messages, tokenize=False, add_generation_prompt=True, enable_thinking=False
+            )
             input_ids = tokenizer.encode(input_text, return_tensors="pt").to(target.device)
 
             response = {}
@@ -203,9 +220,9 @@ def main() -> None:
                     stop_token_ids=[tokenizer.eos_token_id],
                     temperature=args.temperature,
                 )
-            
+
             spec_response = response[block_size]
-            generated_ids = spec_response.output_ids[0, spec_response.num_input_tokens:]
+            generated_ids = spec_response.output_ids[0, spec_response.num_input_tokens :]
             output_text = tokenizer.decode(generated_ids, skip_special_tokens=True)
             messages.append({"role": "assistant", "content": output_text})
             responses.append(response)
@@ -226,6 +243,7 @@ def main() -> None:
     acceptance_lengths = list(chain(*[r[block_size].acceptance_lengths for r in responses]))
     histogram = [acceptance_lengths.count(b) / len(acceptance_lengths) for b in range(block_size + 1)]
     print(f"Acceptance length histogram: {[f'{x * 100:.1f}%' for x in histogram]}")
+
 
 if __name__ == "__main__":
     main()

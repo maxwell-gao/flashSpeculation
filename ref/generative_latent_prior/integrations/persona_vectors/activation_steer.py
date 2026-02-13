@@ -8,12 +8,14 @@ import os
 from glp.denoiser import load_glp
 from glp import script_steer
 
+
 def get_glp_postprocess(device):
     # https://github.com/safety-research/persona_vectors/blob/5faebb1c94b60509acb2f118d8ae85ab3b522fb4/eval/eval_persona.py#L49
     weights_folder = os.environ["GLP_WEIGHTS_FOLDER"]
     ckpt_name = os.environ["GLP_CKPT_NAME"]
     model = load_glp(weights_folder, device=device, checkpoint=ckpt_name)
     return lambda x: script_steer.postprocess_on_manifold_wrapper(model)(x)
+
 
 class ActivationSteerer:
     """
@@ -23,11 +25,11 @@ class ActivationSteerer:
     """
 
     _POSSIBLE_LAYER_ATTRS: Iterable[str] = (
-        "transformer.h",       # GPT‑2/Neo, Bloom, etc.
-        "encoder.layer",       # BERT/RoBERTa
-        "model.layers",        # Llama/Mistral
-        "gpt_neox.layers",     # GPT‑NeoX
-        "block",               # Flan‑T5
+        "transformer.h",  # GPT‑2/Neo, Bloom, etc.
+        "encoder.layer",  # BERT/RoBERTa
+        "model.layers",  # Llama/Mistral
+        "gpt_neox.layers",  # GPT‑NeoX
+        "block",  # Flan‑T5
     )
 
     def __init__(
@@ -52,9 +54,7 @@ class ActivationSteerer:
             raise ValueError("steering_vector must be 1‑D")
         hidden = getattr(model.config, "hidden_size", None)
         if hidden and self.vector.numel() != hidden:
-            raise ValueError(
-                f"Vector length {self.vector.numel()} ≠ model hidden_size {hidden}"
-            )
+            raise ValueError(f"Vector length {self.vector.numel()} ≠ model hidden_size {hidden}")
         # Check if positions is valid
         valid_positions = {"all", "prompt", "response"}
         if self.positions not in valid_positions:
@@ -88,10 +88,7 @@ class ActivationSteerer:
                     print(f"[ActivationSteerer] hooking {path}[{self.layer_idx}]")
                 return cur[self.layer_idx]
 
-        raise ValueError(
-            "Could not find layer list on the model. "
-            "Add the attribute name to _POSSIBLE_LAYER_ATTRS."
-        )
+        raise ValueError("Could not find layer list on the model. Add the attribute name to _POSSIBLE_LAYER_ATTRS.")
 
     def _hook_fn(self, module, ins, out):
         steer = self.coeff * self.vector  # (hidden,)
@@ -110,7 +107,7 @@ class ActivationSteerer:
                     # t2 += steer.to(t.device)
                     t2 = self.glp_postprocess(t2 + steer.to(t.device))
                     return t2
-            elif self.positions == "response": 
+            elif self.positions == "response":
                 t2 = t.clone()
                 # NOTE: edited
                 # t2[:, -1, :] += steer.to(t.device)
@@ -136,10 +133,7 @@ class ActivationSteerer:
                 delta = (new_out[0] if isinstance(new_out, tuple) else new_out) - (
                     out[0] if isinstance(out, (tuple, list)) else out
                 )
-                print(
-                    "[ActivationSteerer] |delta| (mean ± std): "
-                    f"{delta.abs().mean():.4g} ± {delta.std():.4g}"
-                )
+                print(f"[ActivationSteerer] |delta| (mean ± std): {delta.abs().mean():.4g} ± {delta.std():.4g}")
         return new_out
 
     # ---------- context manager ----------
@@ -162,6 +156,7 @@ class ActivationSteererMultiple:
     Add multiple (coeff * steering_vector) to chosen transformer block outputs.
     Accepts a list of dicts, each with keys: steering_vector, coeff, layer_idx, positions.
     """
+
     def __init__(
         self,
         model: torch.nn.Module,

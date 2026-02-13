@@ -4,21 +4,14 @@ import re
 from grader_utils.he_check import evaluate_functional_correctness
 
 
-
 def extract_code(text, entry_point):
-    code_block_pattern = re.compile(
-        rf"```(?:[Pp]ython\n)?.*?def\s+{entry_point}.*?:\n(.*?)\n```", re.DOTALL
-    )
+    code_block_pattern = re.compile(rf"```(?:[Pp]ython\n)?.*?def\s+{entry_point}.*?:\n(.*?)\n```", re.DOTALL)
     code_block = code_block_pattern.search(text)
     if code_block is None:
-        code_block_pattern = re.compile(
-            rf"def\s+{entry_point}.*?:\n(.*?)(?:\n(?!\n*(?:  |\t))|$)", re.DOTALL
-        )
+        code_block_pattern = re.compile(rf"def\s+{entry_point}.*?:\n(.*?)(?:\n(?!\n*(?:  |\t))|$)", re.DOTALL)
         code_block = code_block_pattern.search(text)
     if code_block is None:
-        code_block_pattern = re.compile(
-            r"def.*?:\n(.*?)(?:\n(?!\n*(?:  |\t))|$)", re.DOTALL
-        )
+        code_block_pattern = re.compile(r"def.*?:\n(.*?)(?:\n(?!\n*(?:  |\t))|$)", re.DOTALL)
         code_block = code_block_pattern.search(text)
 
     if code_block is not None:
@@ -26,6 +19,7 @@ def extract_code(text, entry_point):
 
     # if no code block is found, assume the LM is simply filling the code
     return textwrap.indent(text, " " * 4)
+
 
 def entry_point(
     sample_file: str,
@@ -41,5 +35,3 @@ def entry_point(
     k = list(map(int, k.split(",")))
     results = evaluate_functional_correctness(sample_file, k, n_workers, timeout, problem_file)
     print(results)
-
-

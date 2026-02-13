@@ -1,19 +1,20 @@
 import json
 import numpy as np
 
+
 def remove_boxed(s):
     left = "\\boxed{"
     try:
-        assert s[:len(left)] == left
+        assert s[: len(left)] == left
         assert s[-1] == "}"
-        return s[len(left):-1]
+        return s[len(left) : -1]
     except:
         return None
 
 
 def last_boxed_only(sample):
     """
-    Given a (q,a) sample, filter the answers so that they only contain 
+    Given a (q,a) sample, filter the answers so that they only contain
     the last \boxed{...} or \fbox{...} element
     """
     q, a = sample
@@ -21,6 +22,7 @@ def last_boxed_only(sample):
     if a == None:
         return None
     return (q, a)
+
 
 def last_boxed_only_string(string):
     idx = string.rfind("\\boxed")
@@ -41,14 +43,14 @@ def last_boxed_only_string(string):
                 right_brace_idx = i
                 break
         i += 1
-    
+
     if right_brace_idx == None:
         retval = None
     else:
-        retval = string[idx:right_brace_idx + 1]
-    
+        retval = string[idx : right_brace_idx + 1]
+
     return retval
 
 
 def parse_answer(input_str):
-	return remove_boxed(last_boxed_only_string(input_str))
+    return remove_boxed(last_boxed_only_string(input_str))

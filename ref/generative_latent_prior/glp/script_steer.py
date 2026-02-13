@@ -5,6 +5,7 @@ import transformers
 
 from glp import flow_matching
 
+
 # =========================
 #   Diffusion Functions
 # =========================
@@ -12,6 +13,7 @@ def postprocess_on_manifold_wrapper(model, u=0.5, num_timesteps=20, layer_idx=No
     scheduler = model.scheduler
     num_train_timesteps = scheduler.config.num_train_timesteps
     scheduler.set_timesteps(num_timesteps)
+
     def postprocess_on_manifold(acts_edit):
         has_seq_dim = len(acts_edit.shape) == 3
         b = acts_edit.shape[0]
@@ -23,17 +25,13 @@ def postprocess_on_manifold_wrapper(model, u=0.5, num_timesteps=20, layer_idx=No
         latents = model.normalizer.normalize(latents, layer_idx=layer_idx)
         noise = torch.randn_like(latents)
         noisy_latents, _, timesteps, _ = flow_matching.fm_prepare(
-            scheduler, 
+            scheduler,
             latents,
             noise,
             u=torch.ones(latents.shape[0]) * u,
         )
         latents = flow_matching.sample_on_manifold(
-            model,
-            noisy_latents,
-            start_timestep=timesteps[0].item(),
-            num_timesteps=num_timesteps,
-            layer_idx=layer_idx
+            model, noisy_latents, start_timestep=timesteps[0].item(), num_timesteps=num_timesteps, layer_idx=layer_idx
         )
         latents = model.normalizer.denormalize(latents, layer_idx=layer_idx)
         if has_seq_dim:
@@ -42,7 +40,9 @@ def postprocess_on_manifold_wrapper(model, u=0.5, num_timesteps=20, layer_idx=No
             latents = einops.rearrange(latents, "b 1 d -> b d")
         latents = latents.to(device=acts_edit.device, dtype=acts_edit.dtype)
         return latents
+
     return postprocess_on_manifold
+
 
 # =========================
 #    Steering Functions
@@ -50,6 +50,7 @@ def postprocess_on_manifold_wrapper(model, u=0.5, num_timesteps=20, layer_idx=No
 def addition_intervention(w=None, alphas=None, postprocess_fn=None):
     if postprocess_fn is None:
         postprocess_fn = lambda x: x
+
     def rep_act(output, layer_name, inputs):
         nonlocal w, alphas
         use_tuple = isinstance(output, tuple)
@@ -68,7 +69,9 @@ def addition_intervention(w=None, alphas=None, postprocess_fn=None):
             # only apply to every new generated token
             act[:, [-1], :] = postprocess_fn(act[:, [-1], :] + alphas * w)
         return (act, *output[1:]) if use_tuple else act
+
     return rep_act
+
 
 def generate(model, processor, inputs, remove_input=True, **generate_kwargs):
     with torch.no_grad():
@@ -78,9 +81,19 @@ def generate(model, processor, inputs, remove_input=True, **generate_kwargs):
             output = output[:, input_len:]
         output = processor.batch_decode(output, skip_special_tokens=True)
     return output
-    
+
+
 def generate_with_intervention_wrapper(seed=42):
-    def generate_with_intervention(text, hf_model, hf_processor, generate_kwargs={"max_new_tokens": 10}, layers=[], intervention_wrapper=None, intervention_kwargs={}, forward_only=False):
+    def generate_with_intervention(
+        text,
+        hf_model,
+        hf_processor,
+        generate_kwargs={"max_new_tokens": 10},
+        layers=[],
+        intervention_wrapper=None,
+        intervention_kwargs={},
+        forward_only=False,
+    ):
         if seed is not None:
             transformers.set_seed(seed)
         inputs = hf_processor(text, return_tensors="pt", padding=True).to(hf_model.device)
@@ -95,4 +108,5 @@ def generate_with_intervention_wrapper(seed=42):
             else:
                 output_text = generate(hf_model, hf_processor, inputs, **generate_kwargs)
         return output_text
+
     return generate_with_intervention
