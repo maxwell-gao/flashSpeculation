@@ -1,22 +1,24 @@
-from typing import Optional, Callable
-from typing_extensions import Unpack, Tuple
+from typing import Callable, Optional
+
 import torch
 from torch import nn
+from transformers import DynamicCache
+from transformers.cache_utils import Cache
+from transformers.modeling_outputs import CausalLMOutputWithPast
 from transformers.models.qwen3.modeling_qwen3 import (
+    ALL_ATTENTION_FUNCTIONS,
+    FlashAttentionKwargs,
+    GradientCheckpointingLayer,
+    Qwen3Config,
+    Qwen3MLP,
+    Qwen3PreTrainedModel,
     Qwen3RMSNorm,
     Qwen3RotaryEmbedding,
-    Qwen3Config,
-    Qwen3PreTrainedModel,
-    Qwen3MLP,
-    GradientCheckpointingLayer,
-    FlashAttentionKwargs,
-    rotate_half,
     eager_attention_forward,
-    ALL_ATTENTION_FUNCTIONS,
+    rotate_half,
 )
-from transformers import DynamicCache
-from transformers.modeling_outputs import CausalLMOutputWithPast
-from transformers.cache_utils import Cache
+from typing_extensions import Tuple, Unpack
+
 from .utils import build_target_layer_ids, extract_context_feature, sample
 
 

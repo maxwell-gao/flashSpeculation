@@ -1,7 +1,7 @@
-import random
 import math
+import random
+
 import numpy as np
-from functools import partial
 
 # Toy example of compositional MCMC sampling
 # p has nonzero probability of generating error token E which leads to "off the rails repetition" of all 1's: ...E111111
@@ -74,7 +74,7 @@ def naive_composition(p, q, T, context=None, seq_len=None):
     if seq_len is None:
         seq_len = 2 * T
 
-    if context == None:
+    if context is None:
         context = []
         prefix = context.copy()
     else:

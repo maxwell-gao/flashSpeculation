@@ -1,7 +1,7 @@
-import pandas as pd
 import json
 from pathlib import Path
-from typing import List, Dict, Any
+
+import pandas as pd
 
 
 def fnames_to_json(fnames, output_fname, tag):

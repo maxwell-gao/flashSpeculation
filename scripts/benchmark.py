@@ -1,16 +1,18 @@
 import argparse
-import time
 import random
+import time
 from itertools import chain
 from types import SimpleNamespace
-from loguru import logger
+
 import numpy as np
 import torch
+from loguru import logger
 from rich import print
 from tqdm import tqdm
 from transformers import AutoModelForCausalLM, AutoTokenizer, DynamicCache
-from dg_ttt.model import DFlashDraftModel, sample, load_and_process_dataset, extract_context_feature
+
 from dg_ttt import distributed as dist
+from dg_ttt.model import DFlashDraftModel, extract_context_feature, load_and_process_dataset, sample
 
 
 def cuda_time() -> float:

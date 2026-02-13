@@ -1,11 +1,11 @@
-import os
-import pandas as pd
-import numpy as np
-import matplotlib.pyplot as plt
-from grader_utils.math_grader import grade_answer
 import itertools
 import re
-from typing import List, Dict, Tuple
+from typing import Dict, List, Tuple
+
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+from grader_utils.math_grader import grade_answer
 
 _LAST_NUM_RE = re.compile(r"_(\d+)(?=\.[^.]+$)")
 

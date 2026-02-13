@@ -1,15 +1,13 @@
-from collections import defaultdict, Counter
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import List, Union, Iterable, Dict
+import gzip
 import itertools
+import json
+import os
+from collections import Counter, defaultdict
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from typing import Dict, Iterable, List, Union
 
 import numpy as np
 import tqdm
-import gzip
-import json
-import os
-
-
 from grader_utils.he_execute import check_correctness
 
 

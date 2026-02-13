@@ -1,24 +1,23 @@
-from baukit import TraceDict
-from collections import defaultdict
-from dataclasses import dataclass
-import einops
 import glob
 import json
-import numpy as np
-from omegaconf import OmegaConf
 import os
-import pandas as pd
-from scipy.stats import bootstrap
-from sklearn.preprocessing import LabelEncoder
 import subprocess
-import torch
-from tqdm import tqdm
+from collections import defaultdict
+from dataclasses import dataclass
 
-from sklearn.metrics import roc_auc_score
-from sklearn.linear_model import LogisticRegressionCV
-from sklearn.pipeline import make_pipeline
-from sklearn.preprocessing import StandardScaler
+import einops
+import numpy as np
+import pandas as pd
+import torch
+from baukit import TraceDict
 from joblib import Parallel, delayed
+from omegaconf import OmegaConf
+from scipy.stats import bootstrap
+from sklearn.linear_model import LogisticRegressionCV
+from sklearn.metrics import roc_auc_score
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import LabelEncoder, StandardScaler
+from tqdm import tqdm
 
 from glp.denoiser import load_glp
 
@@ -51,7 +50,8 @@ def run_sklearn_logreg(X_train, y_train, X_test, y_test, parallel=True, n_jobs=-
 def run_sklearn_logreg_batched(X_train, y_train, X_test, y_test, device=None, **kwargs):
     assert len(X_train.shape) == len(X_test.shape) == 3
     assert len(y_train.shape) == len(y_test.shape) == 1
-    pt_to_np = lambda x: x.detach().cpu().numpy() if torch.is_tensor(x) else x
+    def pt_to_np(x):
+        return x.detach().cpu().numpy() if torch.is_tensor(x) else x
     X_train, y_train, X_test, y_test = pt_to_np(X_train), pt_to_np(y_train), pt_to_np(X_test), pt_to_np(y_test)
     metrics_batch = Parallel(n_jobs=-1)(
         delayed(run_sklearn_logreg)(X_train[i], y_train, X_test[i], y_test, **kwargs) for i in range(X_train.shape[0])
@@ -96,7 +96,7 @@ def get_meta_neurons_wrapper(seed=42):
         for i in range(0, latents.shape[0], batch_size):
             # collect diffusion model internals
             with TraceDict(model, layers=[x[0] for x in layers], retain_input=True, retain_output=True) as ret:
-                noise_pred = model(
+                model(
                     latents=latents[i : i + batch_size],
                     u=u[i : i + batch_size],
                     layer_idx=layer_idx,
@@ -264,7 +264,8 @@ def scalar_probing(device="cuda:0"):
                 X_train_diffusion, y_train, X_test_diffusion, y_test, device=device
             )
             # save results
-            format_aucs = lambda aucs: {idx: auc.item() for idx, auc in zip(top_batch_idxs, aucs)}
+            def format_aucs(aucs):
+                return {idx: auc.item() for idx, auc in zip(top_batch_idxs, aucs)}
             results["val_aucs"] = format_aucs(val_aucs)
             results["test_aucs"] = format_aucs(test_aucs)
             results["layers"] = layers

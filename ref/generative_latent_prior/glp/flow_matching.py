@@ -1,7 +1,6 @@
 import torch
-from tqdm import tqdm
-
 from diffusers import FlowMatchEulerDiscreteScheduler
+from tqdm import tqdm
 
 
 # ==========================

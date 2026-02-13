@@ -1,12 +1,11 @@
 # activation_steering.py  – v0.2
-import torch
-from contextlib import contextmanager
-from typing import Sequence, Union, Iterable
-
 # NOTE: edited
 import os
-from glp.denoiser import load_glp
+from typing import Iterable, Sequence, Union
+
+import torch
 from glp import script_steer
+from glp.denoiser import load_glp
 
 
 def get_glp_postprocess(device):

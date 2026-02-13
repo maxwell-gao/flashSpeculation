@@ -1,11 +1,10 @@
-import pandas as pd
 import json
-from pathlib import Path
-from typing import List, Dict, Any
-from grader_utils.he_grader import entry_point
-import itertools
 import re
-from typing import List, Dict, Tuple
+from pathlib import Path
+from typing import Dict, List, Tuple
+
+import pandas as pd
+from grader_utils.he_grader import entry_point
 
 _LAST_NUM_RE = re.compile(r"_(\d+)(?=\.[^.]+$)")
 

@@ -1,17 +1,14 @@
 from __future__ import annotations
 
 import argparse
-import time
 import statistics
+import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from typing import Optional
 
 import requests
 import torch
-from transformers import AutoTokenizer
-from dg_ttt.model import load_and_process_dataset
-
 from sglang.srt.environ import envs
 from sglang.srt.utils import get_device_sm, kill_process_tree
 from sglang.test.test_utils import (
@@ -19,6 +16,9 @@ from sglang.test.test_utils import (
     find_available_port,
     popen_launch_server,
 )
+from transformers import AutoTokenizer
+
+from dg_ttt.model import load_and_process_dataset
 
 
 def _is_blackwell() -> bool:

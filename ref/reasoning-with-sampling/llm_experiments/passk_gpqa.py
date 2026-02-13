@@ -1,11 +1,11 @@
-import os
-import pandas as pd
-import numpy as np
-import matplotlib.pyplot as plt
-from grader_utils.gpqa_grader import grade_answer, parse_answer_gpqa
 import itertools
 import re
-from typing import List, Dict, Tuple
+from typing import Dict, List, Tuple
+
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+from grader_utils.gpqa_grader import grade_answer, parse_answer_gpqa
 
 _LAST_NUM_RE = re.compile(r"_(\d+)(?=\.[^.]+$)")
 

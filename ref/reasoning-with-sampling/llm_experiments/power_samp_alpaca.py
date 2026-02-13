@@ -1,29 +1,15 @@
-import os
-
-from contextlib import nullcontext
-from glob import glob
-import json
-import random
-from tqdm import tqdm
 import argparse
+import json
+import os
+import random
 
-import pandas as pd
 import numpy as np
-from torch.nn.parallel import DistributedDataParallel as DDP
-from torch.distributed import init_process_group, destroy_process_group
-from torch.utils.data import Dataset, DataLoader
-from dataclasses import dataclass
-from datasets import Dataset, load_dataset, concatenate_datasets
-
-
+import pandas as pd
 import torch
-import torch.nn as nn
-from torch.nn import functional as F
 import transformers
-
-from grader_utils.parse_utils import parse_answer
 from constants import *
 from power_samp_utils import *
+from tqdm import tqdm
 
 
 def mcmc_power_samp_alp(p: AutoregressiveSampler, context, temp, mcmc_steps, max_new_tokens, block_num=16):

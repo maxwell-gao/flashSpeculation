@@ -1,28 +1,11 @@
-import os
 
-from contextlib import nullcontext
-from glob import glob
-import json
 import random
-from tqdm import tqdm
-import argparse
 
-import pandas as pd
 import numpy as np
-from torch.nn.parallel import DistributedDataParallel as DDP
-from torch.distributed import init_process_group, destroy_process_group
-from torch.utils.data import Dataset, DataLoader
-from dataclasses import dataclass
-from datasets import Dataset, load_dataset, concatenate_datasets
-
-
 import torch
-import torch.nn as nn
-from torch.nn import functional as F
-import transformers
-
-from grader_utils.parse_utils import parse_answer
 from constants import *
+from torch.nn import functional as F
+from tqdm import tqdm
 
 ### DESCRIPTION ###
 # power sampling to sample from p^{alpha}, where p is the base model
@@ -130,7 +113,7 @@ def max_swap(p: AutoregressiveSampler, context, temp, mcmc_steps, max_new_tokens
             s = len(prop)
             assert len(log_prob_prop) == s - idx
             assert len(target_log_prob_prop) == s - idx
-            log_prob_cur = log_probs_norm.copy()[idx - c : s - c]
+            log_probs_norm.copy()[idx - c : s - c]
             target_log_prob_cur = log_probs_unnorm.copy()[idx - c : s - c]
             log_r = sum(target_log_prob_prop) - sum(target_log_prob_cur)
 

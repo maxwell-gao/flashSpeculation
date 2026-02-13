@@ -1,16 +1,14 @@
-from baukit import TraceDict
+import logging
 from collections import OrderedDict
 from dataclasses import dataclass
-import einops
-import logging
-import numpy as np
-import os
 from pathlib import Path
-import torch
 from typing import Literal
-from tqdm import tqdm
-from tqdm import trange
 
+import einops
+import numpy as np
+import torch
+from baukit import TraceDict
+from tqdm import tqdm
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
 logger = logging.getLogger(__name__)
@@ -37,7 +35,7 @@ def save_acts(
         tracedict_config["layers"] = [f"{layer_prefix}.{layer}" for layer in tracedict_config["layers"]]
     # set up tokenizer
     if getattr(hf_tokenizer, "pad_token") is None:
-        print(f"WARNING: setting tokenizer pad_token to eos_token")
+        print("WARNING: setting tokenizer pad_token to eos_token")
         hf_tokenizer.pad_token = hf_tokenizer.eos_token
     if padding_side != hf_tokenizer.padding_side:
         print(f"WARNING: updating tokenizer padding_side to {padding_side}")

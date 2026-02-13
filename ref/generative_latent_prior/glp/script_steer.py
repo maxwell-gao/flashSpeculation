@@ -1,7 +1,7 @@
-from baukit import TraceDict
 import einops
 import torch
 import transformers
+from baukit import TraceDict
 
 from glp import flow_matching
 
@@ -11,7 +11,6 @@ from glp import flow_matching
 # =========================
 def postprocess_on_manifold_wrapper(model, u=0.5, num_timesteps=20, layer_idx=None):
     scheduler = model.scheduler
-    num_train_timesteps = scheduler.config.num_train_timesteps
     scheduler.set_timesteps(num_timesteps)
 
     def postprocess_on_manifold(acts_edit):
@@ -49,7 +48,8 @@ def postprocess_on_manifold_wrapper(model, u=0.5, num_timesteps=20, layer_idx=No
 # =========================
 def addition_intervention(w=None, alphas=None, postprocess_fn=None):
     if postprocess_fn is None:
-        postprocess_fn = lambda x: x
+        def postprocess_fn(x):
+            return x
 
     def rep_act(output, layer_name, inputs):
         nonlocal w, alphas
@@ -101,7 +101,7 @@ def generate_with_intervention_wrapper(seed=42):
             intervention_fn = intervention_wrapper(**intervention_kwargs)
         else:
             intervention_fn = None
-        with TraceDict(hf_model, layers=layers, edit_output=intervention_fn) as ret:
+        with TraceDict(hf_model, layers=layers, edit_output=intervention_fn):
             if forward_only:
                 outputs = hf_model(**inputs)
                 output_text = hf_processor.batch_decode(outputs.logits.argmax(dim=-1), skip_special_tokens=True)

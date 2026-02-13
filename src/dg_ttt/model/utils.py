@@ -1,6 +1,7 @@
-import torch
 from typing import Optional
-from datasets import load_dataset, Features, Sequence, Value
+
+import torch
+from datasets import Features, Sequence, Value, load_dataset
 
 
 def build_target_layer_ids(num_target_layers: int, num_draft_layers: int):

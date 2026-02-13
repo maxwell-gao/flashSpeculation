@@ -1,15 +1,16 @@
-import einops
-from einops import repeat
-from huggingface_hub import snapshot_download
-from itertools import chain
 import math
-from omegaconf import OmegaConf
 import os
+from itertools import chain
 from pathlib import Path
-from safetensors.torch import load_file, save_file
+from types import SimpleNamespace
+
+import einops
 import torch
 import torch.nn as nn
-from types import SimpleNamespace
+from einops import repeat
+from huggingface_hub import snapshot_download
+from omegaconf import OmegaConf
+from safetensors.torch import load_file, save_file
 
 from glp import flow_matching
 
@@ -71,7 +72,7 @@ class Normalizer(nn.Module):
 
     def save_config(self, path):
         path = Path(path)
-        torch.save({"mean": self.mean, "var": self.var}, path / f"rep_statistics.pt")
+        torch.save({"mean": self.mean, "var": self.var}, path / "rep_statistics.pt")
 
 
 # ==========================

@@ -1,6 +1,6 @@
-import textwrap
-import json
 import re
+import textwrap
+
 from grader_utils.he_check import evaluate_functional_correctness
 
 
