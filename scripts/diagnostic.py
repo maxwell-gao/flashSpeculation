@@ -6,21 +6,27 @@ the target pathway (shallow readout: Layer 36 → lm_head) and the draft pathway
 (deep readout: multi-layer → 5-layer transformer → lm_head), then compare their
 logit quality token-by-token.
 
+Three modes to decompose the signal:
+  --mode gold     Gold tokens as noise_embedding (upper bound; includes info leakage)
+  --mode mask     Mask tokens as noise_embedding (fair: matches spec_generate)
+  --mode random   Gold tokens as noise but randomized target_hidden (ablation)
+
 Usage:
     uv run python scripts/diagnostic.py \
         --model Qwen/Qwen3-4B \
         --draft z-lab/Qwen3-4B-DFlash-b16 \
         --dataset gsm8k \
+        --mode mask \
         --max-samples 50 \
         --max-seq-len 2048 \
-        --output results/phase0/diagnostic_gsm8k.json
+        --output results/phase0/diagnostic_gsm8k_mask.json
 
 Multi-GPU:
     torchrun --nproc_per_node=8 scripts/diagnostic.py \
         --model Qwen/Qwen3-8B \
         --draft z-lab/Qwen3-8B-DFlash-b16 \
-        --dataset gsm8k \
-        --output results/phase0/diagnostic_gsm8k_8gpu.json
+        --dataset gsm8k --mode mask \
+        --output results/phase0/diagnostic_gsm8k_mask_8gpu.json
 """
 
 import argparse
@@ -40,6 +46,13 @@ from dg_ttt import distributed as dist
 from dg_ttt.model import DFlashDraftModel, extract_context_feature
 
 console = Console()
+
+MODE_CHOICES = ["gold", "mask", "random"]
+MODE_DESCRIPTIONS = {
+    "gold": "Gold token embeddings as noise (includes non-causal info leakage)",
+    "mask": "Mask token embeddings as noise (fair comparison, matches spec_generate)",
+    "random": "Gold token noise + randomized target_hidden (ablation for leakage vs layers)",
+}
 
 
 # ---------------------------------------------------------------------------
@@ -68,11 +81,17 @@ def load_diagnostic_dataset(name: str) -> list[tuple[str, str]]:
     elif name == "alpaca":
         ds = load_dataset("tatsu-lab/alpaca", split="train")
         for ex in ds:
-            prompt = f"{ex['instruction']}\n\nInput:\n{ex['input']}" if ex["input"] else ex["instruction"]
+            prompt = (
+                f"{ex['instruction']}\n\nInput:\n{ex['input']}"
+                if ex["input"]
+                else ex["instruction"]
+            )
             pairs.append((prompt, ex["output"]))
 
     else:
-        raise ValueError(f"Unknown dataset: {name}. Supported: gsm8k, math500, alpaca")
+        raise ValueError(
+            f"Unknown dataset: {name}. Supported: gsm8k, math500, alpaca"
+        )
 
     return pairs
 
@@ -91,21 +110,26 @@ def compute_logit_comparison(
     gold_answer_text: str,
     max_seq_len: int,
     device: torch.device,
+    mode: str = "gold",
 ) -> dict | None:
     """Teacher-forcing comparison of target vs draft on a single example.
 
-    Block processing exactly mirrors ``spec_generate``:
+    Block processing mirrors ``spec_generate``:
 
-    - Block 0: context = full prompt hidden states, noise = first BS answer embeddings,
+    - Block 0: context = full prompt hidden states, noise = first BS embeddings,
       position_ids = [0 .. prompt_len + BS).  Crop KV cache to prompt_len.
-    - Block i>0: context = hidden states from previous block's positions (BS entries),
-      noise = next BS answer embeddings, position_ids = [kv_len .. block_end).
+    - Block i>0: context = previous block's hidden states (BS entries),
+      noise = next BS embeddings, position_ids = [kv_len .. block_end).
       Crop KV cache to block_start.
 
-    Each block produces BS-1 predictions (the first noise position is the "known"
-    token; the draft predicts positions 1 through BS-1 within each block).
+    Modes:
+        gold   — noise_embedding from gold tokens (non-causal info leakage possible)
+        mask   — noise_embedding from mask tokens (position 0 = known token,
+                 rest = mask_token_id; matches actual spec_generate)
+        random — noise_embedding from gold tokens, but target_hidden replaced
+                 with norm-matched Gaussian noise (ablation)
 
-    Returns dict with per-token and aggregate stats, or None if too short.
+    Returns dict with per-token stats including rank, or None if too short.
     """
     block_size = draft_model.block_size
 
@@ -155,7 +179,31 @@ def compute_logit_comparison(
         output.hidden_states,
         draft_model.target_layer_ids,
     )
-    noise_embedding = target.model.embed_tokens(full_ids)
+
+    # Precompute noise embeddings depending on mode
+    if mode == "gold":
+        # Gold token embeddings (original behavior — includes info leakage)
+        noise_embedding = target.model.embed_tokens(full_ids)
+    elif mode == "mask":
+        # Mask token embeddings for answer region (matches spec_generate)
+        # Prompt region uses gold embeddings (for the first block's context alignment)
+        prompt_emb = target.model.embed_tokens(prompt_ids)
+        mask_id = draft_model.mask_token_id
+        mask_answer_ids = torch.full(
+            (1, answer_len), mask_id, dtype=torch.long, device=device,
+        )
+        # Position 0 of each block is the "known" token — overwrite with gold
+        for b in range(n_full_blocks):
+            offset = b * block_size
+            mask_answer_ids[0, offset] = answer_ids[0, offset]
+        mask_answer_emb = target.model.embed_tokens(mask_answer_ids)
+        noise_embedding = torch.cat([prompt_emb, mask_answer_emb], dim=1)
+    elif mode == "random":
+        # Gold token embeddings (same as gold mode)
+        noise_embedding = target.model.embed_tokens(full_ids)
+    else:
+        raise ValueError(f"Unknown mode: {mode}")
+
     all_position_ids = torch.arange(
         total_len + block_size,
         device=device,
@@ -180,6 +228,12 @@ def compute_logit_comparison(
             noise = noise_embedding[:, block_start:block_end, :]
             kv_len = past_kv_draft.get_seq_length()
             pos = all_position_ids[:, kv_len:block_end]
+
+        # In random mode, replace ctx with norm-matched Gaussian noise
+        if mode == "random":
+            real_norm = ctx.norm()
+            ctx = torch.randn_like(ctx)
+            ctx = ctx * (real_norm / (ctx.norm() + 1e-8))
 
         draft_out = draft_model(
             target_hidden=ctx,
@@ -224,6 +278,10 @@ def compute_logit_comparison(
             d_probs = torch.softmax(draft_logits[0, draft_offset, :], dim=-1)
             p_draft = d_probs[gold_id].item()
 
+            # Rank: 1-indexed, lower is better
+            rank_target = int((t_probs > t_probs[gold_id]).sum().item()) + 1
+            rank_draft = int((d_probs > d_probs[gold_id]).sum().item()) + 1
+
             token_results.append(
                 {
                     "pos": gold_pos,
@@ -234,6 +292,8 @@ def compute_logit_comparison(
                     "delta": p_draft - p_target,
                     "log_p_target": float(np.log(max(p_target, 1e-30))),
                     "log_p_draft": float(np.log(max(p_draft, 1e-30))),
+                    "rank_target": rank_target,
+                    "rank_draft": rank_draft,
                 }
             )
             draft_offset += 1
@@ -244,6 +304,8 @@ def compute_logit_comparison(
         return None
 
     deltas = [t["delta"] for t in token_results]
+    ranks_t = [t["rank_target"] for t in token_results]
+    ranks_d = [t["rank_draft"] for t in token_results]
     return {
         "prompt_len": prompt_len,
         "answer_len": answer_len,
@@ -254,8 +316,20 @@ def compute_logit_comparison(
         "pct_draft_wins": sum(1 for d in deltas if d > 0) / n_tokens,
         "mean_p_target": float(np.mean([t["p_target"] for t in token_results])),
         "mean_p_draft": float(np.mean([t["p_draft"] for t in token_results])),
-        "mean_log_p_target": float(np.mean([t["log_p_target"] for t in token_results])),
-        "mean_log_p_draft": float(np.mean([t["log_p_draft"] for t in token_results])),
+        "mean_log_p_target": float(
+            np.mean([t["log_p_target"] for t in token_results])
+        ),
+        "mean_log_p_draft": float(
+            np.mean([t["log_p_draft"] for t in token_results])
+        ),
+        "mean_rank_target": float(np.mean(ranks_t)),
+        "mean_rank_draft": float(np.mean(ranks_d)),
+        "median_rank_target": float(np.median(ranks_t)),
+        "median_rank_draft": float(np.median(ranks_d)),
+        "pct_rank_draft_better": sum(
+            1 for rt, rd in zip(ranks_t, ranks_d) if rd < rt
+        )
+        / n_tokens,
         "tokens": token_results,
     }
 
@@ -275,6 +349,8 @@ def compute_aggregate_stats(results: list[dict]) -> dict:
         return {}
 
     deltas = [t["delta"] for t in all_tokens]
+    ranks_t = [t["rank_target"] for t in all_tokens]
+    ranks_d = [t["rank_draft"] for t in all_tokens]
     overall = {
         "n_examples": len(results),
         "n_tokens": len(all_tokens),
@@ -283,8 +359,20 @@ def compute_aggregate_stats(results: list[dict]) -> dict:
         "pct_draft_wins": sum(1 for d in deltas if d > 0) / len(deltas),
         "mean_p_target": float(np.mean([t["p_target"] for t in all_tokens])),
         "mean_p_draft": float(np.mean([t["p_draft"] for t in all_tokens])),
-        "mean_log_p_target": float(np.mean([t["log_p_target"] for t in all_tokens])),
-        "mean_log_p_draft": float(np.mean([t["log_p_draft"] for t in all_tokens])),
+        "mean_log_p_target": float(
+            np.mean([t["log_p_target"] for t in all_tokens])
+        ),
+        "mean_log_p_draft": float(
+            np.mean([t["log_p_draft"] for t in all_tokens])
+        ),
+        "mean_rank_target": float(np.mean(ranks_t)),
+        "mean_rank_draft": float(np.mean(ranks_d)),
+        "median_rank_target": float(np.median(ranks_t)),
+        "median_rank_draft": float(np.median(ranks_d)),
+        "pct_rank_draft_better": sum(
+            1 for rt, rd in zip(ranks_t, ranks_d) if rd < rt
+        )
+        / len(all_tokens),
     }
 
     # Buckets by target confidence
@@ -298,18 +386,26 @@ def compute_aggregate_stats(results: list[dict]) -> dict:
 
     bucket_stats = {}
     for name, pred in bucket_defs:
-        bucket_tokens = [t for t in all_tokens if pred(t)]
-        if not bucket_tokens:
+        bt = [t for t in all_tokens if pred(t)]
+        if not bt:
             bucket_stats[name] = {"n_tokens": 0}
             continue
-        bd = [t["delta"] for t in bucket_tokens]
+        bd = [t["delta"] for t in bt]
+        brt = [t["rank_target"] for t in bt]
+        brd = [t["rank_draft"] for t in bt]
         bucket_stats[name] = {
-            "n_tokens": len(bucket_tokens),
+            "n_tokens": len(bt),
             "mean_delta": float(np.mean(bd)),
             "median_delta": float(np.median(bd)),
             "pct_draft_wins": sum(1 for d in bd if d > 0) / len(bd),
-            "mean_p_target": float(np.mean([t["p_target"] for t in bucket_tokens])),
-            "mean_p_draft": float(np.mean([t["p_draft"] for t in bucket_tokens])),
+            "mean_p_target": float(np.mean([t["p_target"] for t in bt])),
+            "mean_p_draft": float(np.mean([t["p_draft"] for t in bt])),
+            "mean_rank_target": float(np.mean(brt)),
+            "mean_rank_draft": float(np.mean(brd)),
+            "pct_rank_draft_better": sum(
+                1 for rt, rd in zip(brt, brd) if rd < rt
+            )
+            / len(bt),
         }
 
     return {"overall": overall, "by_target_confidence": bucket_stats}
@@ -320,7 +416,7 @@ def compute_aggregate_stats(results: list[dict]) -> dict:
 # ---------------------------------------------------------------------------
 
 
-def print_summary(agg: dict) -> None:
+def print_summary(agg: dict, mode: str) -> None:
     """Rich console summary of aggregate stats."""
     if not agg:
         console.print("[red]No results to display.[/red]")
@@ -328,7 +424,10 @@ def print_summary(agg: dict) -> None:
 
     overall = agg["overall"]
     console.print()
-    console.rule("[bold]Phase 0.3 \u2014 Go/No-Go Diagnostic Results[/bold]")
+    console.rule(
+        f"[bold]Phase 0.3 \u2014 Go/No-Go Diagnostic [mode={mode}][/bold]"
+    )
+    console.print(f"[dim]{MODE_DESCRIPTIONS[mode]}[/dim]")
     console.print()
 
     # Overall table
@@ -344,24 +443,35 @@ def print_summary(agg: dict) -> None:
         f"{overall['mean_delta']:+.4f}",
     )
     tbl.add_row("Median delta", f"{overall['median_delta']:+.4f}")
-    tbl.add_row("% draft wins", f"{overall['pct_draft_wins']:.1%}")
+    tbl.add_row("% draft wins (prob)", f"{overall['pct_draft_wins']:.1%}")
     tbl.add_row("Mean log p_target", f"{overall['mean_log_p_target']:.4f}")
     tbl.add_row("Mean log p_draft", f"{overall['mean_log_p_draft']:.4f}")
+    tbl.add_row("", "")
+    tbl.add_row("Mean rank target", f"{overall['mean_rank_target']:.1f}")
+    tbl.add_row("Mean rank draft", f"{overall['mean_rank_draft']:.1f}")
+    tbl.add_row("Median rank target", f"{overall['median_rank_target']:.0f}")
+    tbl.add_row("Median rank draft", f"{overall['median_rank_draft']:.0f}")
+    tbl.add_row(
+        "% draft better rank", f"{overall['pct_rank_draft_better']:.1%}",
+    )
     console.print(tbl)
 
     # Bucket breakdown
     console.print()
     btbl = Table(title="Breakdown by Target Confidence")
     btbl.add_column("Bucket", style="cyan")
-    btbl.add_column("N tokens", justify="right")
-    btbl.add_column("Mean p_target", justify="right")
-    btbl.add_column("Mean p_draft", justify="right")
-    btbl.add_column("Mean delta", justify="right")
-    btbl.add_column("% draft wins", justify="right")
+    btbl.add_column("N", justify="right")
+    btbl.add_column("p_target", justify="right")
+    btbl.add_column("p_draft", justify="right")
+    btbl.add_column("delta", justify="right")
+    btbl.add_column("% p wins", justify="right")
+    btbl.add_column("rank_t", justify="right")
+    btbl.add_column("rank_d", justify="right")
+    btbl.add_column("% rank wins", justify="right")
 
     for name, stats in agg["by_target_confidence"].items():
         if stats["n_tokens"] == 0:
-            btbl.add_row(name, "0", "-", "-", "-", "-")
+            btbl.add_row(name, "0", *(["-"] * 7))
         else:
             btbl.add_row(
                 name,
@@ -370,47 +480,89 @@ def print_summary(agg: dict) -> None:
                 f"{stats['mean_p_draft']:.4f}",
                 f"{stats['mean_delta']:+.4f}",
                 f"{stats['pct_draft_wins']:.1%}",
+                f"{stats['mean_rank_target']:.0f}",
+                f"{stats['mean_rank_draft']:.0f}",
+                f"{stats['pct_rank_draft_better']:.1%}",
             )
     console.print(btbl)
 
-    # Verdict — based on low-confidence bucket (where guided decoding matters)
+    # Verdict — mode-aware, using rank as the primary metric
     console.print()
     low_conf = agg["by_target_confidence"].get("p_target < 0.01", {})
     low_n = low_conf.get("n_tokens", 0)
-    low_pct = low_conf.get("pct_draft_wins", 0)
-    low_delta = low_conf.get("mean_delta", 0)
 
-    if low_n > 0 and low_pct > 0.55 and low_delta > 0:
+    if low_n == 0:
         console.print(
-            f"[bold green]VERDICT: On low-confidence tokens (p_target < 0.01, "
-            f"n={low_n}), draft wins {low_pct:.0%} with mean delta "
-            f"{low_delta:+.4f}.[/bold green]"
+            "[bold yellow]VERDICT: No low-confidence tokens found. "
+            "Try a harder dataset or longer sequences.[/bold yellow]"
+        )
+        console.print()
+        return
+
+    low_rank_pct = low_conf.get("pct_rank_draft_better", 0)
+    low_p_pct = low_conf.get("pct_draft_wins", 0)
+    low_mean_rank_t = low_conf.get("mean_rank_target", 0)
+    low_mean_rank_d = low_conf.get("mean_rank_draft", 0)
+
+    if mode == "mask":
+        # This is the fair test — interpret rank results directly
+        if low_rank_pct > 0.55 and low_mean_rank_d < low_mean_rank_t:
+            console.print(
+                f"[bold green]VERDICT [mode=mask]: On low-confidence tokens "
+                f"(n={low_n}), draft achieves better rank {low_rank_pct:.0%} "
+                f"of the time (mean rank {low_mean_rank_d:.0f} vs "
+                f"{low_mean_rank_t:.0f}).[/bold green]"
+            )
+            console.print(
+                "[bold green]  Genuine deep-readout signal: intermediate layers "
+                "carry information lm_head misses.[/bold green]"
+            )
+        elif abs(low_mean_rank_d - low_mean_rank_t) / max(low_mean_rank_t, 1) < 0.1:
+            console.print(
+                f"[bold yellow]VERDICT [mode=mask]: Draft rank ~= target rank "
+                f"on hard tokens (mean {low_mean_rank_d:.0f} vs "
+                f"{low_mean_rank_t:.0f}). No deep-readout advantage. "
+                f"TTT needed to create divergence.[/bold yellow]"
+            )
+        else:
+            console.print(
+                f"[bold red]VERDICT [mode=mask]: Draft rank worse than target "
+                f"on hard tokens ({low_mean_rank_d:.0f} vs "
+                f"{low_mean_rank_t:.0f}). Draft is a weaker decoder even "
+                f"with intermediate-layer access.[/bold red]"
+            )
+    elif mode == "random":
+        # Ablation: if draft still wins, advantage is from gold-token leakage
+        if low_rank_pct > 0.55:
+            console.print(
+                f"[bold red]VERDICT [mode=random]: Draft wins {low_rank_pct:.0%} "
+                f"on rank even with random hidden states. The advantage is "
+                f"from gold-token info leakage, not intermediate layers.[/bold red]"
+            )
+        else:
+            console.print(
+                f"[bold green]VERDICT [mode=random]: Draft does NOT win with "
+                f"random hidden states ({low_rank_pct:.0%} rank wins). "
+                f"Confirms intermediate layers are necessary for any "
+                f"draft advantage.[/bold green]"
+            )
+    else:  # gold
+        console.print(
+            f"[bold]VERDICT [mode=gold]: On low-confidence tokens (n={low_n}), "
+            f"draft wins {low_p_pct:.0%} (prob) / {low_rank_pct:.0%} (rank)."
+            f"[/bold]"
         )
         console.print(
-            "[bold green]  The deep readout extracts signal the shallow readout "
-            "misses. Guided decoding has potential.[/bold green]"
-        )
-    elif low_n > 0 and abs(low_delta) < 0.005:
-        console.print(
-            "[bold yellow]VERDICT: p_draft \u2248 p_target even on hard tokens "
-            "\u2014 draft faithfully imitates target. TTT needed.[/bold yellow]"
-        )
-    elif low_n == 0:
-        console.print(
-            "[bold yellow]VERDICT: No low-confidence tokens found. Try a "
-            "harder dataset or longer sequences.[/bold yellow]"
-        )
-    else:
-        console.print(
-            f"[bold red]VERDICT: Draft underperforms on hard tokens (delta={low_delta:+.4f}). Investigate.[/bold red]"
+            "[dim]  Note: gold mode includes non-causal info leakage. "
+            "Run with --mode mask for a fair comparison, and --mode random "
+            "to isolate the leakage component.[/dim]"
         )
 
-    # Also note overall picture
     console.print(
         f"\n[dim]Overall: mean delta = {overall['mean_delta']:+.4f}, "
-        f"driven by {overall['n_tokens']} tokens "
-        f"({overall['pct_draft_wins']:.0%} draft wins). "
-        f"High-confidence tokens dominate the average.[/dim]"
+        f"mean rank target = {overall['mean_rank_target']:.0f}, "
+        f"mean rank draft = {overall['mean_rank_draft']:.0f}, "
+        f"draft better rank = {overall['pct_rank_draft_better']:.0%}[/dim]"
     )
     console.print()
 
@@ -444,6 +596,13 @@ def main() -> None:
         help="Dataset with gold answers",
     )
     parser.add_argument(
+        "--mode",
+        type=str,
+        default="gold",
+        choices=MODE_CHOICES,
+        help="Noise/hidden mode: gold (default), mask, or random",
+    )
+    parser.add_argument(
         "--max-samples",
         type=int,
         default=None,
@@ -474,7 +633,9 @@ def main() -> None:
 
         attn_impl = "flash_attention_2"
     except ImportError:
-        console.print("[yellow]flash_attn not installed, falling back to SDPA[/yellow]")
+        console.print(
+            "[yellow]flash_attn not installed, falling back to SDPA[/yellow]"
+        )
         attn_impl = "sdpa"
 
     # Load models
@@ -507,6 +668,7 @@ def main() -> None:
     # Load dataset
     if dist.is_main():
         console.print(f"[bold]Loading dataset:[/bold] {args.dataset}")
+        console.print(f"  Mode: {args.mode} ({MODE_DESCRIPTIONS[args.mode]})")
         console.print(f"  Block size: {draft_model.block_size}")
         console.print(f"  Target layers: {draft_model.target_layer_ids}")
 
@@ -534,6 +696,7 @@ def main() -> None:
             gold_answer_text=gold,
             max_seq_len=args.max_seq_len,
             device=device,
+            mode=args.mode,
         )
         if result is None:
             skipped += 1
@@ -551,11 +714,12 @@ def main() -> None:
 
     if dist.is_main():
         console.print(
-            f"\n[bold]Processed {len(results)} examples[/bold] ({skipped} skipped — answer too short for block_size)"
+            f"\n[bold]Processed {len(results)} examples[/bold] "
+            f"({skipped} skipped \u2014 answer too short for block_size)"
         )
 
         agg = compute_aggregate_stats(results)
-        print_summary(agg)
+        print_summary(agg, mode=args.mode)
 
         # Save JSON
         if args.output:
@@ -567,6 +731,7 @@ def main() -> None:
                     "model": args.model,
                     "draft": args.draft,
                     "dataset": args.dataset,
+                    "mode": args.mode,
                     "max_samples": args.max_samples,
                     "max_seq_len": args.max_seq_len,
                     "block_size": draft_model.block_size,
@@ -580,7 +745,9 @@ def main() -> None:
             if len(results) > 100:
                 for ex in output_data["examples"]:
                     del ex["tokens"]
-                console.print("[dim]Per-token data stripped from JSON (>100 examples)[/dim]")
+                console.print(
+                    "[dim]Per-token data stripped from JSON (>100 examples)[/dim]"
+                )
 
             with open(out_path, "w") as f:
                 json.dump(output_data, f, indent=2, ensure_ascii=False)
