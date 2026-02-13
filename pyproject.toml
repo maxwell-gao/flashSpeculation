@@ -4,14 +4,15 @@ version = "0.1.0"
 description = "Draft-Guided Test-Time Training for Context Learning"
 readme = "README.md"
 license = "MIT"
-requires-python = ">=3.11"
+requires-python = ">=3.11,<3.13"
 dependencies = [
-    "torch>=2.9.0",
+    "torch>=2.10.0",
     "transformers>=4.57.0",
     "accelerate",
     "datasets>=3.0,<3.6",
     "pyarrow>=14,<19",
     "peft",
+    "flash-attn",
     "rich",
     "loguru",
     "numpy",
@@ -22,12 +23,10 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-sglang = [
-    "sglang @ git+https://github.com/sgl-project/sglang.git@refs/pull/16818/head#subdirectory=python",
-]
-flash-attn = [
-    "flash-attn",
-]
+# sglang pinned to torch==2.9.1, incompatible with flash-attn build; re-enable when needed
+# sglang = [
+#     "sglang @ git+https://github.com/sgl-project/sglang.git@refs/pull/16818/head#subdirectory=python",
+# ]
 
 [build-system]
 requires = ["hatchling"]
@@ -38,6 +37,9 @@ allow-direct-references = true
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/dg_ttt"]
+
+[tool.uv.extra-build-dependencies]
+flash-attn = ["torch", "setuptools"]
 
 [tool.ruff]
 line-length = 120

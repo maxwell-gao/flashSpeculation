@@ -18,7 +18,12 @@ uv.lock
 
 # Project
 data*/
+results/
 jobs/
 wandb/
 logs/
 *.log
+
+# Cache (symlinked)
+.cache
+.cache/
