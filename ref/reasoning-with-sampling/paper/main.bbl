@@ -1,0 +1,241 @@
+\begin{thebibliography}{41}
+\providecommand{\natexlab}[1]{#1}
+\providecommand{\url}[1]{\texttt{#1}}
+\expandafter\ifx\csname urlstyle\endcsname\relax
+  \providecommand{\doi}[1]{doi: #1}\else
+  \providecommand{\doi}{doi: \begingroup \urlstyle{rm}\Url}\fi
+
+\bibitem[Guo et~al.(2025)Guo, Yang, Zhang, Song, Zhang, Xu, Zhu, Ma, Wang, Bi, et~al.]{guo2025deepseekr1}
+Daya Guo, Dejian Yang, Haowei Zhang, Junxiao Song, Ruoyu Zhang, Runxin Xu, Qihao Zhu, Shirong Ma, Peiyi Wang, Xiao Bi, et~al.
+\newblock Deepseek-r1: Incentivizing reasoning capability in {LLMs} via reinforcement learning.
+\newblock \emph{arXiv preprint arXiv:2501.12948}, 2025.
+
+\bibitem[Hu et~al.(2025)Hu, Zhang, Han, Jiang, Zhang, and Shum]{hu2025openreasonerzero}
+Jingcheng Hu, Yinmin Zhang, Qi~Han, Daxin Jiang, Xiangyu Zhang, and Heung-Yeung Shum.
+\newblock Open-reasoner-zero: An open source approach to scaling up reinforcement learning on the base model.
+\newblock \emph{arXiv preprint arXiv:2503.24290}, 2025.
+
+\bibitem[Hendrycks et~al.(2021)Hendrycks, Burns, Kadavath, Arora, Basart, Tang, Song, and Steinhardt]{hendrycks2021math}
+Dan Hendrycks, Collin Burns, Saurav Kadavath, Akul Arora, Steven Basart, Eric Tang, Dawn Song, and Jacob Steinhardt.
+\newblock Measuring mathematical problem solving with the {MATH} dataset.
+\newblock \emph{arXiv preprint arXiv:2103.03874}, 2021.
+
+\bibitem[Li et~al.(2022)Li, Choi, Chung, Kushman, Schrittwieser, Leblond, Eccles, Keeling, Gimeno, Dal~Lago, Hubert, Choy, de~Masson~d'Autume, Babuschkin, Chen, Huang, Welbl, Gowal, Cherepanov, Molloy, Mankowitz, Robson, Kohli, de~Freitas, Kavukcuoglu, and Vinyals]{li2022alphacode}
+Yujia Li, David Choi, Junyoung Chung, Nate Kushman, Julian Schrittwieser, R{\'e}mi Leblond, Tom Eccles, James Keeling, Felix Gimeno, Agustin Dal~Lago, Thomas Hubert, Peter Choy, Cyprien de~Masson~d'Autume, Igor Babuschkin, Xinyun Chen, Po-Sen Huang, Johannes Welbl, Sven Gowal, Alexey Cherepanov, James Molloy, Daniel Mankowitz, Esme~Sutherland Robson, Pushmeet Kohli, Nando de~Freitas, Koray Kavukcuoglu, and Oriol Vinyals.
+\newblock Competition-level code generation with {AlphaCode}.
+\newblock \emph{arXiv preprint arXiv:2203.07814}, 2022.
+
+\bibitem[Rein et~al.(2024)Rein, Hou, Cooper~Stickland, Petty, Pang, Dirani, Michael, and Bowman]{rein2024gpqa}
+David Rein, Betty~Li Hou, Asa Cooper~Stickland, Jackson Petty, Richard~Yuanzhe Pang, Julien Dirani, Julian Michael, and Samuel~R Bowman.
+\newblock {GPQA}: A graduate-level google-proof q\&a benchmark.
+\newblock In \emph{First Conference on Language Modeling}, 2024.
+
+\bibitem[He et~al.(2025)He, Fried, and Welleck]{he2025rewarding}
+Andre He, Daniel Fried, and Sean Welleck.
+\newblock Rewarding the unlikely: Lifting {GRPO} beyond distribution sharpening.
+\newblock \emph{arXiv preprint arXiv:2506.02355}, 2025.
+
+\bibitem[Shao et~al.(2025)Shao, Li, Xin, Geng, Wang, Oh, Du, Lambert, Min, Krishna, Tsvetkov, Hajishirzi, Koh, and Zettlemoyer]{shao2025spuriousrewards}
+Rulin Shao, Shuyue~Stella Li, Rui Xin, Scott Geng, Yiping Wang, Sewoong Oh, Simon~Shaolei Du, Nathan Lambert, Sewon Min, Ranjay Krishna, Yulia Tsvetkov, Hannaneh Hajishirzi, Pang~Wei Koh, and Luke Zettlemoyer.
+\newblock Spurious rewards: Rethinking training signals in {RLVR}.
+\newblock \emph{arXiv preprint arXiv:2506.10947}, 2025.
+
+\bibitem[Yue et~al.(2025)Yue, Chen, Lu, Zhao, Wang, Song, and Huang]{yue2025doesrlincentivizereasoning}
+Yang Yue, Zhiqi Chen, Rui Lu, Andrew Zhao, Zhaokai Wang, Shiji Song, and Gao Huang.
+\newblock Does reinforcement learning really incentivize reasoning capacity in llms beyond the base model?
+\newblock \emph{arXiv preprint arXiv:2504.13837}, 2025.
+\newblock URL \url{https://arxiv.org/abs/2504.13837}.
+
+\bibitem[Song et~al.(2025)Song, Kempe, and Munos]{song2025-outcomebasedexploration}
+Yuda Song, Julia Kempe, and R{\'e}mi Munos.
+\newblock Outcome-based exploration for {LLM} reasoning.
+\newblock \emph{arXiv preprint arXiv:2509.06941}, 2025.
+\newblock URL \url{https://arxiv.org/abs/2509.06941}.
+
+\bibitem[Shao et~al.(2024)Shao, Wang, Zhu, Xu, Song, Bi, Zhang, Zhang, Li, Wu, and Guo]{shao2024deepseekmath}
+Zhihong Shao, Peiyi Wang, Qihao Zhu, Runxin Xu, Junxiao Song, Xiao Bi, Haowei Zhang, Mingchuan Zhang, Y.~K. Li, Y.~Wu, and Daya Guo.
+\newblock Deepseek-math: Advancing mathematical reasoning through step-by-step exploration.
+\newblock \emph{arXiv preprint arXiv:2404.01140}, 2024.
+
+\bibitem[Prabhudesai et~al.(2025)Prabhudesai, Chen, Ippoliti, Fragkiadaki, Liu, and Pathak]{prabhudesai2025maximizingconfidence}
+Mihir Prabhudesai, Lili Chen, Alex Ippoliti, Katerina Fragkiadaki, Hao Liu, and Deepak Pathak.
+\newblock Maximizing confidence alone improves reasoning.
+\newblock \emph{arXiv preprint arXiv:2505.22660}, 2025.
+\newblock URL \url{https://arxiv.org/abs/2505.22660}.
+
+\bibitem[Ouyang et~al.(2022)Ouyang, Wu, Jiang, Almeida, Wainwright, Mishkin, Zhang, Agarwal, Slama, Ray, et~al.]{ouyang2022traininglfh}
+Long Ouyang, Jeffrey Wu, Xu~Jiang, Diogo Almeida, Carroll~L. Wainwright, Pamela Mishkin, Chong Zhang, Sandhini Agarwal, Katarina Slama, Alex Ray, et~al.
+\newblock Training language models to follow instructions with human feedback.
+\newblock In \emph{NeurIPS}, volume~35, pages 27730--27744, 2022.
+
+\bibitem[Lambert et~al.(2024)Lambert, Morrison, Pyatkin, Huang, Ivison, Brahman, Miranda, Liu, Dziri, Lyu, et~al.]{lambert2024tulu3}
+Nathan Lambert, Jacob Morrison, Valentina Pyatkin, Shengyi Huang, Hamish Ivison, Faeze Brahman, Lester James~V Miranda, Alisa Liu, Nouha Dziri, Shane Lyu, et~al.
+\newblock T{\"u}lu 3: Pushing frontiers in open language model post-training.
+\newblock \emph{arXiv preprint arXiv:2411.15124}, 2024.
+
+\bibitem[Zeng et~al.(2025)Zeng, Huang, Liu, Liu, He, Ma, and He]{zeng2025simplerlzoo}
+Weihao Zeng, Yuzhen Huang, Qian Liu, Wei Liu, Keqing He, Zejun Ma, and Junxian He.
+\newblock Simplerlzoo: Investigating and taming zero reinforcement learning for open base models in the wild.
+\newblock \emph{arXiv preprint arXiv:2503.18892}, 2025.
+\newblock URL \url{https://arxiv.org/abs/2503.18892}.
+
+\bibitem[Zhao et~al.(2025)Zhao, Kang, Feng, Levine, and Song]{zhao2025learning}
+Xuandong Zhao, Zhewei Kang, Aosong Feng, Sergey Levine, and Dawn Song.
+\newblock Learning to reason without external rewards.
+\newblock \emph{arXiv preprint arXiv:2505.19590}, 2025.
+\newblock URL \url{https://arxiv.org/abs/2505.19590}.
+
+\bibitem[Zhao et~al.(2024)Zhao, Brekelmans, Makhzani, and Grosse]{zhao2024probabilisticinference}
+Stephen Zhao, Rob Brekelmans, Alireza Makhzani, and Roger Grosse.
+\newblock Probabilistic inference in language models via twisted sequential monte carlo.
+\newblock \emph{arXiv preprint arXiv:2404.17546}, 2024.
+\newblock URL \url{https://arxiv.org/abs/2404.17546}.
+
+\bibitem[Chopin(2004)]{chopin2004cltsmc}
+Nicolas Chopin.
+\newblock Central limit theorem for sequential monte carlo methods and its application to bayesian inference.
+\newblock \emph{The Annals of Statistics}, 32\penalty0 (6):\penalty0 2385--2411, 2004.
+\newblock \doi{10.1214/009053604000000615}.
+\newblock URL \url{https://projecteuclid.org/journals/annals-of-statistics/volume-32/issue-6/Central-limit-theorem-for-sequential-Monte-Carlo-methods-and-its/10.1214/009053604000000698.full}.
+
+\bibitem[Faria et~al.(2024)Faria, Agrawal, Farinhas, Rei, de~Souza, and Martins]{faria2024quest}
+Gonçalo R.~A. Faria, Sweta Agrawal, António Farinhas, Ricardo Rei, José G.~C. de~Souza, and André F.~T. Martins.
+\newblock Quest: Quality-aware metropolis-hastings sampling for machine translation.
+\newblock In \emph{NeurIPS}, 2024.
+\newblock URL \url{https://proceedings.neurips.cc/paper_files/paper/2024/file/a221d22ff6a33599142c8299c7ed06bb-Paper-Conference.pdf}.
+
+\bibitem[Neal(1998)]{neal1998annealedimportance}
+Radford~M. Neal.
+\newblock Annealed importance sampling.
+\newblock \emph{arXiv preprint physics/9803008}, 1998.
+\newblock URL \url{https://arxiv.org/abs/physics/9803008}.
+
+\bibitem[{\L}atuszy{\'n}ski et~al.(2025){\L}atuszy{\'n}ski, Moores, and Stumpf-F{\'e}tizon]{latuszynski2025mcmcmultimodal}
+Krzysztof {\L}atuszy{\'n}ski, Matthew~T. Moores, and Timoth{\'e}e Stumpf-F{\'e}tizon.
+\newblock Mcmc for multi-modal distributions.
+\newblock \emph{arXiv preprint arXiv:2501.05908}, 2025.
+\newblock URL \url{https://arxiv.org/abs/2501.05908v1}.
+
+\bibitem[Du et~al.(2023)Du, Durkan, Strudel, Tenenbaum, Dieleman, Fergus, Sohl-Dickstein, Doucet, and Grathwohl]{du2023reduce}
+Yilun Du, Conor Durkan, Robin Strudel, Joshua~B Tenenbaum, Sander Dieleman, Rob Fergus, Jascha Sohl-Dickstein, Arnaud Doucet, and Will~Sussman Grathwohl.
+\newblock Reduce, reuse, recycle: Compositional generation with energy-based diffusion models and mcmc.
+\newblock In \emph{International conference on machine learning}, pages 8489--8510. PMLR, 2023.
+
+\bibitem[Kim et~al.(2025)Kim, Kim, and Park]{kim2025testtimealignment}
+Sunwoo Kim, Minkyu Kim, and Dongmin Park.
+\newblock Test-time alignment of diffusion models without reward over-optimization.
+\newblock \emph{arXiv preprint arXiv:2501.05803}, 2025.
+\newblock URL \url{https://arxiv.org/abs/2501.05803}.
+
+\bibitem[Karan et~al.(2025)Karan, Shah, and Chen]{karan2025reguidance}
+Aayush Karan, Kulin Shah, and Sitan Chen.
+\newblock Reguidance: A simple diffusion wrapper for boosting sample quality on hard inverse problems.
+\newblock \emph{arXiv preprint arXiv:2506.10955}, 2025.
+\newblock URL \url{https://arxiv.org/abs/2506.10955}.
+
+\bibitem[Wang et~al.(2025)Wang, Wang, Du, Sundaralingam, Yang, Chao, P{\'e}rez-D’Arpino, Fox, and Shah]{wang2025inference}
+Yanwei Wang, Lirui Wang, Yilun Du, Balakumar Sundaralingam, Xuning Yang, Yu-Wei Chao, Claudia P{\'e}rez-D’Arpino, Dieter Fox, and Julie Shah.
+\newblock Inference-time policy steering through human interactions.
+\newblock In \emph{2025 IEEE International Conference on Robotics and Automation (ICRA)}, pages 15626--15633. IEEE, 2025.
+
+\bibitem[Kong et~al.(2025)Kong, Du, Mu, Neklyudov, De~Bortoli, Wu, Wang, Ferber, Ma, Gomes, and Zhang]{kong2025diffusionconstrainedopt}
+Lingkai Kong, Yuanqi Du, Wenhao Mu, Kirill Neklyudov, Valentin De~Bortoli, Dongxia Wu, Haorui Wang, Aaron~M. Ferber, Yian Ma, Carla~P. Gomes, and Chao Zhang.
+\newblock Diffusion models as constrained samplers for optimization with unknown constraints.
+\newblock In Yingzhen Li, Stephan Mandt, Shipra Agrawal, and Emtiyaz Khan, editors, \emph{Proceedings of The 28th International Conference on Artificial Intelligence and Statistics}, volume 258 of \emph{Proceedings of Machine Learning Research}, pages 4582--4590. PMLR, 2025.
+\newblock URL \url{https://proceedings.mlr.press/v258/kong25b.html}.
+
+\bibitem[Zhang et~al.(2025)Zhang, Lin, Ye, Zou, Ma, Liang, and Du]{zhang2025inference}
+Xiangcheng Zhang, Haowei Lin, Haotian Ye, James Zou, Jianzhu Ma, Yitao Liang, and Yilun Du.
+\newblock Inference-time scaling of diffusion models through classical search.
+\newblock \emph{arXiv preprint arXiv:2505.23614}, 2025.
+
+\bibitem[Sambridge(2014)]{sambridge2014paralleltempering}
+Malcolm Sambridge.
+\newblock A parallel tempering algorithm for probabilistic sampling and optimization.
+\newblock \emph{Geophysical Journal International}, 196\penalty0 (1):\penalty0 357--374, 2014.
+\newblock \doi{10.1093/gji/ggt374}.
+\newblock URL \url{https://academic.oup.com/gji/article/196/1/357/585739}.
+
+\bibitem[Skreta et~al.(2025)Skreta, Akhound-Sadegh, Ohanesian, Bondesan, Aspuru-Guzik, Doucet, Brekelmans, Tong, and Neklyudov]{skreta2025feynmankacorrectors}
+Marta Skreta, Tara Akhound-Sadegh, Viktor Ohanesian, Roberto Bondesan, Alán Aspuru-Guzik, Arnaud Doucet, Rob Brekelmans, Alexander Tong, and Kirill Neklyudov.
+\newblock Feynman-kac correctors in diffusion: Annealing, guidance, and product of experts.
+\newblock \emph{arXiv preprint arXiv:2503.02819}, 2025.
+\newblock URL \url{https://arxiv.org/abs/2503.02819}.
+
+\bibitem[Xu et~al.(2025)Xu, Wu, Park, Zhou, and Tulsiani]{xu2025temporalscorerescaling}
+Yanbo Xu, Yu~Wu, Sungjae Park, Zhizhuo Zhou, and Shubham Tulsiani.
+\newblock Temporal score rescaling for temperature sampling in diffusion and flow models.
+\newblock \emph{arXiv preprint arXiv:2510.01184}, 2025.
+\newblock URL \url{https://arxiv.org/abs/2510.01184}.
+
+\bibitem[Geffner et~al.(2025)Geffner, Didi, Zhang, Reidenbach, Cao, Yim, Geiger, Dallago, Kucukbenli, and Vahdat]{geffner2025proteina}
+Tomas Geffner, Kieran Didi, Zuobai Zhang, Danny Reidenbach, Zhonglin Cao, Jason Yim, Mario Geiger, Christian Dallago, Emine Kucukbenli, and Arash Vahdat.
+\newblock Proteina: Scaling flow-based protein structure generative models.
+\newblock \emph{arXiv preprint arXiv:2503.00710}, 2025.
+\newblock URL \url{https://arxiv.org/abs/2503.00710}.
+
+\bibitem[Wang et~al.(2020)Wang, Hsieh, Chang, Chen, Pan, Wei, and Juan]{wang2020contextualtemperature}
+Pei-Hsin Wang, Sheng-Iou Hsieh, Shih-Chieh Chang, Yu-Ting Chen, Jia-Yu Pan, Wei Wei, and Da-Chang Juan.
+\newblock Contextual temperature for language modeling.
+\newblock \emph{arXiv preprint arXiv:2012.13575}, 2020.
+\newblock URL \url{https://arxiv.org/abs/2012.13575}.
+
+\bibitem[Li et~al.(2025)Li, Karan, and Chen]{li2025blinkofaneyetheory}
+Marvin Li, Aayush Karan, and Sitan Chen.
+\newblock Blink of an eye: A simple theory for feature localization in generative models.
+\newblock \emph{arXiv preprint arXiv:2502.00921}, 2025.
+\newblock URL \url{https://arxiv.org/abs/2502.00921}.
+
+\bibitem[Abdin et~al.(2024)Abdin, Aneja, Behl, Bubeck, Eldan, Gunasekar, Harrison, Hewett, Javaheripi, Kauffmann, Lee, Lee, Li, Liu, Mendes, Nguyen, Price, de~Rosa, Saarikivi, Salim, Shah, Wang, Ward, Wu, Yu, Zhang, and Zhang]{abdin2024phi4}
+Marah Abdin, Jyoti Aneja, Harkirat Behl, Sébastien Bubeck, Ronen Eldan, Suriya Gunasekar, Michael Harrison, Russell~J. Hewett, Mojan Javaheripi, Piero Kauffmann, James~R. Lee, Yin~Tat Lee, Yuanzhi Li, Weishung Liu, Caio C.~T. Mendes, Anh Nguyen, Eric Price, Gustavo de~Rosa, Olli Saarikivi, Adil Salim, Shital Shah, Xin Wang, Rachel Ward, Yue Wu, Dingli Yu, Cyril Zhang, and Yi~Zhang.
+\newblock Phi-4 technical report.
+\newblock \emph{arXiv preprint arXiv:2412.08905}, 2024.
+\newblock URL \url{https://arxiv.org/abs/2412.08905}.
+
+\bibitem[Metropolis et~al.(1953)Metropolis, Rosenbluth, Rosenbluth, Teller, and Teller]{metropolis1953equation}
+Nicholas Metropolis, Arianna~W. Rosenbluth, Marshall~N. Rosenbluth, Augusta~H. Teller, and Edward Teller.
+\newblock Equation of state calculations by fast computing machines.
+\newblock \emph{Journal of Chemical Physics}, 21\penalty0 (6):\penalty0 1087--1092, 1953.
+\newblock \doi{10.1063/1.1699114}.
+
+\bibitem[Neal(1993)]{neal1993probabilistic}
+Radford~M Neal.
+\newblock Probabilistic inference using markov chain monte carlo methods.
+\newblock \emph{Department of Computer Science, University of Toronto (review paper / technical report)}, 1993.
+
+\bibitem[Gheissari et~al.(2017)Gheissari, Lubetzky, and Peres]{gheissari2017exponentially}
+Reza Gheissari, Eyal Lubetzky, and Yuval Peres.
+\newblock Exponentially slow mixing in the mean-field swendsen–wang dynamics.
+\newblock \emph{arXiv preprint arXiv:1702.05797}, 2017.
+
+\bibitem[Bandeira et~al.(2022)Bandeira, Maillard, Nickl, and Wang]{bandeira2022freeenergybarriers}
+Afonso~S. Bandeira, Antoine Maillard, Richard Nickl, and Sven Wang.
+\newblock On free energy barriers in gaussian priors and failure of cold start mcmc for high-dimensional unimodal distributions.
+\newblock \emph{arXiv preprint arXiv:2209.02001}, 2022.
+\newblock URL \url{https://arxiv.org/abs/2209.02001}.
+
+\bibitem[Schmidler and Woodard(2013)]{schmidlerwoodard2013lowerbounds}
+Scott~C. Schmidler and Dawn~B. Woodard.
+\newblock Lower bounds on the convergence rates of adaptive mcmc methods.
+\newblock Technical report, Duke University / Cornell University, 2013.
+\newblock URL \url{https://www2.stat.duke.edu/~scs/Papers/AdaptiveLowerBounds_AS.pdf}.
+
+\bibitem[Lightman et~al.(2024)Lightman, Kosaraju, Burda, Edwards, Baker, Lee, Leike, Schulman, Sutskever, and Cobbe]{lightman2024lets}
+Hunter Lightman, Vineet Kosaraju, Yura Burda, Harri Edwards, Bowen Baker, Teddy Lee, Jan Leike, John Schulman, Ilya Sutskever, and Karl Cobbe.
+\newblock Let's verify step by step.
+\newblock In \emph{The Twelfth International Conference on Learning Representations}, 2024.
+\newblock URL \url{https://openreview.net/forum?id=v8L0pN6EOi}.
+
+\bibitem[Chen et~al.(2021)Chen, Tworek, Jun, Yuan, de~Oliveira~Pinto, Kaplan, Edwards, Burda, Joseph, Brockman, Ray, Puri, Krueger, Petrov, Khlaaf, Sastry, Mishkin, Chan, Gray, Ryder, Pavlov, Power, Kaiser, Bavarian, Winter, Tillet, Such, Cummings, Plappert, Chantzis, Barnes, Herbert-Voss, Guss, Nichol, Paino, Tezak, Tang, Babuschkin, Balaji, Jain, Saunders, Hesse, Carr, Leike, Achiam, Misra, Morikawa, Radford, Knight, Brundage, Murati, Mayer, Welinder, McGrew, Amodei, McCandlish, Sutskever, and Zaremba]{chen2021evaluatingllmcode}
+M.~Chen, J.~Tworek, H.~Jun, Q.~Yuan, H.~P. de~Oliveira~Pinto, J.~Kaplan, H.~Edwards, Y.~Burda, N.~Joseph, G.~Brockman, A.~Ray, R.~Puri, G.~Krueger, M.~Petrov, H.~Khlaaf, G.~Sastry, P.~Mishkin, B.~Chan, S.~Gray, N.~Ryder, M.~Pavlov, A.~Power, L.~Kaiser, M.~Bavarian, C.~Winter, P.~Tillet, F.~P. Such, D.~Cummings, M.~Plappert, F.~Chantzis, E.~Barnes, A.~Herbert-Voss, W.~H. Guss, A.~Nichol, A.~Paino, N.~Tezak, J.~Tang, I.~Babuschkin, S.~Balaji, S.~Jain, W.~Saunders, C.~Hesse, A.~N. Carr, J.~Leike, J.~Achiam, V.~Misra, E.~Morikawa, A.~Radford, M.~Knight, M.~Brundage, M.~Murati, K.~Mayer, P.~Welinder, B.~McGrew, D.~Amodei, S.~McCandlish, I.~Sutskever, and W.~Zaremba.
+\newblock Evaluating large language models trained on code.
+\newblock \emph{CoRR}, abs/2107.03374, 2021.
+\newblock URL \url{https://arxiv.org/abs/2107.03374}.
+
+\bibitem[Dubois et~al.(2024)Dubois, Galambosi, Liang, and Hashimoto]{dubois2024lengthcontrolledalpacaeval}
+Yann Dubois, Balázs Galambosi, Percy Liang, and Tatsunori~B. Hashimoto.
+\newblock Length-controlled alpacaeval: A simple way to debias automatic evaluators.
+\newblock \emph{arXiv preprint arXiv:2404.04475}, 2024.
+\newblock URL \url{https://arxiv.org/abs/2404.04475}.
+
+\end{thebibliography}

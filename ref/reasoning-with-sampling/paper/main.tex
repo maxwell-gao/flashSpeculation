@@ -1,0 +1,1010 @@
+\documentclass{article}
+\usepackage[preprint]{neurips_2025}
+% For LaTeX2e
+\usepackage{amsthm}
+\usepackage{enumitem}
+\usepackage{caption}
+\usepackage{wrapfig}
+\usepackage{tabularx}
+\usepackage{booktabs}
+\usepackage{listings}
+\usepackage{array}
+\usepackage{listings}
+\usepackage{algorithm}
+\usepackage{fontawesome}
+\usepackage{algpseudocode}  % newer, preferred over 'algorithmic'
+\usepackage{float}
+\usepackage[dvipsnames]{xcolor}
+
+\usepackage{tabularx,booktabs,array}
+\newcolumntype{Y}{>{\raggedright\arraybackslash}X}
+\newcolumntype{P}[1]{>{\raggedright\arraybackslash}p{#1}}
+
+
+\usepackage{bbold}
+\usepackage[lined,boxed,ruled,norelsize,algo2e,linesnumbered]{algorithm2e}
+\usepackage{booktabs}
+% Optional math commands from https://github.com/goodfeli/dlbook_notation.
+\input{math_commands.tex}
+\newtheorem{theorem}{Theorem}
+\newtheorem{proposition}{Proposition}
+\newtheorem{definition}{Definition}
+\newtheorem{observation}{Observation}
+\newtheorem{example}{Example}
+\usepackage{graphicx}
+\usepackage{titlesec}
+
+\renewcommand{\paragraph}[1]{\vspace{.1em}\noindent\textbf{#1}}
+
+\newcommand{\aayush}[1]{{\color{red} [aayush: #1]}}
+\newcommand{\yilun}[1]{{\color{red} [yilun: #1]}}
+
+% \usepackage{hyperref}
+% \usepackage[backref=page, colorlinks]{hyperref} 
+\usepackage[pagebackref=true,colorlinks,citecolor=brown]{hyperref}
+\usepackage{url}
+
+\usepackage{caption}
+\captionsetup{font=small}
+
+\setlength{\abovedisplayskip}{2pt}
+\setlength{\abovedisplayshortskip}{2pt}
+\setlength{\belowdisplayskip}{2pt}
+\setlength{\belowdisplayshortskip}{2pt}
+\setlength{\textfloatsep}{1.5ex}
+
+\titlespacing\section{0pt}{3pt plus 1pt minus 1pt}{2pt plus 1pt minus 1pt}
+\titlespacing\subsection{0pt}{2pt plus 1pt minus 1pt}{1pt plus 1pt minus 1pt}
+
+\newcommand{\blfootnote}[1]{%
+  \begingroup
+    \renewcommand\thefootnote{}% empty marker
+    \footnote{#1}%
+    \addtocounter{footnote}{-1}% keep the counter unchanged
+  \endgroup}
+
+
+\author{%
+  \textbf{Aayush Karan}\textsuperscript{1},
+  \textbf{Yilun Du}\textsuperscript{1} \\[0.6em]
+  \textsuperscript{1}Harvard University \\[0.6em]
+  \textbf{\href{https://aakaran.github.io/reasoning_with_sampling/}
+     {\textcolor{blue!60!black}{\faGlobe\enspace{Website}}}
+    \quad
+  \href{https://github.com/aakaran/reasoning-with-sampling}
+     {\textcolor{blue!60!black}{\faGithub\enspace{Code}}}}
+}
+
+
+
+\title{Reasoning with Sampling: \\ Your Base Model is Smarter Than You Think}
+
+
+
+\newcommand{\fix}{\marginpar{FIX}}
+\newcommand{\new}{\marginpar{NEW}}
+
+%\iclrfinalcopy % Uncomment for camera-ready version, but NOT for submission.
+\begin{document}
+
+
+\maketitle
+
+
+\begin{abstract}
+Frontier reasoning models have exhibited incredible capabilities across a wide array of disciplines, driven by posttraining large language models (LLMs) with reinforcement learning (RL). However, despite the widespread success of this paradigm, much of the literature has been devoted to disentangling truly novel behaviors that emerge during RL but are not present in the base models. In our work, we approach this question from a different angle, instead asking whether comparable reasoning capabilites can be elicited from base models at inference time by \textit{pure sampling}, \textit{without any additional training}. Inspired by Markov chain Monte Carlo (MCMC) techniques for sampling from sharpened distributions, we propose a simple iterative sampling algorithm leveraging the base models' own likelihoods. Over different base models, we show that our algorithm offers substantial boosts in reasoning that nearly match and even outperform those from RL on a wide variety of single-shot tasks, including MATH500, HumanEval, and GPQA. Moreover, our sampler avoids the collapse in diversity over multiple samples that is characteristic of RL-posttraining. Crucially, our method does not require training, curated datasets, or a verifier, suggesting broad applicability beyond easily verifiable domains.
+
+\end{abstract}
+
+\section{Introduction}\label{sec:intro}
+Reinforcement learning (RL) has become the dominant paradigm for enhancing the reasoning capabilities of large language models (LLMs) \citep{guo2025deepseekr1, hu2025openreasonerzero}. Equipped with a reward signal that is typically automatically verifiable, popular RL techniques have been successfully applied to posttrain frontier models, leading to sizeable performance gains in domains like math, coding, and science \citep{hendrycks2021math, li2022alphacode, rein2024gpqa}. 
+
+Despite the widespread empirical success of RL for LLMs, a large body of literature has centered around the following question: are the capabilities that emerge during RL-posttraining \textit{fundamentally novel behaviors} that are \textit{not} present in the base models? This is the question of \textit{distribution sharpening} \citep{he2025rewarding,shao2025spuriousrewards,yue2025doesrlincentivizereasoning}: that is, whether the posttrained distribution is simply a ``sharper'' version of the base model distribution, instead of placing mass on reasoning traces the base model is unlikely to generate. 
+
+Several works point towards the difficulty in learning new capabilities with RL-posttraining. \cite{he2025rewarding,song2025-outcomebasedexploration} compare the pass@$k$ (multi-shot) scores of base models with posttrained models, finding that for large $k$, base models actually outperform while the latter suffer from degraded generation diversity. In such cases, RL appears to redistribute pass@$k$ performance to single-shot performance at the expense of multi-shot reasoning. \cite{yue2025doesrlincentivizereasoning} also notes that the reasoning traces post-RL are tightly concentrated at high likelihoods/confidences under the base model, seemingly drawing from existing high-likelihood capabilities. We illustrate this point in our own experiments in Figure  \ref{fig:conf}. Regardless, the advantage of RL-posttraining for single-shot reasoning has remained, as of yet, undeniable.
+
+In this paper, we present a surprising result: \textit{sampling directly from the base model can achieve single-shot reasoning capabilites on par with those from RL}.
+
+
+
+We propose a sampling algorithm for base models that leverages additional compute at inference time, achieving single-shot performance that \textit{nearly matches} RL-posttraining on \textit{in-domain} reasoning tasks and can even \textit{outperform} on \textit{out-of-domain} reasoning tasks. Furthermore, we observe that generation diversity \textit{does not degrade} with our sampler; in fact, our pass@$k$ (multi-shot) performance \textit{strongly outperforms} RL. We benchmark specifically against Group Relative Policy Optimization (GRPO), which is the standard RL algorithm for enhancing LLM reasoning \citep{shao2024deepseekmath}.
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=\linewidth]{teaser.pdf}
+  %{-10pt}
+  \captionsetup{font=small}
+  \caption{\textbf{Our sampling algorithm can match and outperform RL-posttraining.} Left: we compare our sampling algorithm (ours) against the base model (base) and RL-posttraining (GRPO) on three \textit{verifiable reasoning} tasks (MATH500, HumanEval, GPQA). Right: we compare them on an \textit{unverifiable general task} (AlpacaEval2.0). Our algorithm achieves comparable performance to GRPO within the posttraining domain (MATH500) but can \textit{outperform} on  out-of-domain tasks such as HumanEval and AlpacaEval.}
+  \label{fig:teaser}
+  %{-5pt}
+\end{figure}
+
+
+Crucially, our algorithm is \textit{training-free}, \textit{dataset-free}, and \textit{verifier-free}, avoiding some of the inherent weaknesses of RL methods including extensive hyperparameter sweeps to avoid training instabilities, the need to curate a diverse and expansive posttraining dataset, and the lack of guaranteed access to a ground truth verifier/reward signal \citep{prabhudesai2025maximizingconfidence}. 
+
+Our contributions can be summarized as follows:
+\begin{itemize}[leftmargin=*]
+%{-5pt}
+    \item[{\bf i)}] We introduce the \textit{power distribution} as a useful sampling target for reasoning tasks. Since it can be explicitly specified with a base LLM, no additional training is  required. 
+
+    \item[{\bf ii)}] We further introduce an approximate sampling algorithm for the power distribution using a Markov chain Monte Carlo (MCMC) algorithm that iteratively resamples token subsequences according to their base model likelihoods.   
+
+    \item[{\bf iii)}] We empirically demonstrate the effectiveness of our  algorithm over a range of models (Qwen2.5-Math-7B, Qwen2.5-7B, Phi-3.5-mini-instruct) and reasoning tasks (MATH500, HumanEval, GPQA, AlpacaEval 2.0). Our results show that sampling directly from the base model can achieve results on par with GRPO. In fact, for some out-of-domain tasks, our algorithm consistently \textit{outperforms} the RL baseline. Moreover, over multiple samples, we avoid the collapse in diversity afflicting RL-posttraining, achieving the best of both worlds in terms of single-to-few-shot reasoning capabilities as well as sample diversity.
+%{-5pt}
+\end{itemize}
+Our results collectively illustrate that existing base models are much more capable at single-shot reasoning than current sampling methods reveal.
+
+%{-7pt}
+\section{Related Works}
+%{-3pt}
+
+
+\paragraph{Reinforcement learning for LLMs.} RL has been instrumental in posttraining LLMs. Early on, RL with human feedback (RLHF) \citep{ouyang2022traininglfh} was developed as a technique to align LLMs with human preferences using a trained reward model. Recently, RL with verifiable rewards (RLVR) has emerged as a powerful new posttraining technique, where many works \citep{guo2025deepseekr1,lambert2024tulu3,hu2025openreasonerzero,zeng2025simplerlzoo} discovered that a simple, end-of-generation reward given by an automated verifier could substantially enhance performance on difficult reasoning tasks in mathematics and coding. The Group Relative Policy Optimization (GRPO) algorithm was at the center of these advances \citep{shao2024deepseekmath}. Building off of this success, many subsequent works have examined using reward signals derived from internal signals such as self-entropy \citep{zhao2025learning}, confidence \citep{prabhudesai2025maximizingconfidence}, and even random rewards \citep{shao2025spuriousrewards}. Similar to these works, our paper examines base model likelihoods as a mechanism for improving reasoning performance, but crucially, our technique is \textit{training-free}.
+
+\paragraph{Autoregressive MCMC sampling with LLMs.} Prior works have explored integrating classic MCMC techniques with autoregressive sampling. Many settings including red-teaming, prompt-engineering, and personalized generation can be framed as targeting sampling from the base LLM distribution but \textit{tilted} towards an external reward function. \cite{zhao2024probabilisticinference} proposes learning intermediate value functions that are used in a \textit{Sequential Monte Carlo} (SMC) framework \citep{chopin2004cltsmc}, where multiple candidate sequences are maintained and updated according to their expected future reward. Similarly, \cite{faria2024quest} proposes a \textit{Metropolis-Hastings} (MH) algorithm, which instead of maintaining multiple candidates performs iterative resampling, again updating according to expected reward. Methodologically, our sampling algorithm is most similar to this latter work, but the crucial difference is that our target sampling distribution is completely specified by the base LLM, \textit{avoiding the need for an external reward}.
+
+\paragraph{Annealed sampling for diffusion.} In the statistical physics and Monte Carlo literature, sampling from $p^{\alpha}$ is known as sampling from an \textit{annealed}, or \textit{tempered}, distribution \citep{neal1998annealedimportance} and has inspired a new wave of interest within the diffusion community. Indeed, in traditional MCMC sampling, annealing is used as a way to avoid mode-collapse during sampling and more accurately sample from complex multimodal distributions \citep{latuszynski2025mcmcmultimodal}. This has re-emerged as inference-time sampling methods for diffusion that aim to steer a pretrained model towards ``tilted distributions'' \citep{du2023reduce, kim2025testtimealignment, karan2025reguidance, wang2025inference, kong2025diffusionconstrainedopt, zhang2025inference}. Where traditional RL techniques exhibit mode collapse, applications in the physical sciences \citep{sambridge2014paralleltempering} require multimodal sampling. To this end, works such as \cite{du2023reduce, wang2025inference, kim2025testtimealignment} construct sequences of annealed distributions to ease the transition from base diffusion distribution to tilted distribution. Other works \citep{skreta2025feynmankacorrectors, xu2025temporalscorerescaling} intentionally target sampling from $p^{\alpha}$ for $\alpha > 1$ as a means of generating higher quality samples from the base diffusion model, which is particularly popular for generating more designable proteins  \citep{geffner2025proteina}.
+
+
+%{-5pt}
+\section{Preliminaries}
+\looseness=-1
+Let $\mathcal{X}$ be a finite vocabulary of tokens, and let $\mathcal{X}^T$ denote the set of finite sequences of tokens $x_{0:T} = (x_0, x_1, \dots, x_T)$, where $x_i \in \mathcal{X}$ for all $i$ and $T \in \mathbb{Z}_{\geq 0}$ is some nonnegative integer. For convenience, for a given $t$, let $x_{<t} = (x_0, \dots, x_{t-1})$ and $x_{>t} = (x_{t+1}, \dots, x_{T})$, with similar definitions for $x_{\leq t}$ and $x_{\geq t}$. In general, $\mathbf{x}$ refers to a token sequence $x_{0:T}$, where $T$ is implicitly given. 
+
+
+Then an LLM defines a distribution $p$ over token sequences $\mathcal{X}^T$ by autoregressively learning the conditional token distributions $p(x_t | x_{<t})$ for all $t$, giving the \textit{joint distribution} via the identity
+\begin{equation}\label{eq:joint}
+    p(x_{0:T}) = \prod_{t=0}^T p(x_t | x_{<t}).
+\end{equation}
+
+To sample a sequence from $p$, we simply sample from the LLM token by token using the conditional distributions, which by (\ref{eq:joint}) directly samples from the joint distribution. 
+
+\newpage
+
+\section{MCMC Sampling for Power Distributions}
+
+\begin{wrapfigure}{r}{0.39\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{toy_sharp.pdf}
+  \captionsetup{font=small}
+  \caption{\textbf{A toy example of distribution sharpening.} Here $p$ is a mixture of Gaussians, which we plot against $p^{\alpha}$ ($\alpha = 4.0$).}
+  \label{fig:toy}
+  \vspace{-15pt}
+  %{-15pt}
+\end{wrapfigure}
+
+
+In this section, we introduce our sampling algorithm for base models. Our core intuition is derived from the notion of distribution sharpening posed in Section \ref{sec:intro}. \textit{Sharpening} a reference distribution refers to reweighting the distribution so that high likelihood regions are further upweighted while low likelihood regions are downweighted, biasing samples heavily towards higher likelihoods under the reference. Then if RL posttrained models really are just sharpened versions of the base model, we should be able to explicitly specify a target sampling distribution that achieves the same effect.
+
+We organize this section as follows. Section \ref{subsec:pow} presents this target sharpened distribution and provides some mathematical motivation for why its samples are amenable for reasoning tasks. Section \ref{subsec:mh} introduces a general class of Markov chain Monte Carlo (MCMC) algorithms aimed at actually sampling from this target distribution, and finally, Section \ref{subsec:samp} details our specific implementation for LLMs.
+
+\subsection{Reasoning with Power Distributions}\label{subsec:pow}
+
+One natural way to sharpen a distribution $p$ is to sample from the \textit{power distribution} $p^{\alpha}$. Since 
+\begin{equation}
+    p(\mathbf{x}) > p(\mathbf{x'}) \implies \frac{p(\mathbf{x})^{\alpha}}{p(\mathbf{x'})^{\alpha}} > \frac{p(\mathbf{x})}{p(\mathbf{x'})} \qquad (\alpha \in [1, \infty]),
+\end{equation}
+it follows that exponentiating $p$ \textit{increases} the relative weight on higher likelihood sequences ($\mathbf{x}$) while \textit{decreasing} the relative weight on lower likelihood ones ($\mathbf{x'}$) (see Figure \ref{fig:toy} for a visualization).
+
+ 
+
+A related but well-known sharpening strategy is  \textit{low-temperature sampling} \citep{wang2020contextualtemperature}, which exponentiates the conditional next-token distributions at each step:
+% 
+\begin{equation}\label{eq:temp}
+     p_{\text{temp}}(x_t | x_0 \dots x_{t-1}) = \frac{p(x_t | x_{t-1}\dots x_0)^{\alpha}}{\sum_{x_t' \in \mathcal{X}} p(x_t' | x_{t-1}\dots x_0)^{\alpha}},
+\end{equation}
+% 
+% 
+% 
+where the \textit{temperature} is $\tau = 1/\alpha$. A common misconception is that sampling with (\ref{eq:temp}) over $T$ tokens is equivalent to sampling from $p^{\alpha}$; however, this is false in a subtle yet crucial way, as we illuminate in the following. 
+
+% \yilun{This jumps into technical details maybe too quickly -- maybe first given some intuition on why the typical way people sample from the marginal distribution is different from proper low temperature sampling -- then go into the math details}
+
+
+\begin{proposition} Low-temperature sampling does not sample from the power distribution $p^{\alpha}$.
+\end{proposition}
+\begin{proof}
+    We show that the associated conditional next-token distributions are distinct at each timestep $t$. The conditional distribution on $x_t$ for $p^{\alpha}$  is given by
+\begin{equation}
+    p_{\text{pow}}(x_t | x_0 \dots x_{t-1}) = \frac{\sum_{x_{>t}} p(x_0, \dots, x_t, \dots, x_T)^{\alpha}}{\sum_{x_{\geq t}} p(x_0, \dots, x_t, \dots, x_T)^{\alpha}}.
+\end{equation}
+
+Using Bayes rule
+\begin{equation}
+    p(x_t | x_{t-1} \dots x_0) = \frac{p(x_0, \dots, x_{t})}{p(x_0, \dots, x_{t-1})} = \frac{\sum_{x_{>t}} p(x_0, \dots, x_t, \dots, x_T)}{\sum_{x_{\geq t}} p(x_0, \dots, x_t, \dots, x_T)},
+\end{equation}
+we can rewrite the low-temperature marginal (\ref{eq:temp}) as 
+\begin{equation}
+    p_{\text{temp}}(x_t | x_0 \dots x_{t-1}) = \frac{\left(\sum_{x_{>t}} p(x_0, \dots, x_t, \dots, x_T)\right)^{\alpha}}{\sum_{x_t'}\left(\sum_{x_{>t}} p(x_0, \dots, x_t, \dots, x_T)\right)^{\alpha}}.
+\end{equation}
+
+Ignoring normalizations for clarity, the relative weight on token $x_t$ for sampling from $p^{\alpha}$ is given by a \textit{sum of exponents}
+\begin{equation}\label{eq:sumexp}
+    p_{\text{pow}}(x_t | x_{<t}) \propto \sum_{x_{>t}} p(x_0, \dots, x_t, \dots, x_T)^{\alpha}.
+\end{equation}
+Meanwhile, the relative weight for low-temperature sampling is given by an \textit{exponent of sums}
+\begin{equation}\label{eq:expsum}
+    p_{\text{temp}}(x_t | x_{<t}) \propto \left(\sum_{x_{>t}} p(x_0, \dots, x_t, \dots, x_T)\right)^{\alpha}.
+\end{equation}
+Since the relative weights of next-token prediction are distinct for each sampling strategy, it follows that the joint distribution over seqeunces must also be distinct for each sampler. Hence, the distribution on sequences given by low-temperature sampling is \textit{not the same} as the one given by $p^{\alpha}$.
+%{-5pt}
+\end{proof}
+
+One intuitive way to understand this difference is that low-temperature sampling does not account for how exponentiation sharpens the likelihoods of ``future paths'' at time step $t$, instead ``greedily'' averaging all these future likelihoods (\textit{exponent of sums} (\ref{eq:expsum})). On the other hand, sampling from $p^{\alpha}$ \textit{inherently accounts} for future completions as it exponentiates all future paths (\textit{sum of exponents} (\ref{eq:sumexp})) before computing the weights for next-token prediction. This has the following consequence:
+
+\begin{observation}
+    The power distribution upweights tokens with few but high likelihood future paths, while low-temperature sampling upweights tokens with several but low likelihood completions.
+\end{observation}
+
+\begin{example}
+    {\rm We can observe this phenomenon with a simple example. Let us consider the token vocabulary $\mathcal{X} = \{a, b\}$ and restrict our attention to two-token sequences $(x_0, x_1)$: $aa, ab, ba, bb$. Let \[
+        p(aa) = 0.00, \qquad p(ab) = 0.40, \qquad p(ba) = 0.25, \qquad p(bb) = 0.25,
+    \] so that \[
+        p(x_0 = a) = 0.40, \qquad p(x_0 = b) = 0.50. \qquad
+    \] Let $\alpha = 2.0$. Under $p^{\alpha}$, we have \[p_{\text{pow}}(x_0 = a) \propto 0.00^2 + 0.40^2 = 0.160, \qquad p_{\text{pow}}(x_0 = b) \propto 0.25^2 + 0.25^2 = 0.125,\] so $p^{\alpha}$ prefers sampling $a$ over $b$. Under low-temperature sampling, \[p_{\text{temp}}(x_0 = a) \propto (0.00 + 0.40)^2 = 0.160, \qquad p_{\text{temp}}(x_0 = b) \propto (0.25 + 0.25)^2 = 0.250,\] preferring sampling $b$ over $a$. If $p^{\alpha}$ samples $x_0=a$, there is only one future path with likelihood $0.40$. If $p_{\text{temp}}$ samples $x_0=b$, there are two future paths $ba, bb$, but either choice has likelihood $0.25$. 
+    
+    In other words, even though $a$ has lower conditional likelihood under both $p$ and $p_{\text{temp}}$, $p^{\alpha}$ upweights $a$ and samples the highest likelihood two-token sequence. $b$ has many future paths contributing to a higher likelihood under $p$ and $p_{\text{temp}}$, but leads to low likelihood sequences. We provide a stronger formalization of this phenomenon in Appendix \ref{apx:proof}}.
+\end{example}
+
+ 
+
+Thus, sampling from $p^{\alpha}$ encourages sampling tokens which have fewer but higher likelihood ``future paths", as opposed to tokens with several lower likelihood completions. This type of behavior is immensely valuable for reasoning tasks. For example, choosing ``wrong'' tokens that have high average likelihoods but trap outputs in low likelihood individual futures are examples of \textit{critical windows} or \textit{pivotal tokens} \citep{li2025blinkofaneyetheory, abdin2024phi4}, a phenomenon where a few tokens are highly influential in the correctness of language model outputs. In fact, sharp critical windows have been shown to correlate strongly with reasoning failures \citep{li2025blinkofaneyetheory}. Instead, embedded in sampling from the power distribution is an implicit bias towards planning for future high likelihood tokens.
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=\linewidth]{mcmc.pdf}
+  \captionsetup{font=small}
+  \caption{\textbf{Illustrating Metropolis-Hastings with random resampling.} A random index $t$ is selected and a new candidate is generated by resampling. Based on the relative likelihoods, the candidate is accepted or rejected, and the process repeats.}
+  \label{fig:step}
+  %{-5pt}
+\end{figure}
+
+
+
+
+
+
+\subsection{The Metropolis-Hastings Algorithm}\label{subsec:mh}
+Now that we have seen how sampling from $p^{\alpha}$ can in theory assist the underlying LLM's ability to reason, our aim now turns towards proposing an algorithm to accurately sample from it. Given an LLM $p$, we have access to the values $p^{\alpha}$ over any sequence length; however, these values are \textit{unnormalized}. Direct sampling from the true probabilities requires normalizing over all sequences $(x_0, \dots, x_T) \in \mathcal{X}^T$, which is computationally intractable. 
+
+To get around this, we invoke a Markov Chain Monte Carlo (MCMC) algorithm known as Metropolis-Hastings (MH) \citep{metropolis1953equation}, which targets exactly what we want: approximate sampling from an unnormalized probability distribution. The MH algorithm constructs a Markov chain of sample sequences $(\mathbf{x}^0, \mathbf{x}^1, \dots, \mathbf{x}^n)$ using an arbitrary \textit{proposal distribution} $q(\mathbf{x}|\mathbf{x}^i)$ to select the next candidate $\mathbf{x}^{i+1}$. With probability 
+% 
+\begin{equation}\label{eq:accept}
+    A(\mathbf{x}, \mathbf{x}^i) = \text{min} \left\lbrace 1, \frac{p^{\alpha}(\mathbf{x}) \cdot q(\mathbf{x}^i | \mathbf{x})}{p^{\alpha}(\mathbf{x}^i) \cdot q(\mathbf{x}|\mathbf{x}^i)}\right\rbrace,
+\end{equation}
+ 
+ candidate $\mathbf{x}$ is accepted as $\mathbf{x}^{i+1}$; otherwise, MH sets $\mathbf{x}^{i+1} = \mathbf{x}^{i}$. This algorithm is especially convenient as it only requires the relative weights given by $p^{\alpha}$ (as the normalization weights in $A$ cancel) and works with \textit{any} generic but tractable sampler $q$ with minimal restrictions. Remarkably, for large enough $n$, this process converges to sampling from the \textit{target distribution} $p^{\alpha}$ under the following (quite minimal) conditions on the proposal distribution \citep{neal1993probabilistic}:
+
+ \begin{definition}
+    {\rm The proposal distribution $q$ is \textit{irreducible} if for any set $X$ with nonzero mass under the target distribution $p^{\alpha}$, $q$ has nonzero probability of eventually sampling from $X$. The proposal is \textit{aperiodic} if the induced chain of samples does not return to the same sample after a fixed interval number of steps.}
+    \vspace{-2pt}
+\end{definition}
+
+Thus, we must simply ensure that our proposal distribution satisfies irreducibility and aperiodicity, and Metropolis-Hastings takes care of the rest. On a practical level, we would also like both $q(\mathbf{x} | \mathbf{x}^i)$ and its reverse $q(\mathbf{x}^i | \mathbf{x})$ to be easily computable. 
+
+
+
+
+
+
+
+Consider the following family of \textit{random resampling} proposal distributions (see Figure \ref{fig:step}). Let $p_{\text{prop}}$ be a proposal LLM. With uniform probability $\frac{1}{T}$, select a random $t \in [1, T]$ and \textit{resample the sequence}  starting at index $t$ using $p_{\text{prop}}$. Then the transition likelihood $q(\mathbf{x} | \mathbf{x}^i)$ is simply the likelihood of the resampling. Note that at each candidate selection step, we have a nonzero probability of transitioning between any two sequences $\mathbf{x}, \mathbf{x'} \in \mathcal{X}$, since with some probability we can always resample as early as the beginning of $\mathbf{x}$. This ensures our proposal distribution is both irreducible and aperiodic. Moreover, $q(\mathbf{x}^i | \mathbf{x})$ is easy to calculate by symmetry, since we can treat $\mathbf{x}^i$ as a resampled version of $\mathbf{x}$.
+
+With the flexibility endowed by Metropolis-Hastings, we can choose the proposal LLM $p_{\text{prop}}$ to be any LLM with any sampling strategy (e.g., low-temperature sampling). 
+
+% \yilun{Describe what Metropolis-Hastings proposal distributions in practice you use and what tradeoffs they might have. Overall, this section is a bit abstract -- you could maybe have a psuedocode block}
+
+% %{-5pt}
+\subsection{Power Sampling with Autoregressive MCMC}\label{subsec:samp}
+%{-7pt}
+
+
+
+A direct implementation of Metropolis-Hastings for LLMs would involve initializing with a sampled token sequence of length $T$, subsequently generating new candidates of length $T$ with (\ref{eq:accept}) over many, many iterations. This process  is computationally expensive, however, due to the repeated, full sequence inference calls to the LLM.
+
+In fact, the main downside to MCMC algorithms in practice is the potential for an \textit{exponential mixing time} \citep{gheissari2017exponentially}, where a poor choice of initialization or proposal distribution can result in an exponentially large number of samples required before convergence to the target distribution. This problem is exacerbated if the sample space has \textit{high dimensionality} \citep{bandeira2022freeenergybarriers,schmidlerwoodard2013lowerbounds}, which is precisely exhibited by the sequence space of tokens $\mathcal{X}^T$, especially for long sequences/large values of $T$. 
+
+To remedy this, we propose an algorithm that leverages the sequential structure of autoregressive sampling. We define a series of intermediate distributions which we  progressively sample from, until converging to the target distribution $p^{\alpha}$. In particular, samples from one intermediate distribution initiate a Metropolis-Hastings process for the next, helping avoid pathological initializations. 
+
+
+Fix block size $B$ and proposal LLM $p_{\text{prop}}$, and consider the sequence of (unnormalized) distributions
+\begin{equation}
+    \emptyset \longrightarrow p(x_0, \dots, x_B)^{\alpha} \longrightarrow p(x_0, \dots, x_{2B})^{\alpha} \longrightarrow \dots \longrightarrow p(x_0, \dots, x_T)^{\alpha},
+\end{equation}
+where $p(x_0, \dots, x_{kB})$ denotes the joint distribution over token sequences of length $kB$, for any $k$. For convenience, let $\pi_k$ denote the distribution given by \begin{equation}
+    \pi_k(x_{0:kB}) \propto p(x_{0:kB})^{\alpha}.
+\end{equation}
+Suppose we have a sample from $\pi_k$. To obtain a sample from $\pi_{k+1}$, we initialize a Metropolis-Hastings process by sampling the next $B$ tokens $x_{kB+1:(k+1)B}$ with $p_{\text{prop}}$. We subsequently run the MCMC sampling procedure for $N_{\text{MCMC}}$ steps, using the \textit{random resampling} proposal distribution $q$ from the previous section. The full details are presented in Algorithm \ref{alg:samp}.
+
+\begin{figure}[t]
+\begin{minipage}{\linewidth}
+\begin{algorithm2e}[H]
+\DontPrintSemicolon
+\caption{Power Sampling for Autoregressive Models}
+\label{alg:samp}
+\SetKwInOut{Input}{Input}
+\SetKwInOut{Output}{Output}
+\SetKwInOut{Params}{Hyperparams}
+
+\Input{base $p$; proposal $p_{\mathrm{prop}}$; power $\alpha$; length $T$}
+\BlankLine
+\Params{block size $B$; MCMC steps $N_{\mathrm{MCMC}}$}
+\BlankLine
+\Output{$(x_0,\dots,x_T) \sim p^\alpha$}
+
+\BlankLine
+\textbf{Notation:} Define the unnormalized intermediate target
+\[{\pi}_k(x_{0:{kB}}) \;\propto\; p(x_{0:kB})^{\alpha}.
+\]
+
+
+\BlankLine
+
+
+\For{$k \gets 0$ \KwTo $\lceil \frac{T}{B}\rceil-1$}{
+  
+  Given prefix $x_{0:kB}$, we wish to sample from $\pi_{k+1}$. Construct initialization ${\mathbf{x}}^{0}$ by extending autoregressively with $p_{\text{prop}}$:
+  \[
+  x^{(0)}_t \sim p_{\text{prop}}\big(x_t \mid x_{<t}\big), 
+    \qquad\text{for  } kB+1 \leq t \leq (k+1)B.
+  \]
+  Set the current state $\mathbf{x} \gets \mathbf{x}^{0}$. \;
+
+  \BlankLine
+  \For{$n \gets 1$ \KwTo $N_{\mathrm{MCMC}}$}{
+    Sample an index $m \in \{1,\dots, (k+1)B\}$  uniformly. \;
+    \BlankLine
+    Construct proposal sequence $\mathbf{x}'$ with prefix $x_{0:m-1}$ and resampled completion:
+    \[
+    x'_{t} \sim p_{\text{prop}}\big(x_t \mid x_{<t}\big), 
+    \qquad\text{for } m \leq t \leq (k+1)B.
+    \]
+
+    Compute acceptance ratio (\ref{eq:accept})
+    \[
+      A(\mathbf{x'}, \mathbf{x}) \;\gets\; \min\Bigg\{1,\ 
+      \frac{{\pi}_k(\mathbf{x'})}{{\pi}_k(\mathbf{x})}
+      \cdot 
+      \frac{p_{\text{prop}}(\mathbf{x}\mid \mathbf{x'})}{p_{\text{prop}}(\mathbf{x'}\mid \mathbf{x})}
+      \Bigg\}.
+    \]
+    Draw $u \sim \mathrm{Uniform}(0,1)$; \;
+    \lIf{$u \le A(\mathbf{x'}, \mathbf{x})$}{\textbf{accept} and set $\mathbf{x} \gets \mathbf{x'}$}
+  }
+  Set $x_{0:(k+1)B} \gets \mathbf{x}$ to fix the new prefix sequence for the next stage. \;
+}
+\Return{$x_{0:T}$} \;
+\end{algorithm2e}
+\end{minipage}
+%{-5pt}
+% %{-20pt}
+\end{figure}
+
+
+
+Note that Algorithm \ref{alg:samp} is \textit{single-shot}: even though multiple inference calls are made, the decision to accept vs. reject new tokens is made purely by base model likelihoods to simulate sampling \textit{a single sequence} from $p^{\alpha}$. We can interpret this as a new axis for \textit{inference-time scaling}, as we expend additional compute during sampling to obtain a higher quality/likelihood sample.
+
+To quantify the scaling, we can estimate the average number of tokens generated by Algorithm \ref{alg:samp}. Note that each candidate generation step when sampling from $\pi_k(x_{0:kB}$ resamples an average of $\frac{kB}{2}$ tokens, $N_{\text{MCMC}}$ times. Summing over all $k$, the expected number of tokens generated is 
+\begin{equation}\label{eq:tok}\mathbb{E}_{\text{tokens}} = N_{\text{MCMC}}\sum_{k=1}^{\lceil T/B \rceil} \frac{kB}{2} \approx \frac{N_{\text{MCMC}}T^2}{4B}.\end{equation}
+The key tradeoff here is between the block size $B$ and number of MCMC steps $N_{\text{MCMC}}$. A larger $B$ requires larger ``jumps'' between intermediate distributions, requiring a larger $N_{\text{MCMC}}$ to adequately transition. In Section \ref{sec:exp}, we empirically find a value for $B$ that makes Algorithm \ref{alg:samp} performant for relatively small values of $N_{\text{MCMC}}$.
+
+
+% %{-5pt}
+\section{Experiments}\label{sec:exp}
+%{-7pt}
+
+
+
+\subsection{Experimental Setup}
+%{-3pt}
+
+
+\paragraph{Evaluation.} We use a standard suite of reasoning benchmarks ranging across mathematics, coding, and STEM (MATH500, HumanEval, GPQA), along with a non-verifiable benchmark (AlpacaEval 2.0) evaluating general helpfulness. We evaluate all of our methods and baselines \textit{single-shot}; i.e., on one final response string. 
+
+\begin{itemize}[leftmargin=*, , nosep]
+    \item {\textbf{MATH500}}: The {MATH} dataset \citep{lightman2024lets} consists of competition math problems spanning seven categories including geometry, number theory, and precalculus. There are 12500 problems total, with 7500 training problems and 5000 test problems. {MATH500} is a specific randomly chosen subset of the test set standardized by OpenAI.
+
+
+    \item \textbf{HumanEval}: HumanEval is a set of 164 handwritten programming problems covering algorihtms, reasoning, mathematics, and language comprehension \citep{chen2021evaluatingllmcode}. Each problem has an average of 7.7 associated unit tests, where solving the problem corresponds to passing all unit tests.
+
+
+    \item {\textbf{GPQA}}: GPQA \citep{rein2024gpqa} is a dataset of multiple-choice science questions (physics, chemistry, and biology) which require advanced reasoning skills to solve. We use  subset GPQA Diamond for evaluation, which consists of 198 questions which represent the highest quality subset of the GPQA dataset.
+
+
+    \item \textbf{AlpacaEval 2.0}: The AlpacaEval dataset is a collection of 805 prompts \citep{dubois2024lengthcontrolledalpacaeval} that gauge general helpfulness with questions asking e.g., for movie reviews, recommendations, and reading emails. The model responses are graded by an automated LLM judge (GPT-4-turbo), which determines a preference for the model responses over those from a baseline (also GPT-4-turbo). The resulting score is a win rate of model responses normalized for the length of the model response.
+\end{itemize}
+
+
+\paragraph{Models.} To demonstrate the efficacy of our sampling algorithm, we use the base models Qwen2.5-Math-7B, Qwen2.5-7B, and Phi-3.5-mini-instruct. For our RL baselines, we use the implementation of GRPO in \cite{shao2025spuriousrewards}, which posttrains these models on the MATH training split. For both the Qwen2.5 models, we use the default hyperparameters used to benchmark their performance in \cite{shao2025spuriousrewards}. For the Phi-3.5 model, we use a set of hyperparameters selected from \cite{abdin2024phi4} that avoids training instabilities and converges to improvement over the base model over a large number of epochs. 
+
+\paragraph{Sampling Algorithm.} For our implementation of power sampling (Algorithm \ref{alg:samp}), we set the maximum $T$ to be $T_{\text{max}} = 3072$ (termination can happen earlier with an EOS token) and block size $B = 3072/16 = 192$. Empirically, we find $\alpha = 4.0$ coupled with a proposal LLM $p_{\text{prop}}$ chosen as the base model with sampling temperature $1/\alpha$ to be  most performant for reasoning tasks. For AlpacaEval 2.0, we find that having a proposal distribution of higher temperature ($\tau = 0.5$) improves performance. 
+
+\subsection{Results}
+\begin{table}[t]
+\centering
+\small
+\begin{tabular}{p{4cm}cccc}
+\toprule
+ & MATH500 & HumanEval & GPQA & AlpacaEval2.0 \\
+\midrule
+
+\multicolumn{5}{l}{\textbf{Qwen2.5-Math-7B}} \\
+\hspace{0.5cm}Base     &  0.496    &    0.329  &   0.278   &  1.61    \\
+\hspace{0.5cm}Low-temperature &  0.690    &     0.512 &  0.353  &   2.09   \\
+\hspace{0.5cm}\textbf{Power Sampling (ours)}     & \textbf{0.748}     &     \underline{\textbf{0.573}} &  \textbf{{0.389}}     &   \underline{\textbf{2.88}}   \\
+\cmidrule[\lightrulewidth](lr){1-5}
+\hspace{0.5cm}GRPO (MATH)    &  \textbf{0.785}   &    \textbf{0.537}  &   \textbf{0.399}   &   \textbf{2.38}   \\
+\midrule
+
+\multicolumn{5}{l}{\textbf{Qwen2.5-7B}} \\
+\hspace{0.5cm}Base     &   0.498   &     0.329 &   0.278   &   7.05   \\
+\hspace{0.5cm}Low-temperature & 0.628     &     0.524 &   0.303   &   5.29   \\
+\hspace{0.5cm}\textbf{Power Sampling (ours)}     &  \textbf{0.706}    &     \underline{\textbf{0.622}} &   \textbf{0.318}   &   \underline{\textbf{8.59}}   \\
+\cmidrule[\lightrulewidth](lr){1-5}
+\hspace{0.5cm}GRPO (MATH)    &  \textbf{0.740}    &   \textbf{0.561}   &    \textbf{0.354}  &   \textbf{7.62}   \\
+\midrule
+
+\multicolumn{5}{l}{\textbf{Phi-3.5-mini-instruct}} \\
+\hspace{0.5cm}Base     & 0.400     &     0.213 &   0.273   &   14.82   \\
+\hspace{0.5cm}Low-temperature & 0.478     &    0.585  &   0.293   &  \textbf{18.15}    \\
+\hspace{0.5cm}\textbf{Power Sampling (ours)}     &  \underline{\textbf{0.508}}    &     \underline{\textbf{0.732}} &   \underline{\textbf{{0.364}}}  &  \underline{\textbf{17.65}}    \\
+\cmidrule[\lightrulewidth](lr){1-5}
+\hspace{0.5cm}GRPO (MATH)   & \textbf{0.406}      &   \textbf{0.134}   &   \textbf{0.359}   &   \textbf{{16.74}}   \\
+\bottomrule
+\end{tabular}
+%{-5pt}
+\vspace{5pt}
+\caption{\textbf{Power sampling (ours) matches and even outperforms GRPO across model families and tasks.}  We benchmark the performance of our sampling algorithm on MATH500, HumanEval, GPQA, and AlpacaEval 2.0. We bold the scores of both our method and GRPO, and underline whenever our method outperforms GRPO. Across models, we see that power sampling is comparable to GRPO on in-domain reasoning (MATH500), and can outperform GRPO on out-of-domain tasks.}\label{tab:main}
+\vspace{-5pt}
+\end{table}
+
+
+
+
+
+
+\paragraph{Main results.} We display our main results in Table \ref{tab:main}. Across base models of different families, our sampling algorithm achieves massive, near-universal boosts in single-shot accuracies and scores over different reasoning and evaluation tasks that reach, e.g., up to \textbf{+51.9\%} on HumanEval with Phi-3.5-mini and \textbf{+25.2\%} on MATH500 with Qwen2.5-Math. In particular, on MATH500, which is in-domain for RL-posttraining, power sampling achieves accuracies that are on par with those obtained by GRPO. Furthermore, on out-of-domain reasoning, our algorithm again matches GRPO on GPQA and actually \textit{outperforms} on HumanEval by up to \textbf{+59.8\%}. Similarly, power sampling consistently outperforms on the non-verifiable AlpacaEval 2.0, suggesting a \textit{generalizability} of our boosts to domains beyond verifiability. 
+
+The surprising success of this fundamentally simple yet training-free sampling algorithm underscores the latent reasoning capabilities of existing base models. 
+
+
+%{-5pt}
+\subsection{Analysis}
+%{-3pt}
+We analyze how the reasoning characteristics of power sampling relate to those of GRPO. We present an example in Table \ref{tab:phi}, with further examples in Appendix \ref{apx:more}. 
+
+\paragraph{Reasoning trace likelihoods and confidences.} By design, power sampling targets sampling higher likelihood sequences from the base model. In Figure \ref{fig:conf}, the left graph plots a histogram of the output sequence log-likelihoods (averaged by length) of the base model, power sampling, and GRPO responses on MATH500, where likelihoods are taken relative to the Qwen2.5-Math-7B base model. Our method samples from higher likelihood regions of the base model, as intended, but still maintains noticeable spread. Meanwhile, GRPO samples are heavily concentrated at the highest likelihood peak. 
+
+\begin{figure}[h!]
+  \centering
+  \includegraphics[width=\linewidth]{combined_hists.pdf}
+  %{-10pt}
+  \vspace{-15pt}
+  \captionsetup{font=small}
+  \caption{\textbf{ Base model (Qwen2.5-Math-7B) likelihoods and confidences for MATH500 responses.} Left: We plot the log-likelihoods (relative to the base model) of original, power sampling, and GRPO responses over MATH500. Right: We do the same but for confidences relative to the base model. We observe that GRPO samples from the highest likelihood and confidence regions with power sampling close behind, which correlates with higher empirical accuracy.}
+  \label{fig:conf}
+  \vspace{-8pt}
+\end{figure}
+
+We also plot the base model \textit{confidence} of  MATH500 responses, defined to be the average negative entropy (\textit{uncertainty}) of the next-token distributions \citep{prabhudesai2025maximizingconfidence}:
+\begin{equation}
+    \text{Conf}(x_{0:T}) = \frac{1}{T+1}\sum_{t=0}^T\sum_{x \in \mathcal{X}}p(x | x_{<t}) \log{p(x | x_{<t}}).
+\end{equation}The right plot of Figure \ref{fig:conf} demonstrates that our method's and GRPO responses sample from similarly high confidence regions from the base model, which again correspond to regions of higher likelihood and correct reasoning.  
+
+\paragraph{Reasoning trace lengths.} Another defining characteristic of RL-posttraining is long-form reasoning \citep{guo2025deepseekr1}, where samples tend to exhibit longer responses. On MATH500, Qwen2.5-Math-7B averages a response length of \textbf{600} tokens, while GRPO averages \textbf{671} tokens. Surprisingly, power sampling achieves a similar average length of \textbf{679} tokens, \textit{without explicitly being encouraged to favor longer generations.}  This emerges naturally from the sampling procedure.
+
+
+
+\paragraph{Diversity and pass@$k$ performance.} Again, notice the peaked and highly concentrated likelihoods/confidences of GRPO relative to the distributional spread of power sampling in Figure \ref{fig:conf}. This suggests GRPO exhibits a collapse in diversity while our sampler does not, aligning with the observation that RL-posttraining strongly sharpens the base model distribution at the expense of diversity \citep{song2025-outcomebasedexploration}. To quantify the comparative diversity of power sampling relative to GRPO, we can plot the pass@$k$ accuracy rate, where a question is solved if at least one of $k$ samples is accurate. Figure \ref{fig:pass} shows exactly this: unlike GRPO, whose pass@$k$ performance tapers off for large $k$, power sampling strongly outperforms for $k > 1$. Moreover, our performance curve supersedes that of the base model until finally converging in performance. In particular, we are able to achieve GRPO-level single-shot performance \textit{without compromising multi-shot performance} (see Appendix \ref{apx:passes} for other domains), addressing a long-standing downside to RL-posttraining.
+
+
+
+
+
+
+
+\begin{figure}[h!]
+    \centering
+    \includegraphics[width=0.65\linewidth]{math500_passatk_comparison.pdf}
+    \captionsetup{font=small}
+    \vspace{-10pt}
+    \caption{\textbf{Pass@$k$ performance on MATH500}. We plot the pass@$k$ accuracy (correct if at least one of $k$ samples is accurate) of power sampling (ours) and RL (GRPO) relative to the base model (Qwen2.5-Math-7B). Our performance curve is strictly better than both GRPO and the base model, and our pass rate at high $k$ matches the base model, demonstrating sustained generation diversity.}
+    \label{fig:pass}
+\end{figure}
+
+
+
+
+
+
+
+\newcolumntype{Z}[1]{>{\centering\arraybackslash}p{#1}}
+
+\newcolumntype{Q}[1]{>{\raggedright\arraybackslash}p{#1}} % ragged-right column
+\newcolumntype{C}[1]{>{\centering\arraybackslash}p{#1}}   % centered column
+
+% Column widths: System=1.1cm, Passed=1.2cm, remainder for code
+\newlength{\codecol}
+\setlength{\codecol}{\dimexpr\textwidth - 1.1cm - 1.2cm - 6\tabcolsep\relax}
+\newlength{\codeinner}
+\setlength{\codeinner}{0.75\codecol} % smaller inner box → visibly centered
+
+% Listings style (simple)
+\lstdefinestyle{py}{
+  language=Python,
+  basicstyle=\ttfamily\scriptsize,
+  keepspaces=true,
+  showstringspaces=false,
+  breaklines=true,
+  breakatwhitespace=false,
+  aboveskip=1pt,
+  belowskip=1pt
+}
+
+% Full-span width for instructions row
+\newlength{\fullspan}
+\setlength{\fullspan}{\dimexpr\textwidth - 2\tabcolsep\relax}
+
+% --- Saveboxes for completions ---
+\newsavebox{\mcmcbox}
+\begin{lrbox}{\mcmcbox}
+  \begin{minipage}{\codeinner}
+\begin{lstlisting}[style=py]
+return [s for s in strings 
+        if s.startswith(prefix)]
+\end{lstlisting}
+  \end{minipage}
+\end{lrbox}
+
+\newsavebox{\grpobox}
+\begin{lrbox}{\grpobox}
+  \begin{minipage}{\codeinner}
+\begin{lstlisting}[style=py]
+return [string for string in strings if
+        string.startswith(f'{prefix}'*2)]
+\end{lstlisting}
+  \end{minipage}
+\end{lrbox}
+
+% --- Table ---
+\begin{table}[t]
+\centering
+\setlength{\tabcolsep}{6pt}
+\renewcommand{\arraystretch}{1.15}
+\begin{tabular}{Q{1.1cm} C{\codecol} Q{1.2cm}}
+\toprule
+\multicolumn{3}{c}{%
+  \parbox{\fullspan}{\footnotesize{\textit{Filter an input list of strings only for ones that start with a given prefix.} (Phi-3.5-mini-instruct: HumanEval)}}%
+} \\
+\midrule
+\footnotesize{Method} & \footnotesize{Response} & \footnotesize{Passed} \\
+\midrule
+\footnotesize{Ours} & \makebox[\codecol][c]{\usebox{\mcmcbox}} & \texttt{\scriptsize{true}} \\
+\addlinespace[1pt]  % <-- extra vertical space
+\footnotesize{GRPO} & \makebox[\codecol][c]{\usebox{\grpobox}} & \texttt{\scriptsize{false}} \\
+\bottomrule
+\end{tabular}
+%{-5pt}
+\vspace{5pt}
+\caption{\textbf{Sample responses on HumanEval: Phi-3.5-mini-instruct.} We present an example where our method solves a simple coding question, but GRPO does not.}\label{tab:phi}
+\vspace{-10pt}
+\end{table}
+
+
+\begin{figure}[h!]
+  \centering
+  \includegraphics[width=\linewidth]{combined_figure.pdf}
+  %{-9pt}
+  \captionsetup{font=small}
+  \caption{\textbf{Effect of hyperparameters on power sampling.} Left: We plot MATH500 accuracy across model families for various values of $\alpha$. Right: We plot the increase in accuracy of power sampling on Qwen models as the number of MCMC steps increases. }
+  \label{fig:hp}
+  %{-5pt}
+\end{figure}
+
+
+
+\paragraph{The effect of power distributions.}
+The two most important hyperparameters for power sampling are the choice of $\alpha$ and the number of MCMC (resampling) steps during sequence generation $N_{\text{MCMC}}$. At the extremes, choosing $\alpha = 1.0$ samples from the base model directly, while taking $\alpha \to \infty$ has the effect of deterministically accepting any resampled sequence that strictly increases the likelihood. Of course, even though higher base model likelihoods correlate with better reasoning (Figure \ref{fig:conf}), directly optimizing for likelihood is not necessarily optimal for reasoning, suggesting an ideal intermediate value of $\alpha$.
+
+In Figure \ref{fig:hp}, we display MATH500 accuracies across various values of $\alpha$ and find that an intermediate $\alpha = 4.0$ outperforms other values, as expected. Noticeably, the accuracies of power sampling remain relatively stable beyond $\alpha \geq 2.0$, suggesting that power sampling in practice is relatively robust to the choice of $\alpha$.
+
+
+\paragraph{Test-time scaling with MCMC steps.} On the other hand, $N_{\text{MCMC}}$ toggles the inference-time compute expended by our algorithm, providing a natural axis for test-time scaling. In Section \ref{subsec:samp} we raised the notion of a \textit{mixing time}, or the number of MCMC steps required before adequately sampling from the target distribution. In our case, we expect that the fewer MCMC steps we take, the further our algorithm samples from the target $p^{\alpha}$. 
+
+
+
+\looseness=-1
+We plot performance dependence on $N_{\text{MCMC}}$ in Figure \ref{fig:hp} and notice a steady increase in accuracy until $N_{\text{MCMC}} = 10$, beyond which accuracy remains roughly stable (not plotted). The accuracy difference from using fewer MCMC steps is noticeable but no more than $3$-$4\%$ between $N_{\text{MCMC}} = 2$
+and $N_{\text{MCMC}} = 10$. However, the jump in accuracy by using at least two steps as opposed to none is substantial ($3$-$4$\%). 
+
+We can even compute the total amount of tokens generated by our method relative to running GRPO. From (\ref{eq:tok}), our sampler generates $\frac{1}{4B} \cdot {N_{\text{MCMC}}T}$ times as many tokens as standard inference to generate a sequence of length $T$. Plugging in our experimental parameters $N_{\text{MCMC}} = 10$, $T = 679$ (our average output length for MATH500) and $B = 192$, running inference with power sampling incurs a multiplier of $\textbf{8.84} \times$ the number of tokens as running standard inference. Since GRPO generates multiple rollouts per example during training, \textit{our method incurs roughly the same inference cost as one epoch of GRPO training}, assuming 8 rollouts per sample with identical dataset sizes. Typically though, one GRPO epoch is still more expensive as it uses 16 rollouts and a training set that is larger than MATH500. 
+
+
+%{-3pt}
+\section{Conclusion}
+%{-3pt}
+
+In this work, we present an algorithm that samples directly from a base model without any additional training or access to an external signal, achieving a single-shot reasoning performance that is on par with, and sometimes even better than, that of a state-of-the-art RL-posttraining algorithm. We use the discussion of RL distribution sharpening to motivate defining the power distribution as a valuable target distribution for reasoning. Although exact power distribution sampling is intractable, we employ classic MCMC techniques alongside the sequential structure of autoregressive generation to define our power sampling algorithm, which demonstrates strong empirical performance.
+
+Our results suggest that base model capabilities are underutilized at sampling time and point towards a close relationship between high likelihood regions of the base model and strong reasoning capabilities. Employing additional compute at sampling-time with a stronger understanding of base model capabilites offers a promising direction for expanding the scope of reasoning beyond verifiability.
+
+
+\section{Acknowledgments}
+A.K. would like to thank  the Paul and Daisy Soros Foundation, NDSEG Fellowship, and Kempner Institute for their support.
+
+
+% 
+% Our work has several implications for enhancing reasoning capabilities of frontier models. 
+
+
+{
+    % \bibliographystyle{ieeenat_fullname}
+    \bibliographystyle{unsrtnat}
+    \bibliography{main}
+}
+
+% \bibliography{iclr2026_conference}
+% \bibliographystyle{iclr2026_conference}
+
+
+\newpage
+
+
+\appendix
+\section{Appendix}
+
+\subsection{Additional Theoretical Discussion}\label{apx:proof}
+
+In this section, we provide a stronger formalization of the phenomenon that power sampling downweights tokens that trap outputs in low-likelihood futures while low-temperature sampling does not. 
+
+\begin{proposition}[\textit{Informal}]
+    Power sampling upweights tokens with small support but high likelihood completions, while low-temperature sampling upweights tokens with large support but low likelihood completions.
+\end{proposition}
+
+
+\begin{definition}
+    \rm For the rest of this section, fix a prefix $x_{0:t-1}$. We say that $x_t$ has \textbf{marginal weight} $\varepsilon$ under the conditional next-token distribution if $\sum_{x>t}p(x_0, \dots, x_t, \dots x_T) = \varepsilon$.
+\end{definition}
+
+We consider a simplified model of the ``critical window'' or ``pivotal token'' phenomenon \citep{li2025blinkofaneyetheory, abdin2024phi4}, which refers to intermediate tokens that strongly influence the quality of the final generation. We differentiate between pivotal tokens that lead to high-likelihood futures vs. low-likelihood ones. 
+
+\begin{definition}
+\rm
+    At one extreme, a pivotal token maximally induces a high-likelihood completion if it places its entire marginal weight $\varepsilon$ on one future (singular support); i.e., for only one choice of $x>t$ is $p(x_0, \dots, x_t, \dots, x_T)$ nonzero. We call such a token a \textbf{positive pivotal token.}
+\end{definition}
+
+\begin{definition}
+\rm
+    At the other extreme, a pivotal token minimizes the likelihood of any future if its entire marginal weight $\varepsilon$ is uniformly distributed across $N$ future completions. In other words, there exist $N$ completions $x>t$ such that $p(x_0, \dots, x_t, \dots, x_T)$ are all nonzero with likelihood $\frac{\varepsilon}{N}$. We call such a token a \textbf{negative pivotal token.}
+\end{definition}
+
+
+Our simplified model of high and low-likelihood futures examines when positive pivotal tokens are favored over negative pivotal tokens under a given sampling distribution. In particular, we show that power sampling can upweight a positive pivotal token over a negative one even if the latter has a higher marginal weight, whereas low-temperature sampling always upweights the negative pivotal token in such a scenario. 
+
+Of course, whenever a positive pivotal token has higher marginal weight, both power sampling and low-temperature sampling will upweight it.
+
+\begin{proposition}
+    Let $x_t$ be a positive pivotal token with marginal weight $\varepsilon$, and let $x_t'$ be a negative pivotal token with marginal weight $\varepsilon'$ and support $N$. Then if 
+    \begin{equation}
+        \frac{\varepsilon'}{N^{1 - 1/\alpha}} < \varepsilon < \varepsilon',
+    \end{equation}
+    the future likelihood of $x_t$ is higher than any future likelihood of $x_t'$. Moreover, power sampling upweights $x_t$ over $x_t'$ while low-temperature sampling upweights $x_t'$ over $x_t$.
+\end{proposition}
+
+\begin{proof}
+Since $\alpha \geq 1$, it follows that \begin{equation}
+    \frac{\varepsilon'}{N^{1 - 1/\alpha}} > \frac{\varepsilon'}{N}
+\end{equation}
+and thus $\varepsilon > \frac{\varepsilon'}{N}$, establishing that the future completion likelihood of $x_t$ is greater than that of $x_t'$ (i.e. the assignment of positive and negative pivotal tokens is consistent).
+
+Now, if $\varepsilon < \varepsilon'$, then under the low-temperature distribution, the relative marginal weights on $x_t$ and $x_t'$ are $\varepsilon^{\alpha}$ and $\varepsilon'^{\alpha}$, so the probability of choosing $x_t$ is \textit{downweighted} relative to $x_t'$. However, for the power distribution, the relative marginal weights are $p_{\text{pow}}(x_t | x_{<t}) = \varepsilon^{\alpha}$ and $p_{\text{pow}}(x_t' | x_{<t}) = \frac{\varepsilon'^{\alpha}}{N^{\alpha - 1}}$. Then, as long as $\varepsilon^{\alpha} > \frac{\varepsilon'^{\alpha}}{N^{\alpha - 1}} \iff \varepsilon > \frac{\varepsilon'}{N^{1 - 1/{\alpha}}}$, token $x_t$ will be \textit{upweighted} relative to token $x_t'$. 
+
+In other words, the marginal weight on $x_t$ can be \textit{less than} the mass on $x_t'$ under $p$, but if the completion for $x_t$ has higher likelihood than any individual completion for $x_t'$, power sampling favors $x_t$ over $x_t'$.\end{proof}
+
+
+\subsection{Pass@k Accuracies over Multiple Domains}\label{apx:passes}
+In this section, we plot the pass@$k$ performance of power sampling, GRPO, and the base model (Qwen2.5-Math-7B) over MATH500, GPQA, and HumanEval to demonstrate that our sampling algorithm is highly performant at both single-shot and multi-shot reasoning while maintaining response diversity. Power sampling is plotted with $\alpha = 4.0$ for MATH500 and GPQA and $\alpha = 1.67$ for HumanEval (this temperature exhibits slightly better results at earlier $k$). In all cases, both in-domain and out-of-domain for GRPO, power sampling has near universally better performance than both GRPO and the base model in pass@$k$ for $k > 1$ and matches, if not exceeds, the base model upper bound at large $k$. 
+\begin{figure}[h!]
+    \centering
+    \includegraphics[width=0.9\linewidth]{math500_passatk_comparison.pdf}
+    \captionsetup{font=small}
+    \caption{\textbf{Pass@$k$ performance on MATH500 (Qwen2.5-Math-7B)}. }
+    \label{fig:apxpass}
+\end{figure}
+
+\begin{figure}[h!]
+    \centering
+    \includegraphics[width=0.9\linewidth]{passatk_comparison_he_alt.pdf}
+    \captionsetup{font=small}
+    \caption{\textbf{Pass@$k$ performance on HumanEval (Qwen2.5-Math-7B)}. }
+    \label{fig:apxpass3}
+\end{figure}
+
+
+
+
+\begin{figure}[h!]
+    \centering
+    \includegraphics[width=0.9\linewidth]{gpqa_passatk_alt_comparison.pdf}
+    \captionsetup{font=small}
+    \caption{\textbf{Pass@$k$ performance on GPQA (Qwen2.5-Math-7B)}. }
+    \label{fig:apxpass2}
+\end{figure}
+
+One thing to note about these plots is that the loss in diversity varies noticeably from benchmark to benchmark. MATH500 and GPQA clearly show that GRPO has a significantly lower pass@$k$ performance and diversity even for smaller $k$, while on HumanEval GRPO exhibits better pass@$k$ than the base model until $k = 16$. We speculate this might be due to the fact that while MATH500 and GPQA are graded on a ``singular'' answer, HumanEval is based on completing code where multiple solutions might be accepted, indicating a reduction in diversity may emerge but at much higher $k$. 
+
+
+\subsection{More Qualitative Examples}\label{apx:more}
+% --- Table (Math Example: 3/20 as decimal, with distinct GRPO answer) ---
+\begin{table}[h!]
+\centering
+\setlength{\tabcolsep}{6pt}
+\renewcommand{\arraystretch}{1.15}
+
+% Recompute width: only 2 columns now
+\newlength{\answercol}
+\setlength{\answercol}{\dimexpr\textwidth - 1.1cm - 4\tabcolsep\relax}
+\newlength{\answerinner}
+\setlength{\answerinner}{0.95\answercol}
+
+% Full-span width for header row
+\setlength{\fullspan}{\dimexpr\textwidth - 2\tabcolsep\relax}
+
+\begin{tabular}{Q{1.1cm} Z{\answercol}}
+\toprule
+\multicolumn{2}{c}{%
+  \parbox{\fullspan}{\textit{Can you solve the following math problem? Write $\frac{3}{20}$ as a decimal. Please reason step by step, and put your final answer within \textbackslash boxed\{\{\}\}. Correct answer: $\boxed{0.15}$}}%
+} \\
+\midrule
+System & Answer \\
+\midrule
+Ours &
+\parbox{\answerinner}{\small
+To convert the fraction $\frac{3}{20}$ to a decimal, we can follow these steps:
+
+1. Identify the numerator and the denominator of the fraction. In this case, the numerator is 3 and the denominator is 20.  
+2. Divide the numerator by the denominator. In this case, we divide 3 by 20.  
+3. Perform the division. The result is 0.15.  
+
+Therefore, the fraction $\frac{3}{20}$ as a decimal is $\boxed{0.15}$.
+} \\
+\midrule
+GRPO &
+\parbox{\answerinner}{\small
+To convert the fraction $\frac{3}{20}$ to a decimal, we can follow these steps:
+
+1. \textbf{Understand the fraction}: The fraction $\frac{3}{20}$ means 3 divided by 20.  
+
+2. \textbf{Perform the division}: We need to divide 3 by 20. Since 3 is less than 20, we will add a decimal point and zeros to 3 to make the division possible.  
+
+3. \textbf{Set up the division}: Write 3 as 3.000 (adding three zeros for precision).  
+
+4. \textbf{Divide}:  
+   - 20 goes into 30 once (since $20 \times 1 = 20$).  
+   - Subtract 20 from 30 to get a remainder of 10.  
+   - Bring down the next 0 to make it 100.  
+   - 20 goes into 100 five times (since $20 \times 5 = 100$).  
+   - Subtract 100 from 100 to get a remainder of 0.  
+
+5. \textbf{Combine the results}: The quotient from the division is 0.15.  
+
+Therefore, the decimal representation of $\frac{3}{20}$ is $\boxed{0.15}$.
+} \\
+\bottomrule
+\end{tabular}
+\caption{Comparison on MATH500: Qwen2.5-Math-7B. We present an example where our method and GRPO are correct.}\label{tab:math}
+%{-1pt}
+\end{table}
+
+
+
+% --- Saveboxes for completions (HumanEval/46) ---
+\newsavebox{\mcmcboxxlvi}
+\begin{lrbox}{\mcmcboxxlvi}
+  \begin{minipage}{\codeinner}
+\begin{lstlisting}[style=py]
+# Base cases
+if n == 0:
+    return 0
+elif n == 1:
+    return 0
+elif n == 2:
+    return 2
+elif n == 3:
+    return 0
+
+# Initialize the first four elements
+fib4_values = [0, 0, 2, 0]
+
+# Compute the rest of the sequence iteratively
+for i in range(4, n+1):
+    next_value = (fib4_values[i-1] + fib4_values[i-2] +
+                  fib4_values[i-3] + fib4_values[i-4])
+    fib4_values.append(next_value)
+
+# Return the n-th element
+return fib4_values[n]
+\end{lstlisting}
+  \end{minipage}
+\end{lrbox}
+
+\newsavebox{\grpoboxxlvi}
+\begin{lrbox}{\grpoboxxlvi}
+  \begin{minipage}{\codeinner}
+\begin{lstlisting}[style=py]
+a, b, c, d = 0, 0, 2, 0
+for _ in range(n):
+    a, b, c, d = b, c, d, a + b + c + d
+return d
+\end{lstlisting}
+  \end{minipage}
+\end{lrbox}
+
+% --- Table (HumanEval/46) ---
+\begin{table}[h!]
+\centering
+\setlength{\tabcolsep}{6pt}
+\renewcommand{\arraystretch}{1.15}
+\begin{tabular}{Q{1.1cm} C{\codecol} Q{1.2cm}}
+\toprule
+\multicolumn{3}{c}{%
+  \parbox{\fullspan}{\textit{The Fib4 number sequence is a sequence similar to the Fibonacci sequence defined as: fib4(0)=0, fib4(1)=0, fib4(2)=2, fib4(3)=0, and for $n \ge 4$, fib4(n) = fib4(n-1) + fib4(n-2) + fib4(n-3) + fib4(n-4). Write a function to efficiently compute the n-th element without recursion.}}%
+} \\
+\midrule
+System & Completion & Passed \\
+\midrule
+Ours & \makebox[\codecol][c]{\usebox{\mcmcboxxlvi}} & \texttt{true} \\
+\midrule 
+GRPO & \makebox[\codecol][c]{\usebox{\grpoboxxlvi}} & \texttt{false} \\
+\bottomrule
+\end{tabular}
+\caption{HumanEval comparison on Phi-3.5-mini-instruct.}
+\end{table}
+
+% --- Table (Math Example, no Passed column) ---
+
+% --- Table (Math Example, with separator) ---
+
+\begin{table}[h!]
+\centering
+\setlength{\tabcolsep}{6pt}
+\renewcommand{\arraystretch}{1.15}
+
+% Recompute width: only 2 columns now
+\setlength{\answercol}{\dimexpr\textwidth - 1.1cm - 4\tabcolsep\relax}
+\setlength{\answerinner}{0.95\answercol}
+
+\begin{tabular}{Q{1.1cm} Z{\answercol}}
+\toprule
+\multicolumn{2}{c}{%
+  \parbox{\fullspan}{\textit{Can you solve the following math problem? What integer $n$ satisfies $0 \le n < 18$ and
+  \[
+  n \equiv -11213141 \pmod{18}~?
+  \]
+  Please reason step by step, and put your final answer within \textbackslash boxed\{\{\}\}.} \text{\rm Correct answer: $\boxed{13}$}}%
+} \\
+\midrule
+Method & Answer \\
+\midrule
+Ours &
+\parbox{\answerinner}{\small
+First, we perform the division of 11213141 by 18:
+\[
+11213141 \div 18 \approx 622952.277777\ldots
+\]
+The integer part of the quotient is 622952. Now, we multiply 622952 by 18 to find the product:
+\[
+622952 \times 18 = 11213136
+\]
+Next, we subtract this product from 11213141 to find the remainder:
+\[
+11213141 - 11213136 = 5
+\]
+So, the remainder when 11213141 is divided by 18 is 5. This means:
+\[
+11213141 \equiv 5 \pmod{18}
+\]
+Therefore:
+\[
+-11213141 \equiv -5 \pmod{18}
+\]
+Since we need a non-negative remainder, we convert \(-5\) to a positive equivalent by adding 18:
+\[
+-5 + 18 = 13
+\]
+Thus:
+\[
+-11213141 \equiv 13 \pmod{18}
+\]
+The integer \( n \) that satisfies \( 0 \le n < 18 \) and \( n \equiv -11213141 \pmod{18} \) is: $\boxed{13}$.
+} \\
+\midrule  % <-- Added horizontal bar between MCMC and GRPO
+GRPO &
+\parbox{\answerinner}{\small
+Step 1: Find the remainder when 11213141 is divided by 18.  
+We can use the property of modular arithmetic that states \( a \equiv b \pmod{m} \) if and only if \( a \mod m = b \mod m \). So, we need to compute \( 11213141 \mod 18 \).
+
+To simplify this, we can use the fact that the remainder of a number when divided by 18 is the same as the remainder of the sum of its digits when divided by 18 (although this is not always the most efficient method, it can be used here for simplicity).
+
+First, let's sum the digits of 11213141:
+\[
+1 + 1 + 2 + 1 + 3 + 1 + 4 + 1 = 14.
+\]
+Now, we need to find the remainder when 14 is divided by 18. Since 14 is less than 18, the remainder is simply 14. Therefore,
+\[
+11213141 \equiv 14 \pmod{18}.
+\]
+
+Step 2: Find the remainder when \(-11213141\) is divided by 18.  
+Since \( 11213141 \equiv 14 \pmod{18} \), it follows that
+\[
+-11213141 \equiv -14 \pmod{18}.
+\]
+We need to convert \(-14\) to a positive remainder between 0 and 17. To do this, we add 18 to \(-14\):
+\[
+-14 + 18 = 4.
+\]
+Therefore,
+\[
+-11213141 \equiv 4 \pmod{18}.
+\]
+
+The integer \( n \) that satisfies \( 0 \le n < 18 \) and \( n \equiv -11213141 \pmod{18} \) is
+\(\boxed{4}\).
+} \\
+\bottomrule
+\end{tabular}
+\caption{MATH500 comparison between our sampling algorithm and GRPO for Qwen2.5-Math-7B. Here is an example where GRPO gets an incorrect answer, while our sampling algorithm succeeds. Our sample answer uses a distinct method altogether.}
+\end{table}
+
+
+
+
+
+
+% --- Table (Math Example, full text) ---
+
+
+
+
+
+
+
+
+\lstdefinestyle{py}{
+  language=Python,
+  basicstyle=\ttfamily\small,
+  columns=fullflexible,
+  breaklines=true,
+  showstringspaces=false,
+  tabsize=2,
+  frame=none
+}
+
+
+% --- Preamble (once) ---
+% --- Preamble (once) ---
+% --- Preamble (once) ---
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+\end{document}
