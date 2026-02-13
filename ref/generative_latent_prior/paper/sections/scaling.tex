@@ -1,0 +1,143 @@
+\section{Scaling~\methodname{}}\label{sec:scaling}
+
+\methodname{} is appealing because it imposes no structural assumptions, instead learning the activation distribution directly from the data. %
+To characterize the computational requirements of this approach, we train unconditional~\methodname{}s of varying sizes on Llama1B activations, and a single~\methodname{} on Llama8B activations for use in later experiments.
+We enumerate all~\methodname{}s and their final Frechet Distances in~\autoref{tab:catalog}.
+
+\textbf{Hyperparameters.}
+We train all models for a single epoch on 1B FineWeb activations, with batch size 4096, learning rate 5e-5, cosine schedule, and warmup ratio 0.01.
+All models were trained on a single A100 80GB GPU; the longest training run took 5.6 days.
+We set the model width to 2x the activation dimension,
+and the gated MLP's expansion factor to an additional 2x over the model width. In early experiments, we found that making the~\methodname{} sufficiently wide relative to the input activations is critical for generation quality, as first pointed out by~\citet{li2024return}.
+
+\subsection{Checking Generation Quality}\label{sec:checking_gen}
+Unlike text or image models, generative activation models cannot be assessed by directly inspecting samples.
+Below, we describe metrics and visualizations for assessing~\methodname{} quality.
+We report all results on the Llama8B~\methodname{}.
+
+\begin{table}[t]
+\centering
+\caption{
+Frechet Distance (FD) between 50k generated and real activations; lower is better. \methodname{} generates from pure noise while SAE reconstructs from real activations (a more favorable setting). \methodname{} achieves lower FD than SAEs and improves with scale. Activations are from the middlemost layer of each LLM. SAEs are from \citet{llama1bsae,chanin2025sparsewrongincorrectl0} for Llama1B and~\citet{llama8bsae,he2024llamascope} for Llama8B. The lower bound reports irreducible sampling error (FD of train vs.~val sets).
+}
+\begin{tabular}{lcc}
+\hline
+Method & \# Params & FD ($\downarrow$) \\
+\hline
+\textbf{Llama1B ($d=2048$)} & & \\
+\textcolor{mediumgray}{Lower Bound} & - & \textcolor{mediumgray}{0.22} \\
+SAE Reconstruction & 0.1B & 1.99 \\
+\methodname{}, 3 Layers & 0.5B & 0.68 \\
+\methodname{}, 6 Layers & 0.9B & 0.61 \\
+\methodname{}, 12 Layers & 1.7B & 0.55 \\
+\methodname{}, 24 Layers & 3.3B & \textbf{0.53} \\
+\hline
+\textbf{Llama8B ($d=4096$)} & & \\
+\textcolor{mediumgray}{Lower Bound} & - & \textcolor{mediumgray}{2.60} \\
+SAE Reconstruction & 1.0B & 6.91 \\
+\methodname{}, 6 Layers & 3.4B & \textbf{5.93} \\
+\hline
+\end{tabular}
+\label{tab:catalog}
+\end{table}
+
+\begin{figure}[t]
+  \centering
+
+  \begin{subfigure}[t]{0.49\linewidth}
+    \centering
+    \caption{Num Steps = 1}\label{fig:subsample_steps:a}
+    \includegraphics[trim={0.5cm 0.5cm 0.5cm 1cm}, width=\linewidth]{figures/scaling/pca/llama8b_0001.jpg}
+  \end{subfigure}
+  \begin{subfigure}[t]{0.49\linewidth}
+    \centering
+    \caption{Num Steps = 4}\label{fig:subsample_steps:b}
+    \includegraphics[trim={0.5cm 0.5cm 0.5cm 1cm}, width=\linewidth]{figures/scaling/pca/llama8b_0004.jpg}
+  \end{subfigure}
+  \vspace{0.1em}
+  \begin{subfigure}[t]{0.49\linewidth}
+    \centering
+    \caption{Num Steps = 20}\label{fig:subsample_steps:c}
+    \includegraphics[trim={0.5cm 0.5cm 0.5cm 1cm}, width=\linewidth]{figures/scaling/pca/llama8b_0020.jpg}
+  \end{subfigure}
+  \begin{subfigure}[t]{0.49\linewidth}
+    \centering
+    \caption{Num Steps = 1000}\label{fig:subsample_steps:d}
+    \includegraphics[trim={0.5cm 0.5cm 0.5cm 1cm}, width=\linewidth]{figures/scaling/pca/llama8b_1000.jpg}
+  \end{subfigure}
+  \vspace{0.8em}
+  \begin{subfigure}[t]{\linewidth}
+    \centering
+    \caption{Num Steps vs. Frechet Distance}\label{fig:subsample_steps:e}
+    \includegraphics[width=0.9\linewidth]{figures/scaling/steps_vs_fd.pdf}
+  \end{subfigure}
+  \caption{
+  \methodname{} generates activation samples near-indistinguishable from real activations, given enough sampling steps. (a-d) PCA of real activations (yellow) vs.~\methodname{} samples (pink) for Llama8B. The distributions converge around 20 sampling steps. (e) Frechet Distance confirms this quantitatively.
+  }
+  \label{fig:subsample_steps}
+\end{figure}
+
+\begin{table}[t]
+\centering
+\caption{
+Delta LM Loss (increase in LLM perplexity when original activations are replaced with reconstructed ones) for both~\methodname{} and a comparable SAE~\cite{he2024llamascope}.~\methodname{} achieves lower Delta LM Loss despite not being trained for reconstruction. Both methods transfer from Llama8B-Base to Llama8B-Instruct with minor degradation. Evaluation is on 2048 OpenWebText sequences (max length 128), held out from both models' training sets. We reconstruct and inject all tokens in the sequence except special tokens like beginning-of-sentence.
+}
+\setlength{\tabcolsep}{8pt}
+\begin{tabular}{lcc}
+\toprule
+& \multicolumn{2}{c}{Delta LM Loss ($\downarrow$)}\\
+Method & Llama8B-Base & Llama8B-Instruct \\
+\midrule
+SAE & 0.1976 & 0.2224 \\
+\methodname{} & \textbf{0.0513} & \textbf{0.0860}\\
+\bottomrule
+\end{tabular}
+\label{tab:delta_lm_loss}
+\end{table}
+
+\textbf{Representation Frechet Distance.}
+First, we use the Frechet Distance (FD)~\cite{DowsonLandau1982FrechetDistance,heusel2017fid} to understand the distance between the generated and real activation distributions. For the real distribution, we use 50k activations sampled from the FineWeb dataset used to train~\methodname{}.
+We take a single token per document.
+As the lower bound, we also provide the FD between real training and validation activations, which represents the irreducible error that arises from computing FD from a finite set of samples.
+We also compare with SAE reconstructions initialized from the training activations, a more generous setting than~\methodname{}, which is initialized from pure noise. When generating with~\methodname{}, we use 1000 diffusion steps.
+As seen in~\autoref{tab:catalog},~\methodname{} achieves much lower FDs than SAE reconstructions, and increasing parameter count improves FD.
+
+\textbf{PCA of Generated vs. Real Samples.}
+We also examine PCA~\cite{pearson1901lines} as a higher bandwidth visualization beyond the scalar FD. To better illustrate how PCA distinguishes ``bad models'' and ``good models,'' we use decreasing numbers of diffusion steps to simulate worse diffusion models, from the same~\methodname{} trained on Llama8B activations.
+As seen in the top-2 PCA components visualized in~\autoref{fig:subsample_steps}, reduced sampling steps result in reduced mode coverage (\ref{fig:subsample_steps:a}-\ref{fig:subsample_steps:b}), until a minimum threshold at 20 steps where generated samples become relatively indistinguishable from real ones (\ref{fig:subsample_steps:c}-\ref{fig:subsample_steps:d}). 
+We also plot the numerical relationship between number of steps and FD-50k in~\autoref{fig:subsample_steps:e}.
+
+\textbf{Delta LM Loss.}
+We next measure Delta LM Loss~\cite{bricken2023monosemanticity,lieberum-etal-2024-gemma}, a standard SAE evaluation metric that quantifies the increase in the LLM's loss caused by injecting reconstructed activations.
+To adapt~\methodname{} for ``reconstruction,'' we use a similar algorithm as~\autoref{fig:pseudocode_steering_method}, where we feed a real activation interpolated with noise. 
+The injected noise can be viewed as an information bottleneck similar to the SAE's sparse bottleneck, where~\methodname{} must use its learned prior to infer the missing details.
+We use $\text{t\_start}=0.5~\text{and}~\text{num\_steps}=20$.
+Surprisingly,~\methodname{} achieves a better Delta LM Loss than a pre-existing SAE~\cite{he2024llamascope} also trained on Llama8B-Base activations, as seen in~\autoref{tab:delta_lm_loss}.
+We hypothesize that SAE reconstructions are more off-manifold because they trade off reconstruction quality for an inductive bias towards sparsity, compared with \methodname{}'s slightly modified yet on-manifold activations.
+In~\autoref{tab:delta_lm_loss} we also see that both the SAE and~\methodname{} trained on Llama8B-Base transfer to Llama8B-Instruct, albeit with a minor degradation in Delta LM Loss.
+
+\subsection{Scaling Laws}\label{sec:scaling}
+We now characterize how diffusion loss scales with compute.
+In~\autoref{fig:scaling:a} we depict the training loss as a function of FLOPs for~\methodname{}s of varying sizes trained on Llama1B activations.
+We follow~\citet{kaplan2020scalinglawsneurallanguage} and estimate FLOPs as $C=6ND$, where $N$ is the number of parameters and $D$ is the number of tokens.
+We fit a power law of the form $L(C) = E + A \cdot C^{-\alpha}$ to the loss envelope, finding $E=0.52$ (irreducible error), $A=435.1$ (scaling coefficient), and  $\alpha=0.169$ (rate of improvement).
+
+Importantly, this scaling transfers to downstream tasks.  As shown in Figures~\ref{fig:scaling:b}-\ref{fig:scaling:c}, both steering performance and probing accuracy improve with compute, closely tracking the diffusion loss (we treat these tasks in detail in Sections~\ref{subsec:steering_sentiment} and \ref{subsec:probing_oned}). For each task, we estimate  scaling laws constrained to checkpoints on the compute-efficient frontier, superimposing the power-law fit to the raw data.
+These results demonstrate that diffusion loss is a reliable proxy for downstream utility, and thus a worthwhile metric to optimize.
+
+
+
+    
+
+
+
+
+
+
+
+
+
+
+
+
+

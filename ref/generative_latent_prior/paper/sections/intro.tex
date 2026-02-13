@@ -1,0 +1,81 @@
+\section{Introduction}\label{sec:intro}
+Neural network activations encode rich information reflecting how models process and represent data~\cite{hinton1986distributed,mikolov2013w2v,zeiler2014visualizing,bau2020units}.
+These latent representations enable a broad range of applications, from extracting internal knowledge via activation probing~\cite{alain2017understanding,hewitt-manning-2019-structural,belinkov-2022-probing} to steering behavior via targeted interventions~\cite{turner2024steeringlanguagemodelsactivation,zou2025repe,hendel-etal-2023-context,todd2024function}.
+However, existing methods for analyzing and manipulating activations often assume linearity or other structures \cite{pearson1901lines,olshausen1997sparse,bricken2023monosemanticity}, 
+and are therefore prone to producing corrupted activations that degrade LLM fluency~\cite{templeton2024scaling,vu2025angular}.
+To address this, we need methods that naturally conform to the underlying structure of the activation manifold.
+
+\begin{figure}
+\centering
+\includegraphics[width=0.90\linewidth]{figures/teaser.pdf}
+\caption{\textbf{\longmethodname{}:} 
+an activation model trained with a~\textit{generative} diffusion objective.
+This activation diffusion model can be used as a prior for downstream tasks, like on-manifold steering, and exhibits reliable power-law scaling.
+}
+\label{fig:teaser}
+\end{figure}
+
+
+\begin{figure*}[t]
+    \captionsetup[subfigure]{labelformat=empty}
+    \centering
+    \begin{minipage}[t]{0.30\textwidth}
+        \centering
+        \subcaption{(a) Training Loss on FineWeb}\label{fig:scaling:a}
+        \includegraphics[width=0.98\textwidth,trim=0.5cm 0.8cm 1.5cm 0.3cm, clip]{figures/scaling/flops/flops_vs_loss.pdf}
+    \end{minipage}\hfill
+    \begin{minipage}[t]{0.32\textwidth}
+        \centering
+        \subcaption{(b) On-Manifold Sentiment Steering}\label{fig:scaling:b}
+        \includegraphics[width=0.94\textwidth,trim=0.5cm 0.8cm 1.5cm 0.5cm,clip]{figures/scaling/flops/flops_vs_steer_marked.pdf}
+    \end{minipage}\hfill
+    \begin{minipage}[t]{0.30\textwidth}
+        \centering
+        \subcaption{(c) 1-D Probe for 113 Binary Tasks}\label{fig:scaling:c}
+        \includegraphics[width=\textwidth,trim=0.5cm 0.8cm 1.5cm 0.5cm, clip]{figures/scaling/flops/flops_vs_oned_u-0-5_marked.pdf}
+    \end{minipage}
+    \caption{
+    \methodname{} scales with compute. We train~\methodname{} (with \textcolor{blueone}{0.5B}, \textcolor{bluetwo}{0.9B}, \textcolor{bluethree}{1.7B}, \textcolor{bluefour}{3.3B} parameters) on Llama1B activations.
+    (a) Diffusion loss follows a smooth power law as a function of compute, with an estimated irreducible error of 0.52. (b) Steering performance for controlling positive sentiment (see~\autoref{subsec:steering_sentiment}) improves with compute, tracking the loss. (c) 
+    1-D probing performance (see~\autoref{subsec:probing_oned}) likewise improves with compute. See~\autoref{sec:appendix_scaling} for plots with diffusion loss on the x-axis.
+    }
+    \label{fig:scaling}
+\end{figure*}
+
+Generative models offer a principled alternative. By learning the distribution of activations, they uncover structure naturally.
+In computer vision, for instance,
+image diffusion models can project unrealistic images back onto the natural image manifold while preserving semantic content~\cite{meng2022sdedit}, and their intermediate representations encode semantically meaningful features useful for downstream tasks~\cite{luo2023dhf,tang2023dift,zhang2023tale,hedlin2023unsupervised}.
+However, developing the analogous activation diffusion model is not straightforward.
+Activations are high-dimensional vectors that cannot be directly inspected, posing challenges for training and evaluation.
+
+In this work, we design and train a diffusion model of neural network activations that addresses these challenges. 
+We call this model a~\longmethodname{}, or~\methodname{}.
+\methodname{} is a deep diffusion MLP fit on the same activation data commonly used to train SAEs.
+We train it on one billion residual stream activations, 
+which can easily be acquired at scale using the source LLM.
+To debug model quality, we use the Frechet Distance~\cite{DowsonLandau1982FrechetDistance} and PCA~\cite{pearson1901lines} to check that~\methodname{} generates activations near-indistinguishable from real ones.
+
+
+We apply~\methodname{} to common interpretability tasks. Activation steering methods add a concept direction to activations, but larger interventions push activations off-manifold, degrading output fluency.~\methodname{} offers a remedy: post-processing via diffusion sampling projects off-manifold activations back onto the natural manifold while preserving their semantic content (\autoref{fig:teaser}). Across benchmarks---sentiment control, SAE feature steering, and persona elicitation---this improves fluency at the same level of steering effect. We additionally find that~\methodname{}'s intermediate representations encode semantically meaningful features: these ``meta-neurons'' outperform both SAE features and raw LLM neurons on 1-D probing tasks, suggesting~\methodname{} learns to isolate interpretable concepts into individual units.
+
+\methodname{} scales predictably with compute. Across models from 0.5B to 3.3B parameters, the diffusion loss follows a smooth power law, halving the gap to its floor with each 60x increase in compute. This scaling transfers directly to downstream tasks: better-trained~\methodname{}s yield improved steering and probing, with gains that closely track the loss (\autoref{fig:scaling}). The diffusion loss thus serves as both a training objective and a reliable predictor of downstream utility---suggesting that continued scaling will yield further improvements.
+
+More broadly,~\methodname{} contributes to a line of work on meta-modeling, which studies generative models of neural network components~\cite{schmidhuber1992learning,hinton1987fast,ha2017hypernetworks,Peebles2022,wang2024neural}.
+Prior meta-models typically focus on sample generation, e.g., synthesizing network weights. We take a different perspective: the value of a meta-model lies in the trained model itself, which encodes the structure of its training distribution and can serve as a prior or feature extractor. Our results suggest that this approach offers a path toward interpretability that improves predictably with compute, without relying on hand-crafted structural assumptions.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

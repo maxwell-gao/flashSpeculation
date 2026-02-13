@@ -1,0 +1,153 @@
+
+\documentclass{article}
+
+\usepackage{microtype}
+\usepackage{graphicx}
+\usepackage{subcaption}
+\usepackage{booktabs} %
+
+\usepackage{hyperref}
+
+
+\newcommand{\theHalgorithm}{\arabic{algorithm}}
+
+
+\usepackage[preprint]{icml2026}
+
+
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{mathtools}
+\usepackage{amsthm}
+
+\usepackage[capitalize,noabbrev]{cleveref}
+
+\captionsetup[subfigure]{position=top}
+\usepackage{multirow}
+\usepackage{listings}
+\usepackage[dvipsnames]{xcolor}
+\usepackage{array}
+\usepackage{enumitem}
+\usepackage[T1]{fontenc}
+\usepackage{caption}
+\captionsetup[figure]{skip=1em}
+\usepackage{subcaption}
+\captionsetup[subfigure]{labelsep=space}
+\usepackage{tabularx}
+\usepackage{threeparttable}
+\usepackage{placeins}
+
+\lstset{
+    backgroundcolor=\color{gray!5},
+    basicstyle=\tiny\ttfamily,
+    keywordstyle=\ttfamily, 
+    commentstyle=\color{blue},
+    rulecolor=\color{gray},
+    frame=single,
+    framesep=5pt,
+    breaklines=true
+}
+\renewcommand\thesubfigure{\alph{subfigure}}
+\AtBeginDocument{%
+  \renewcommand*{\sectionautorefname}{Section}%
+  \renewcommand*{\subsectionautorefname}{Section}%
+  \renewcommand*{\subsubsectionautorefname}{Section}%
+}
+
+\newcommand{\red}[1]{\textcolor{red}{#1}}
+\definecolor{specialyellow}{HTML}{F1C232}
+\definecolor{specialpink}{HTML}{E053C3}
+\definecolor{mediumgray}{gray}{0.60}
+\definecolor{blueone}{HTML}{94C4DF}
+\definecolor{bluetwo}{HTML}{4A98C9}
+\definecolor{bluethree}{HTML}{1664AB}
+\definecolor{bluefour}{HTML}{09306B}
+
+\theoremstyle{plain}
+\newtheorem{theorem}{Theorem}[section]
+\newtheorem{proposition}[theorem]{Proposition}
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{corollary}[theorem]{Corollary}
+\theoremstyle{definition}
+\newtheorem{definition}[theorem]{Definition}
+\newtheorem{assumption}[theorem]{Assumption}
+\theoremstyle{remark}
+\newtheorem{remark}[theorem]{Remark}
+
+\usepackage[textsize=tiny]{todonotes}
+
+
+
+\newcommand{\fancyfont}[1]{\begingroup\fontfamily{ppl}\selectfont #1\endgroup}
+\newcommand{\longmethodname}{Generative Latent Prior}
+\newcommand{\methodname}{\scalebox{0.95}{\fancyfont{GLP}}}
+\newcommand{\papertitle}{Learning a Generative Meta-Model of LLM Activations}
+\newcommand{\metaact}{meta-neuron}
+
+\newcommand{\jf}[1]{\textcolor{Sepia}{JF: #1}}
+\newcommand{\gl}[1]{\textcolor{ForestGreen}{GL: #1}}
+\newcommand{\js}[1]{\textcolor{TealBlue}{JS: #1}}
+\newcommand{\ar}[1]{\textcolor{RubineRed}{AR: #1}}
+\newcommand{\td}[1]{\textcolor{RoyalPurple}{TD: #1}}
+
+\icmltitlerunning{\papertitle}
+
+\begin{document}
+
+\twocolumn[
+  \icmltitle{\papertitle}
+
+
+
+  \icmlsetsymbol{equaladvising}{$\dagger$}
+  \icmlsetsymbol{note}{$\ddagger$}
+
+  \begin{icmlauthorlist}
+    \icmlauthor{Grace Luo}{berk}
+    \icmlauthor{Jiahai Feng}{berk,note}
+    \icmlauthor{Trevor Darrell}{berk,equaladvising}
+    \icmlauthor{Alec Radford}{ind,equaladvising}
+    \icmlauthor{Jacob Steinhardt}{berk,transluce,equaladvising}
+  \end{icmlauthorlist}
+
+  \icmlaffiliation{berk}{UC Berkeley}
+  \icmlaffiliation{transluce}{Transluce}
+  \icmlaffiliation{ind}{Independent}
+
+  \icmlcorrespondingauthor{Grace Luo}{graceluo@berkeley.edu}
+
+  \icmlkeywords{Machine Learning, ICML}
+
+  \vskip 0.3in
+]
+
+
+
+\printAffiliationsAndNotice{
+\hspace{-1.65em}
+\textsuperscript{$\ddagger$}Work done while at UC Berkeley.
+\textsuperscript{$\dagger$}Equal advising. \newline
+}  %
+
+\input{sections/abstract}
+\input{sections/intro}
+\input{sections/approach}
+\input{sections/scaling}
+\input{sections/steering}
+\input{sections/probing}
+\input{sections/related}
+\input{sections/discussion}
+
+\clearpage
+
+\input{sections/acknowledgements}
+
+\input{sections/broader_impact}
+
+\bibliography{example_paper}
+\bibliographystyle{icml2026}
+
+\clearpage
+\input{sections/appendix}
+
+\end{document}

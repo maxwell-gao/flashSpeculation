@@ -1,0 +1,387 @@
+\appendix
+\section*{Appendix}
+
+\section{Pseudocode}
+In~\autoref{fig:pseudocode_diffusion} we depict the pseudocode for the diffusion objective, corresponding to~\autoref{sec:diffusion_objective}.
+
+\begin{figure}[h]
+\begin{lstlisting}[language=Python,commentstyle=\color{blue}]
+# =========================================
+# denoiser - MLP denoiser network
+# scaler - pre-computed activation stats
+# acts[n, d] - minibatch of activations
+# =========================================
+
+# standardize to zero mean & unit variance
+acts = (acts - scaler.mean) / scaler.std
+
+# sample noise & timesteps
+noise = np.random.normal()
+t = np.random.uniform(0, 1)
+
+# linearly interpolate activations & noise
+noisy_acts = (1 - t) * acts + t * noise
+target_velocity = noise - acts
+
+# run one step of denoising
+pred_velocity = denoiser(
+    acts=noisy_acts,
+    timesteps=t,
+)
+
+# mean squared error loss
+loss = mse_loss(
+    pred_velocity,
+    target_velocity
+)
+\end{lstlisting}
+\caption{
+We use the diffusion objective, specifically flow matching,
+to train a novel activation model.
+}
+\label{fig:pseudocode_diffusion}
+\end{figure}
+
+\section{Scaling: Extended Results}\label{sec:appendix_scaling}
+\subsection{Multi-Layer Modeling}\label{sec:appendix_multi_layer}
+Aside from training layer-specific~\methodname{}s, we also explore training a multi-layer model on activations from all 16 layers of Llama1B. 
+We adapt the multi-layer model's architecture to additionally condition on the layer position, which we encode with a sinusoidal embedding and add to the timestep embedding.
+We compare the scaling behavior of the single and multi-layer model in~\autoref{fig:multi_layer}, on activations from the middlemost layer (for which the single-layer model is specialized). We depict the computational exchange rate of both methods across training in~\autoref{fig:multi_layer_exchange}.
+
+\begin{figure*}
+    \captionsetup[subfigure]{labelformat=empty}
+    \centering
+    \begin{minipage}[t]{0.33\textwidth}
+        \centering
+        \subcaption{(a) Training Loss on FineWeb}\label{fig:multi_layer:a}
+        \includegraphics[width=\textwidth]{figures/scaling/multi_layer/flops_vs_loss.pdf}
+    \end{minipage}\hfill
+    \begin{minipage}[t]{0.33\textwidth}
+        \centering
+        \subcaption{(b) On-Manifold Sentiment Steering}\label{fig:multi_layer:b}
+        \includegraphics[width=\textwidth]{figures/scaling/multi_layer/flops_vs_steer.pdf}
+    \end{minipage}\hfill
+    \begin{minipage}[t]{0.33\textwidth}
+        \centering
+        \subcaption{(c) 1-D Probe for 113 Binary Tasks}\label{fig:multi_layer:c}
+        \includegraphics[width=\textwidth]{figures/scaling/multi_layer/flops_vs_probe.pdf}
+    \end{minipage}
+    \caption{Multi-layer scaling. We compare the scaling behavior of single (\textcolor{bluethree}{blue}) vs. multi-layer (\textcolor{specialpink}{pink})~
+    \methodname{}s trained on Llama1B activations, on activations from the middlemost layer (for which the single-layer model is specialized).
+    Corresponding to~\autoref{tab:catalog}, the final representation Frechet Distance for the single-layer model is 0.55, and the multi-layer model is 0.66.
+    }
+    \label{fig:multi_layer}
+\end{figure*}
+
+\begin{figure*}
+    \centering
+    \begin{minipage}[t]{0.4\textwidth}
+        \centering
+        \caption*{Exchange Rate of Multi-Layer / Single-Layer~\methodname{}}
+        \includegraphics[width=\linewidth]{figures/scaling/multi_layer/exchange_rate.pdf}
+        \caption{Multi-layer exchange rate. Using the loss curves from~\autoref{fig:multi_layer:a}, we plot $\mathrm{FLOPs}_{\text{multi-layer}}/\mathrm{FLOPs}_{\text{single-layer}}$ at matched diffusion loss, with $\mathrm{FLOPs}_{\text{single-layer}}$ obtained via piecewise linear interpolation.}
+        \label{fig:multi_layer_exchange}
+    \end{minipage}
+    \hfill
+    \begin{minipage}[t]{0.4\textwidth}
+        \centering
+        \caption*{PCA of SAE Reconstructions}
+        \includegraphics[width=\linewidth]{figures/scaling/pca/llama8b_sae.jpg}
+        \caption{PCA of SAE reconstructions. We visualize FineWeb training activations vs.~their reconstructions from~\citet{he2024llamascope}.}
+        \label{fig:pca_sae}
+    \end{minipage}
+\end{figure*}
+
+\subsection{Additional PCA Visualizations}
+Corresponding to~\autoref{fig:subsample_steps}, we show the PCA of Llama8B SAE~\cite{he2024llamascope} reconstructions.
+Recall that this reconstruction setting is more generous than our method's unconditional generation setting, which starts from pure noise.
+Both~\methodname{}s and SAEs produce activations that are relatively indistinguishable from real activations, from the perspective of the top-2 PCA components.
+
+\clearpage
+\section{Steering: Extended Results}\label{sec:appendix_steering}
+
+\subsection{Loss vs. Steering Scaling}\label{subsec:loss_vs_steer}
+In~\autoref{fig:scaling_steer} we depict the steering performance as a function of loss, rather than compute.
+Instead of a power law, we fit a linear function of the form $f(L) = b + m \cdot L$, where $L$ is the loss and $f(L)$ is the on-manifold steering performance.
+We also depict the individualized rather than averaged concept and fluency scores in~\autoref{fig:scaling_steer:b} and~\ref{fig:scaling_steer:c} respectively. 
+
+\subsection{Specialized Evaluators}\label{subsec:specialized_evaluators}
+While we design the evaluation in~\autoref{subsec:steering_sentiment} for ease of comparison across many checkpoints, here we conduct a more extensive sentiment steering evaluation on our Llama8B~\methodname{}.
+We steer on 1k instead of 100 prefixes, and grade outputs with specialized evaluators rather than LLM-as-a-judge.
+We measure the concept score $s_{\text{concept}}$ with a five-point sentiment classifier~\cite{distilbertsst5} (the softmax probabilities weighted by the ordinal class labels 1-5).
+We define the positive concept score as $s_{\text{concept}}$ and the negative concept score as $6 - s_{\text{concept}}$.
+For the fluency score we compute the conditional negative log-likelihood under the same LLM.
+We depict the concept-fluency tradeoff in~\autoref{fig:sentiment_quantitative}, where we see that~\methodname{} expands the Pareto frontier on top of DiffMean, for both positive and negative sentiment steering.
+
+\subsection{Steering Coefficient Regimes}
+The results in~\autoref{fig:scaling:b} are averaged across relative steering coefficients $\geq 1$.
+We do this because we observe that~\methodname{} is most helpful for large steering coefficients, and there is a larger spread of performance across checkpoints in this regime, as seen in~\autoref{fig:alpha_vs_steer}.
+
+\subsection{Qualitative Results}
+We show additional qualitative results for each steering setting, with~\autoref{tab:sentiment_qualitative} corresponding to~\autoref{subsec:steering_sentiment},~\autoref{tab:sae_qualitative_long} corresponding to~\autoref{subsec:steering_sae}, and~\autoref{tab:persona_qualitative_long} corresponding to~\autoref{subsec:steering_persona}.
+
+\subsection{Experimental Configurations}
+In~\autoref{tab:steering_configurations} we detail the datasets and hyperparameters used for the on-manifold steering experiments in~\autoref{subsec:steering_sentiment}-~\ref{subsec:steering_persona}.
+
+\begin{figure*}[t]
+    \captionsetup[subfigure]{labelformat=empty}
+    \centering
+    \begin{minipage}[t]{0.30\textwidth}
+        \centering
+        \subcaption{(a) }\label{fig:scaling_steer:a}
+        \includegraphics[width=\textwidth,trim=0.5cm 0.8cm 1.5cm 0.3cm, clip]{figures/scaling/flops/loss_vs_steer_marked.pdf}
+    \end{minipage}\hfill
+    \begin{minipage}[t]{0.30\textwidth}
+        \centering
+        \subcaption{(b) }\label{fig:scaling_steer:b}
+        \includegraphics[width=\textwidth,trim=0.5cm 0.8cm 1.5cm 0.3cm, clip]{figures/scaling/flops/loss_vs_concept_marked.pdf}
+    \end{minipage}\hfill
+    \begin{minipage}[t]{0.32\textwidth}
+        \centering
+        \subcaption{(c) }\label{fig:scaling_steer:c}
+        \includegraphics[width=0.90\textwidth,trim=0.5cm 0.8cm 1.5cm 0.3cm, clip]{figures/scaling/flops/loss_vs_fluency_marked.pdf}
+    \end{minipage}
+    \caption{
+    Scaling behavior of on-manifold steering.
+    (a) We visualize the same checkpoints as~\autoref{fig:scaling:b}, but with Diffusion Loss rather than FLOPs on the x-axis.
+    (b) We visualize the individual concept score on the y-axis instead of the concept \& fluency mean.
+    (c) We visualize the individual fluency score on the y-axis.
+    }
+    \label{fig:scaling_steer}
+\end{figure*}
+
+\begin{figure*}[t]
+\centering
+\begin{minipage}[t]{0.5\textwidth}
+  \centering
+  \vspace{4em}
+  \includegraphics[width=\linewidth]{figures/steer/sentiment.pdf}
+  \captionof{figure}{Controlling sentiment in Llama8B-Base. We score concept with a five-point sentiment classifier (higher is better) and fluency with the negative log-likelihood under the same LLM (lower is better). Error bars show 95\% bootstrap confidence intervals with 10k resamples.}
+  \label{fig:sentiment_quantitative}
+\end{minipage}\hfill
+\begin{minipage}[t]{0.45\textwidth}
+  \centering
+  \vspace{0em}
+  \caption*{Effect of Scaling by Steering Coefficient Regime}
+  \includegraphics[width=\linewidth]{figures/steer/steer_regime.pdf}
+  \captionof{figure}{Steering coefficient regimes. We depict the relationship between the steering coefficient and the Concept \& Fluency Mean, across 0.5-3.3B Llama1B~\methodname{} checkpoints colored by FLOPs, corresponding to~\autoref{fig:scaling:b}. We also provide the DiffMean baseline.}
+  \label{fig:alpha_vs_steer}
+\end{minipage}
+\end{figure*}
+
+\clearpage
+\input{figures/steer/qualitative_long}
+
+\begin{table*}
+\centering
+\caption{Experimental configurations corresponding to~\autoref{sec:steering}.}
+\label{tab:steering_configurations}
+\begin{threeparttable}
+\begin{tabular}{@{}
+    >{\raggedright\arraybackslash}p{0.10\linewidth} 
+    >{\raggedright\arraybackslash}p{0.30\linewidth} 
+    >{\raggedright\arraybackslash}p{0.28\linewidth} 
+    >{\raggedright\arraybackslash}p{0.28\linewidth}@{}
+}
+\toprule
+  & SAE Improvement \par (\autoref{subsec:steering_sae}) 
+  & Persona Elicitation \par (\autoref{subsec:steering_persona}) 
+  & Sentiment Control \par (\autoref{subsec:steering_sentiment}) \\
+\midrule
+Datasets 
+& SAE Features: 500 from Llamascope~\cite{he2024llamascope}
+\newline Instructions: 5 per feature from AlpacaEval~\cite{alpaca_eval} 
+&
+Personas: 3 from~\citet{chen2025personavectorsmonitoringcontrolling} (evil, sycophantic, hallucinating)
+\newline Questions: 20 per persona from~\citet{chen2025personavectorsmonitoringcontrolling}
+& Sentiments: 1 from SST-5 \citep{socher-etal-2013-recursive} (positive sentiment)
+\newline Prefixes: 100 from OpenWebText \cite{Gokaslan2019OpenWeb}, marked as neutral sentiment by~\citet{liu-etal-2021-dexperts} 
+\\
+\midrule
+Steering \newline Coefficients 
+& Relative $r \in \{0.2, 0.4, 0.6, 0.8, 1.0, 1.2, 1.4,$ \par $1.6, 1.8, 2.0\}$ $\bar{\|a\|}_2=11.6$
+& Absolute $\alpha \in \{0.2, 0.4, 0.6, 0.8, 1.0, 1.2, 1.4,$ \par $1.6, 1.8, 2.0, 2.5, 3.0, 4.0, 5.0\}$ 
+& Relative $r \in$ \newline $\{1.0, 1.2, 1.4, 1.6, 1.8, 2.0\}$ 
+\newline $\bar{\|a\|}_2=11.6$ 
+\\
+\midrule
+Max New Tokens & 128 & 128 & 20  \\
+\midrule
+\# Outputs Evaluated 
+& $2500$ across all SAE features \par (1 continuation per instruction) 
+& $200$ per persona \par (10 answers per question)
+& $100$ per~\methodname{} checkpoint\tnote{*}
+\par (1 continuation per prefix) 
+\\
+\bottomrule
+\end{tabular}
+\begin{tablenotes}[flushleft]
+\footnotesize
+\item[*]In~\autoref{subsec:steering_sentiment} we use $100$ outputs for efficient evaluation across many checkpoints; we perform a more extensive evaluation with $1000$ outputs in~\autoref{subsec:specialized_evaluators}.
+\end{tablenotes}
+\end{threeparttable}
+\end{table*}
+
+\clearpage
+\section{Probing: Extended Results}\label{sec:appendix_probing}
+
+\subsection{Loss vs. Probing Scaling}\label{subsec:loss_vs_probe}
+In~\autoref{fig:scaling_probe} we depict the probing performance as a function of compute in the top row, and loss in the bottom row. We fit a power law with respect to compute, and a linear function with respect to loss, in the same fashion as~\autoref{subsec:loss_vs_steer}.
+We also ablate the diffusion timestep, which represents the noisiness of the inputs to~\methodname{} for probing.
+We see that the scaling trends are cleaner for a noisier timestep ($t=0.5$, left column) compared to a relatively clean timestep ($t=0.1$, right column).
+We hypothesize that evaluating at noisier timesteps better separates models because it requires more work from the~\methodname{}, which needs to identify and retain the underlying semantic concepts present.
+
+\subsection{Dense Probing}\label{subsec:dense_probe}
+\autoref{sec:probing} discusses 1-D probing with a single scalar feature; here we explore dense probing with all available features.
+
+\textbf{Scaling Behavior.} 
+Here, we use the same setup as~\autoref{subsec:probing_oned}, except we do not pre-filter any layer features and use the val AUC to select the best-performing layer.
+In~\autoref{fig:dense_probe} we depict the scaling behavior of dense probing, both in terms of scaling FLOPs (top row) and diffusion loss (bottom row). Similar to~\autoref{fig:scaling_probe}, we see that the scaling trends are cleaner for noisier inputs (left column). Like 1-D probing, we observe that training~\methodname{}s with more compute leads to better dense probing performance.
+
+\textbf{Baseline Comparison.} We use the same setup as~\autoref{subsec:probing_oned_baselines}, except we do not pre-filter any features. In~\autoref{tab:dense_probe} we compare~\methodname{} to the baselines. We see that~\methodname{} achieves similar scores to the raw LLM baselines, and outperforms the SAEs. The dense probing results indicate that the tested concepts do exist in a~\textit{distributed} fashion in the raw LLM activations, leaving little headroom for activation models. We argue that for the tasks from~\citet{kantamneni2025are}, 1-D probing is a more informative evaluation setting, as it provides a larger separation across methods and highlights which ones are superior at~\textit{localizing} concepts.
+
+\begin{table}[t]
+\centering
+\footnotesize
+\caption{Dense probing performance, corresponding to~\autoref{tab:oned_probe}. Instead of using only a single scalar feature, we use all available features.}
+\label{tab:dense_probe}
+\begin{tabular}{lcc}
+\hline
+Method & Probe AUC ($\uparrow$) & 95\% CI \\
+\hline
+\textbf{Llama1B} & & \\
+Raw Layer Output & 0.92	& [0.90, 0.94]\\
+Raw MLP Neuron & 0.93 & [0.91, 0.94]\\
+SAE & 0.85 & [0.82, 0.87] \\
+\methodname{} & 0.92 & [0.90, 0.94]\\
+\hline
+\textbf{Llama8B} & & \\
+Raw Layer Output & 0.94 & [0.93, 0.96] \\
+Raw MLP Neuron &  0.94 & [0.93, 0.96] \\
+SAE & 0.90 & [0.88, 0.92] \\
+\methodname{} & 0.94 & [0.92, 0.96] \\
+\hline
+\end{tabular}
+
+\bigskip
+\caption{Validating the 1-D probe filtering heuristic. We show results with pre-filtering (left) and without (right).
+We report the average AUC as well as the 95\% CI in brackets.}
+\label{tab:heuristic_check}
+\begin{tabular}{lcc}
+\toprule
+Method & 1-D Probe (k=512) & 1-D Probe (k=all) \\
+\midrule
+\textbf{Llama1B} \\
+Raw Layer Output & 0.77 [0.74, 0.80] & 0.77 [0.74, 0.80] \\
+Raw MLP Neuron & 0.79 [0.77, 0.82] & 0.79 [0.77, 0.82] \\
+\midrule
+\textbf{Llama8B} \\
+Raw Layer Output & 0.77 [0.74, 0.79] & 0.77 [0.74, 0.79] \\
+Raw MLP Neuron & 0.82 [0.80, 0.85] & 0.82 [0.80, 0.85] \\
+\bottomrule
+\end{tabular}
+
+\bigskip
+\caption{Number of available features per method.}
+\label{tab:oned_probe_dim}
+\begin{tabular}{lr}
+\hline
+Method & \# Available Features\\
+\hline
+\textbf{Llama1B} & \\
+SAE & 16,384 \\
+Raw Layer Output & 2,048 \\
+Raw MLP Neuron & 8,192 \\
+\methodname{} & 196,608 \\
+\hline
+\textbf{Llama8B} & \\
+SAE & 131,072 \\
+Raw Layer Output & 4,096 \\
+Raw MLP Neuron & 14,336 \\
+\methodname{} & 98,304 \\
+\hline
+\end{tabular}
+\end{table}
+
+\subsection{Additional 1-D Probing Results}
+\textbf{Validating pre-filtering.} In~\autoref{tab:heuristic_check} we validate the pre-filtering heuristic used in~\autoref{subsec:probing_oned}, which ranks features by their class mean difference and selects the top-k, following~\citet{gurnee2023finding}.
+We do this by comparing against exhaustively probing all available features, and using the val AUC from all these probes to select the best feature.
+As seen in~\autoref{tab:heuristic_check}, there is no observable difference in the result with (left column) and without (right column) the heuristic.
+
+\textbf{Number of available features.}  For our probing evaluation, we report the number of available features for each method in~\autoref{tab:oned_probe_dim}, from which the top feature is used for 1-D probing.
+We do not observe any noticeable relationship between number of features and 1-D probe performance; the Llama1B~\methodname{} contains more available features than the SAE and the Llama8B~\methodname{} contains less, but~\methodname{} significantly outperforms SAE in probe AUC in both cases.
+
+\textbf{Locations of diffusion~\metaact{}s.} In~\autoref{fig:probe_locations} we visualize the locations of the best performing \metaact{}s in the Llama8B~\methodname{}, where we see that the middlemost diffusion layer is the most semantically rich, consistent with findings in image diffusion models~\cite{luo2023dhf}.
+
+\begin{figure*}[t]
+    \captionsetup[subfigure]{labelformat=empty} 
+    \centering
+    \begin{minipage}[t]{0.48\textwidth}
+        \centering
+        \subcaption{(a) Scaling FLOPs, More Noisy (t=0.5)}\label{fig:dense_probe:a}
+        \includegraphics[width=\textwidth]{figures/probe/dense/flops_vs_dense_u-0-5_marked.pdf}
+    \end{minipage}\hfill
+    \begin{minipage}[t]{0.48\textwidth}
+        \centering
+        \subcaption{(b) Scaling FLOPs, More Clean (t=0.1)}\label{fig:dense_probe:b}
+        \includegraphics[width=\textwidth]{figures/probe/dense/flops_vs_dense_u-0-9_marked.pdf}
+    \end{minipage}
+    \begin{minipage}[t]{0.48\textwidth}
+        \centering
+        \subcaption{(c) Scaling Loss, More Noisy (t=0.5)}\label{fig:dense_probe:c}
+        \includegraphics[width=\textwidth]{figures/probe/dense/loss_vs_dense_u-0-5_marked.pdf}
+    \end{minipage}\hfill
+    \begin{minipage}[t]{0.48\textwidth}
+        \centering
+        \subcaption{(d) Scaling Loss, More Clean (t=0.1)}\label{fig:dense_probe:d}
+        \includegraphics[width=\textwidth]{figures/probe/dense/loss_vs_dense_u-0-9_marked.pdf}
+    \end{minipage}
+    \caption{Scaling behavior of dense probing. Unlike 1-D probing, we use all the available features. Row-wise, we vary the x-axis (FLOPs vs. Diffusion Loss). Column-wise, we vary the noisiness of the diffusion input (noisy vs. clean).}
+    \label{fig:dense_probe}
+\end{figure*}
+
+\begin{figure*}[t]
+    \captionsetup[subfigure]{labelformat=empty} 
+    \centering
+    \begin{minipage}[t]{0.48\textwidth}
+        \centering
+        \subcaption{(a) Scaling FLOPs, More Noisy (t=0.5)}\label{fig:scaling_probe:a}
+        \includegraphics[width=\textwidth]{figures/scaling/flops/flops_vs_oned_u-0-5_marked.pdf}
+    \end{minipage}\hfill
+    \begin{minipage}[t]{0.48\textwidth}
+        \centering
+        \subcaption{(b) Scaling FLOPs, More Clean (t=0.1)}\label{fig:scaling_probe:b}
+        \includegraphics[width=\textwidth]{figures/scaling/flops/flops_vs_oned_u-0-9_marked.pdf}
+    \end{minipage}
+    \begin{minipage}[t]{0.48\textwidth}
+        \centering
+        \subcaption{(c) Scaling Loss, More Noisy (t=0.5)}\label{fig:scaling_probe:c}
+        \includegraphics[width=\textwidth]{figures/scaling/flops/loss_vs_oned_u-0-5_marked.pdf}
+    \end{minipage}\hfill
+    \begin{minipage}[t]{0.48\textwidth}
+        \centering
+        \subcaption{(d) Scaling Loss, More Clean (t=0.1)}\label{fig:scaling_probe:d}
+        \includegraphics[width=\textwidth]{figures/scaling/flops/loss_vs_oned_u-0-9_marked.pdf}
+    \end{minipage}
+    \caption{Scaling behavior of 1-D probing. Row-wise, we vary the x-axis (FLOPs vs. Diffusion Loss). Column-wise, we vary the noisiness of the diffusion input (noisy vs. clean).
+    }
+    \label{fig:scaling_probe}
+\end{figure*}
+
+\begin{figure*}
+\centering
+\caption*{Locations of Top-1 Diffusion Meta-Neurons Across Layers}
+\includegraphics[width=\linewidth]{figures/probe/oned_probe_layer_task.pdf}
+\caption{
+For each 1-D probing task, we depict the location of the best performing~\methodname{} \metaact{}.
+We also color each layer by the frequency at which it contained the best task-specific~\metaact{}.
+}
+\label{fig:probe_locations}
+\end{figure*}
+
+
+
+
+
+
+

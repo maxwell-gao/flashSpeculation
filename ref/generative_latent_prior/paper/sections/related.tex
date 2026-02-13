@@ -1,0 +1,38 @@
+\section{Related Work}\label{sec:related}
+
+\textbf{Meta-Models.}
+Meta-models treat neural networks as a new data modality~\cite{iclr25workshop,horwitz2025we}.
+Prior work often focuses on network weights, 
+spanning domains like image classifier weights~\cite{Peebles2022, wang2024neural,zeng2025generativemodelingweightsgeneralization},
+NeRFs~\cite{Erkoc_2023_ICCV}, 
+Stable Diffusion LoRAs~\cite{dravidinterpreting},
+and LLM LoRAs~\cite{ilharco2023editing,charakorn2025texttolora}.
+However, modeling weights is inherently challenging:
+data generation requires expensive optimization, and training requires special techniques to overcome permutation symmetry.
+We sidestep both issues by modeling activations instead of weights.
+
+Most relevant to our work, recent methods investigate diffusion models on DINO~\cite{Caron_2021_ICCV} activations,
+demonstrating that they can be used for image generation as a conditioning signal~\cite{li2024return} or latent space~\cite{zheng2025diffusiontransformersrepresentationautoencoders}.
+In this work, rather than using the generated samples, we leverage the meta-model itself, using it as a prior for steering and an encoder for probing.
+
+\textbf{Activation Modeling.}
+Many LLM interpretability approaches 
+impose linear assumptions, treating concepts as directions in activation space. These include dictionary learning methods like SAEs~\cite{olshausen1997sparse,lee2006efficient,bricken2023monosemanticity,huben2024sparse,gao2025scaling}
+and vector arithmetic methods~\cite{mikolov2013w2v} like DiffMean~\cite{marks2024geometry}, Task and Function Vectors~\cite{hendel-etal-2023-context,todd2024function}, RepE~\cite{zou2025repe}, and Persona Vectors~\cite{chen2025personavectorsmonitoringcontrolling}.
+These approaches typically only represent linear structure, while \methodname{} imposes no such restriction.
+
+A separate line of work develops  nonlinear methods for describing activations in natural language; this includes SelfIE~\cite{10.5555/3692070.3692357}, LatentQA~\cite{pan2024latentqateachingllmsdecode} and others~\cite{karvonen2026activationoraclestrainingevaluating,choi2025scalably,li2025traininglanguagemodelsexplain,huang2025predictiveconceptdecoderstraining}.
+These methods aim to verbalize activations rather than model their distribution, and thus serve a complementary role to \methodname{}.
+
+\textbf{Diffusion Language Models.}
+The diffusion objective has been proposed for pure language modeling, including discrete diffusion over tokens~\cite{lou2024discrete} and continuous diffusion over word embeddings~\cite{li2022diffusionlm} and soft prompts~\cite{lovelace-etal-2024-diffusion}.
+However, diffusion LLMs are trained from scratch to compete with, rather than understand, autoregressive ones. Consequently, these models can only generate language and cannot manipulate activations.
+
+
+
+
+
+
+
+
+

@@ -1,0 +1,57 @@
+\section{\longmethodname{}}\label{sec:approach}
+
+We now describe \methodname{}, an activation diffusion model, covering its training objective, architecture, and data pipeline.
+
+\subsection{Diffusion Objective}\label{sec:diffusion_objective}
+Neural activations are continuous vectors, making them well-suited to the diffusion framework~\cite{sohl2015deep, ho2020denoising}.
+At the core of diffusion is the forward process, which produces training data by adding Gaussian noise to real samples
+and the reverse process,
+which generates data samples from pure noise at inference time.
+We use flow matching~\cite{liu2023flow, albergo2023building, lipman2023flow, esser2024scaling,gao2025diffusionmeetsflow},
+whose forward process produces $z_t$ as a linear interpolation between the data point $z_0$ and the noise $\epsilon$
+\begin{align}
+    z_t = (1 - t)z_0 + t\epsilon
+\end{align}
+for $t \in [0, 1]$; the reverse process iteratively samples new data $z_0$, starting from $z_1 \sim \mathcal{N}(0, I)$ with $t' < t$
+\begin{align}
+    z_{t'} = z_t + \hat{u} \cdot (t' - t) \label{eq:rf_sampling}
+\end{align}
+This motivates training a neural network denoiser $\hat{u}_\theta(z_t, t)$ to approximate the target velocity $u = \epsilon - z_0$.
+We show pseudocode for this training objective in \Cref{fig:pseudocode_diffusion}.
+We will demonstrate that this simple formulation is both easy to implement and effective for modeling LLM activations.
+Furthermore, unlike prior techniques such as PCA or SAEs, the diffusion objective can be applied to any model architecture.
+
+\subsection{Architecture}
+We formulate our denoiser as a stack of
+feedforward MLP blocks following the design from Llama3~\cite{grattafiori2024llama3herdmodels}.
+Each block is a SwiGLU layer~\cite{shazeer2020gluvariantsimprovetransformer} with residual connections~\cite{he2016deepresiduallearning}.
+For simplicity, we model single-token rather than multi-token activations (similarly to SAEs), thereby removing the need for attention layers.
+
+The only diffusion-specific modification needed is timestep conditioning~\cite{ho2020denoising}. Recall the parameterization $\hat{u}_\theta(z_t, t)$ from~\autoref{sec:diffusion_objective};  we condition on $t$ by multiplicatively modulating~\cite{perez2018film} the SwiGLU gate pre-activation at each MLP block.
+The models we train are unconditional, 
+meaning they do not need class labels or any other conditioning information during training.
+
+\subsection{Data Pipeline}
+We train~\methodname{} on the same activation data commonly used to train SAEs. 
+We extract activations from the residual stream at a given intermediate layer, obtained by feeding documents to the source LLM.
+Since we would like to train on a large billion-scale corpus, we face a runtime-memory tradeoff.
+Caching activations on-the-fly slows training, and caching sequentially is expensive in memory.
+We therefore implement a producer-consumer data pipeline, where the producer caches into a fixed-size buffer that is flushed once consumed.
+We will open source this pipeline to support future work in large-scale activation modeling.
+
+For our large-scale web corpus we use FineWeb~\cite{penedo2024the}, also commonly used for LLM pretraining, from which we sample 1 billion tokens.
+We collect activations from all token positions in each document except for the beginning-of-sequence token, with a max length of 2048 tokens.
+We always train on activations from the middlemost layer (Layer 7 of Llama1B and Layer 15 of Llama8B), and we explore training a multi-layer model in~\autoref{sec:appendix_multi_layer}.
+We heavily speed up our producer by implementing activation caching through the vLLM~\cite{kwon2023efficient} and nnsight~\cite{fiotto-kaufman2025nnsight} libraries.
+We also speed up our consumer via mixed precision training.
+
+  
+
+
+
+
+
+
+
+
+

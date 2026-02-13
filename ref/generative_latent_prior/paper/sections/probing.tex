@@ -1,0 +1,83 @@
+\section{Interpreting with~\methodname{}}\label{sec:probing}
+\begin{table}
+\caption{
+1-D probing performance: predicting binary concepts from a single scalar feature.~\methodname{}~\metaact{}s substantially outperform all baselines on both Llama1B and Llama8B. SAE baselines are the same as~\autoref{tab:catalog}; results are aggregated over 113 tasks from~\citet{kantamneni2025are}, with 95\% bootstrap CIs.
+}
+\label{tab:oned_probe}
+\begin{tabular}{lcc}
+\hline
+Method & Probe AUC ($\uparrow$) & 95\% CI \\
+\hline
+\textbf{Llama1B} & & \\
+SAE & 0.70 & [0.67, 0.73]\\
+Raw Layer Output & 0.77 & [0.74, 0.80]\\
+Raw MLP Neuron & 0.79 & [0.77, 0.82]\\
+\methodname{} & \textbf{0.84} & [0.81, 0.87]\\
+\hline
+\textbf{Llama8B} & & \\
+SAE & 0.76 & [0.73, 0.79] \\
+Raw Layer Output & 0.77 & [0.74, 0.79] \\
+Raw MLP Neuron &  0.82 & [0.80, 0.85] \\
+\methodname{} & \textbf{0.87} & [0.84, 0.89] \\
+\hline
+\end{tabular}
+\end{table}
+
+\input{figures/probe/qualitative}
+
+Finally, we show that~\methodname{} can be helpful as a feature encoder via 1-D probing~\cite{gurnee2023finding, gao2025scaling}, where a single scalar feature is used to predict a binary concept.
+We use 1-D probing to test whether~\methodname{} is a promising alternative for interpreting LLMs; i.e., 
+whether it isolates concepts into single units, with broad coverage over human-understandable concepts of interest.
+In particular, we are interested in comparing the performance of unsupervised shallow linear encoders (SAE) with our newly proposed unsupervised \textit{deep} and \textit{nonlinear} encoders (\methodname).
+In addition to 1-D probing,~\autoref{subsec:dense_probe} similarly shows that dense probing performance also improves when scaling~\methodname{}.
+
+\textbf{Method.}
+We encode features with~\methodname{} via ``\metaact{}s,'' or the internal representations of the meta-model itself.
+We extract~\metaact{}s at each MLP block's SwiGLU gate\footnote{
+    Since our architecture mimics Llama's MLP blocks, this corresponds to the gated MLP neurons studied in prior work~\citep{choi2024automatic}: 
+$\phi_i(z) = \mathrm{SiLU}\!\left(\left(w_i^{1}\right)^{\top} z\right)\cdot \left(w_i^{2}\right)^{\top} z$
+}, from a single forward pass through the diffusion model.
+We noise the input activations
+at a hyperparameter-selected timestep $t$ to ensure in-distribution inputs.
+
+\textbf{Setup.} For our concept set we use the 113 binary classification tasks from~\cite{kantamneni2025are}, which spans general language understanding, knowledge of geography and public figures, and topics like biology and math.
+For each concept, we run probing in two stages: we first use the heuristic from~\citet{gurnee2023finding} to find a small set of candidate neurons using the train set, then fit 1-D classifiers on each candidate, selecting the best via val AUC~\cite{Bradley1997TheUO} and reporting the final test AUC.
+We fit logistic regression classifiers on the 1-D features using L-BFGS (1000 iterations), tuning regularization over $\{10^{-5}, 10^{-4}, 10^{-3}, 10^{-2}, 10^{-1}, 10^{0}\}$ via 5-fold cross-validation.
+Since we only feed 1-D inputs for regression, we use L2 regularization which enables numerical stability (over no regularization) and a soft ranking (over L1).
+All probes are conducted on the last token activation in the sequence.
+For our baselines we compare against SAEs, raw layer outputs (also the input for both SAE and~\methodname{}), and raw MLP neurons (which precedes the layer output); see~\autoref{tab:oned_probe_dim} for the number of available features per method.
+
+\subsection{Baseline Comparison on 1-D Probes}\label{subsec:probing_oned_baselines}
+We first compare~\methodname{} against competitive baselines on 1-D probing.
+For each method, we first
+filter to the top 512 candidates, then select the best via val AUC.
+We run~\methodname{} with inputs at $t=0.1$.
+As seen in~\autoref{tab:oned_probe},~\methodname{} is the best encoder for 1-D probing.
+Consistent with~\citet{kantamneni2025are}, we see that SAEs are close but slightly worse in performance than the raw layer output, on Llama8B.
+In fact, the raw MLP neurons are the strongest baseline, indicating that the LLM already exhibits some native disentanglement, without the help of an external encoder.
+Most interestingly, the Llama1B~\methodname{} outperforms all of the Llama8B raw activations, suggesting that~\methodname{} is an encouraging alternative to LLM scaling for achieving parsimonious and human-interpretable representations.
+
+\subsection{Scaling Behavior of 1-D Probes}\label{subsec:probing_oned}
+We then investigate whether scaling improves 1-D probing performance, for  Llama1B~\methodname{}s trained on varying model sizes and data scales.
+We anchor at the last checkpoint and 
+filter to a single candidate per layer, then select the best via val AUC.
+In~\autoref{fig:scaling:c} we visualize the results for inputs at $t=0.5$, which displays the cleanest scaling trend; see a comparison of timesteps at~\autoref{fig:scaling_probe}.
+Most notably, none of the curves exhibit a plateau, meaning that allocating more compute could lead to even higher probe scores.
+
+\subsection{Exploring Meta-Neurons}
+To better understand the \metaact{}s discovered by 1-D probing, we extract maximally activating examples over a large corpus, following standard practice in automated neuron description~\cite{bills2023language,choi2024automatic}.
+We take documents from the FineWeb training set, truncate them to max 64 tokens, resulting in 1M total tokens from 16k unique docs.
+Since we have already localized concepts to their best \metaact{} location in the process of probing,
+we can examine their consistency with their top-3 activating examples, as shown in~\autoref{tab:probe_qualitative}.
+We observe that the discovered \metaact{}s exhibit consistent activation patterns, e.g.,
+baseball terms for a baseball \metaact{}
+or expressions of disagreement for a contradiction \metaact{}.
+
+
+
+
+
+
+
+
+

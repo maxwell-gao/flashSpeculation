@@ -1,0 +1,12 @@
+\section{Discussion}\label{sec:discussion}
+We have shown that diffusion models can learn the distribution of LLM activations, and that the resulting meta-model is useful downstream: as a prior that keeps steering interventions on-manifold, and as a feature extractor whose~\metaact{}s isolate interpretable concepts. Both applications improve with scale, tracking the diffusion loss. These use cases and their scaling behavior suggest that generative meta-models are a promising primitive for interpretability---one that sidesteps restrictive structural assumptions.
+
+\textbf{Limitations.} Our approach has several limitations that suggest directions for future work. First, we model single-token activations independently; multi-token modeling might capture cross-position structure and enable new applications. Second,~\methodname{} is unconditional, and conditioning on the clean activation (rather than a noised version) could reduce information loss for applications like steering. Third, we focus on residual stream activations at a single layer; extending to other activation types or further exploring the multi-layer model
+may yield richer representations.
+
+\textbf{Future Directions.} 
+Analogies from image diffusion also suggest further applications. For instance, diffusion loss has been used as a measure of image typicality~\cite{li2023diffusion,diff-mining}; high loss under~\methodname{} might similarly flag unusual or out-of-distribution activations. More broadly, we hope~\methodname{} provides a foundation for importing techniques from the rich literature on diffusion models into the domain of neural network interpretability.
+
+
+
+

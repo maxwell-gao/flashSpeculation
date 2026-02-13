@@ -1,52 +1,81 @@
-# Draft-Guided Test-Time Training for Context Learning
+# Draft-Guided Decoding: Unlocking LLM Capabilities Through Internal Representations
 
-Can we unlock a large language model's latent context learning ability by adapting its speculative decoding draft model at test time?
+## The Problem
 
-## Motivation
+Large language models know more than they say.
 
-[CL-bench](https://www.clbench.com) ([paper](https://huggingface.co/papers/cl-bench)) reveals that frontier LLMs solve only ~17% of tasks requiring learning from context, even when all necessary information is provided. The dominant failure mode is **ignoring or misusing context** — models revert to parametric priors instead of applying new rules/knowledge given in the prompt.
+[Power Sampling](https://arxiv.org/abs/2510.14901) (Karan & Du, 2025) demonstrated this concretely: by sampling more carefully from base models—without any training—they matched RL-posttraining performance on reasoning benchmarks. The implication is stark: **standard autoregressive decoding is a lossy readout of the model's internal knowledge.**
 
-[DFlash](https://arxiv.org/abs/2602.06036) introduces a block diffusion draft model for speculative decoding that reads the target model's **intermediate-layer hidden states** (not just the final layer) and proposes token blocks in parallel. This architecture creates a unique opportunity: the draft model is a lightweight decoder that has access to richer features than the target's own `lm_head`.
+[CL-bench](https://www.clbench.com) (Dou & Zhou, 2026) exposes the same bottleneck from a different angle: frontier LLMs solve only ~17% of tasks requiring learning from context, even when all necessary information is provided. Models read the context, encode it in their hidden states, but fail to decode it into correct outputs. The dominant failure mode is **reverting to parametric priors** instead of applying the new knowledge sitting right there in the prompt.
 
-**Core hypothesis**: By adapting the draft model to a specific context via test-time training (TTT), and then using the adapted draft to guide the target model's decoding, we can improve context learning without modifying the target model's weights.
+Both findings point to the same diagnosis: **the bottleneck is in decoding, not in knowledge.**
 
-## Approach
+## The Insight
 
-### Architecture Recap (DFlash)
+Standard decoding reads only the **last layer** of the model:
 
 ```
-Target model (frozen, e.g. Qwen3-8B, 36 layers)
-  │
-  ├── Layer 1 hidden  ──┐
-  ├── Layer 9 hidden  ──┤
-  ├── Layer 17 hidden ──┼──► concat & project ──► Draft model input
-  ├── Layer 25 hidden ──┤                         (5-layer Transformer, ~1B params)
-  ├── Layer 33 hidden ──┘                         shared lm_head with target
-  │
-  └── Layer 36 ──► lm_head ──► standard autoregressive token
+Layer 1 → Layer 2 → ... → Layer 36 → lm_head → token
+                                         ↑
+                                    sole exit point
 ```
 
-The draft model reads 5 intermediate layers of the target via cross-attention (KV injection), giving it a **multi-resolution view** of the target's internal representations.
+But intermediate layers encode rich information that may not survive to the final layer—context-specific knowledge, future-path awareness, multi-scale representations. This information is **present but lost** in the last-layer-to-lm_head bottleneck.
 
-### Test-Time Training (TTT)
+[DFlash](https://arxiv.org/abs/2602.06036) (Chen et al., 2026) builds a block diffusion draft model for speculative decoding that reads the target model's **intermediate-layer hidden states** via cross-attention KV injection. It was designed for speed, but its architecture inadvertently creates something more valuable: **an alternative decoding pathway through the model's internal representations.**
 
-Before generation, adapt the draft model to the current context using self-supervised learning:
+```
+Target model (e.g. Qwen3-8B, 36 layers, frozen)
+  │
+  ├── Layer 1  ──┐
+  ├── Layer 9  ──┤
+  ├── Layer 17 ──┼── concat & project ──► Draft model (5 layers) ──► lm_head ──► draft_logits
+  ├── Layer 25 ──┤
+  ├── Layer 33 ──┘
+  │
+  └── Layer 36 ──────────────────────────► lm_head ──► target_logits
+```
 
-1. **Target prefills the context** (standard, no extra cost) → hidden states at all layers and positions are available
-2. **Construct training data** from the context itself: for random anchor positions, use target hidden states as input and actual next-token blocks as labels — this exactly mirrors DFlash's inference behavior
-3. **Update LoRA parameters** (~5M trainable params) on the draft model's `fc` projection and attention `k_proj`/`v_proj` — the components that control how the draft reads target hidden states
+Two decoding pathways from the same model. `target_logits` reads only the final layer. `draft_logits` reads five intermediate layers spanning the full depth. The difference between them:
 
-This teaches the draft model *how to decode this specific context's representations*.
+```
+draft_logits − target_logits = information present in intermediate layers
+                               but not surfaced by the standard decoding path
+```
+
+## The Method
 
 ### Draft-Guided Decoding
 
-Instead of standard speculative decode (where the target has absolute veto power), use the TTT-adapted draft to bias the target's token distribution:
+Use the draft model's logits to open a second decoding pathway:
 
 ```
-guided_logits = target_logits + α × (draft_logits − target_logits)
+guided_logits = (1 − β) · target_logits + β · draft_logits
 ```
 
-The term `(draft_logits − target_logits)` represents context-specific corrections: information the draft extracted from intermediate layers that the target's own `lm_head` under-emphasizes. This is analogous to contrastive decoding, but with a context-adapted model as the contrastive signal.
+- β = 0: standard target decoding (last layer only)
+- β = 1: pure draft decoding (multi-layer internal representations)
+- β ∈ (0, 1): interpolation between both pathways
+
+This is a single forward pass. No iteration, no search, no MCMC. The draft model acts as a **learned readout** of the target's internal state, offering information that the `lm_head` alone cannot surface.
+
+### Why This Goes Beyond Power Sampling
+
+Power Sampling targets \(p^\alpha\)—a sharpened version of the base model's **output distribution**. It can only amplify what's already probable. If the correct answer has near-zero probability under `lm_head`, no amount of sharpening helps:
+
+> p(correct)^α ≈ 0^α = 0
+
+Draft guidance is not constrained by the output distribution. It reads **internal representations**, where the context information may be well-encoded even when `lm_head` fails to surface it. The draft model opens a pathway that the output distribution does not contain.
+
+### Test-Time Training (TTT)
+
+Before generation, adapt the draft model to the current context:
+
+1. **Target prefills the context** (standard, no extra cost) → hidden states at all layers available
+2. **Construct self-supervised data** from the context: at random anchor positions, use target hidden states as input and actual next-token blocks as labels
+3. **Update LoRA parameters** (~5M trainable) on the draft's `fc` projection and attention KV projections
+
+This teaches the draft *how to decode this specific context's representations*—adapting the alternative pathway to the task at hand.
 
 ## Roadmap
 
@@ -54,62 +83,52 @@ The term `(draft_logits − target_logits)` represents context-specific correcti
 
 | ID | Task | Deliverable |
 |----|------|-------------|
-| 0.1 | Deploy DFlash + Qwen3-8B, reproduce paper Table 1 (τ, speedup) | Verified benchmark numbers |
+| 0.1 | Deploy DFlash + Qwen3-8B, reproduce paper results (τ, speedup) | Verified benchmark numbers |
 | 0.2 | Run CL-bench with Qwen3-8B autoregressive baseline | Task solving rate per subcategory |
 | 0.3 | Run standard DFlash spec decode on CL-bench contexts | τ on long/complex contexts vs. standard benchmarks |
-| 0.4 | Profile: target prefill time, hidden states memory, draft forward time | Compute budget table for TTT step limits |
-
-**Checkpoint**: If τ on CL-bench contexts is notably lower than on standard benchmarks, it confirms the draft is underperforming on OOD contexts → TTT has room to help.
+| 0.4 | Profile: target prefill time, hidden states memory, draft forward time | Compute budget table |
 
 ### Phase 1 — TTT for Acceptance Rate (τ) (~2 weeks)
 
 | ID | Task | Deliverable |
 |----|------|-------------|
-| 1.1 | Integrate LoRA into draft model (attention q/k/v + fc), verify zero-init preserves original τ | LoRA-enabled draft checkpoint |
+| 1.1 | Integrate LoRA into draft model (attention q/k/v + fc), verify zero-init preserves original τ | LoRA-enabled draft |
 | 1.2 | Implement prefill TTT: self-supervised block prediction on context with position-weighted loss | `ttt_adapt()` function |
-| 1.3 | Measure Δτ on standard benchmarks (GSM8K, HumanEval) | TTT vs. no-TTT comparison |
-| 1.4 | Measure Δτ on CL-bench contexts, bucketed by length and category | TTT effectiveness on long contexts |
-| 1.5 | Hyperparameter sweep: TTT steps (10/30/100), lr (1e-4/5e-4/1e-3), LoRA rank (4/8/16), sample windows | Optimal config + ablation curves |
+| 1.3 | Measure Δτ on standard benchmarks (GSM8K, HumanEval) and CL-bench contexts | TTT vs. no-TTT comparison |
+| 1.4 | Hyperparameter sweep: TTT steps, lr, LoRA rank | Optimal config + ablation curves |
 
-**Checkpoint**: τ improvement > 0.5 validates TTT infrastructure. This phase has standalone value (adaptive speculative decoding) regardless of Phase 2 outcomes.
+**Standalone value**: Even if Phase 2 fails, TTT for τ improvement is a publishable contribution (adaptive speculative decoding).
 
 ### Phase 2 — Draft-Guided Decoding (~2 weeks)
 
 | ID | Task | Deliverable |
 |----|------|-------------|
-| 2.1 | Implement `guided_generate()`: token-by-token autoregressive with draft logit bias | Generation function |
-| 2.2 | **Control**: guided decoding WITHOUT TTT on CL-bench (α = 0.1/0.2/0.3/0.5) | Scores vs. baseline — tests whether draft's multi-layer features have inherent value |
-| 2.3 | TTT + guided decoding on CL-bench | Scores vs. 2.2 and baseline |
-| 2.4 | **Null control**: `target_logits + α × random_noise` to rule out temperature-like effects of α | Ablation data |
-| 2.5 | Qualitative analysis: compare outputs across conditions, identify what draft corrections look like | Case study report |
+| 2.1 | Implement `guided_generate()`: token-by-token with draft logit interpolation | Generation function |
+| 2.2 | **Key experiment**: guided decoding WITHOUT TTT on CL-bench (β sweep) | Tests whether the alternative pathway has inherent value |
+| 2.3 | TTT + guided decoding on CL-bench | Tests whether TTT unlocks additional signal |
+| 2.4 | **Null control**: `target_logits + β × noise` to rule out regularization effects | Ablation |
+| 2.5 | Qualitative analysis: what does the draft correction `draft − target` look like? | Case studies |
 
-**Evaluation matrix**:
-- CL-bench 4 subcategories × temperature {0.3, 0.6, 1.0} × α {0.0, 0.1, 0.2, 0.3, 0.5} × TTT {off, on}
-- Start with 10% subset of CL-bench for fast iteration; full eval at convergence.
-
-**Checkpoint (critical decision point)**:
-- (2.3) > (2.2) > baseline → full hypothesis validated, proceed to Phase 3
-- (2.2) ≈ baseline, (2.3) > baseline → TTT is essential, multi-layer features alone insufficient
-- (2.2) ≈ (2.3) ≈ baseline → core hypothesis fails; pivot to alternative mechanisms (reranking, multi-round refinement, or TTT-only for speed)
+**Decision point** (critical):
+- (2.2) > baseline → the alternative pathway alone has value; TTT amplifies it
+- (2.3) > (2.2) > baseline → full hypothesis validated
+- All ≈ baseline → intermediate layers don't encode actionable context info for these tasks; pivot needed
 
 ### Phase 3 — Analysis & Optimization (~2 weeks)
 
-*Contingent on positive signal from Phase 2.*
-
 | ID | Task | Deliverable |
 |----|------|-------------|
-| 3.1 | Error taxonomy: which CL-bench error types (context-ignored / context-misused / reasoning-error) does TTT+guided fix? | Error breakdown comparison |
-| 3.2 | Layer selection ablation: vary `target_layer_ids` (shallow-only / deep-only / single-layer) | Layer contribution analysis |
-| 3.3 | Adaptive α: scale α based on draft-target logit divergence per token | Improved guided decoding |
-| 3.4 | Multi-round refinement: generate → TTT on [context + response] → re-generate with adapted draft | Multi-round vs. single-round comparison |
-| 3.5 | Focus on "Empirical Discovery & Simulation" subcategory (hardest, <10% baseline) | Inductive reasoning analysis |
-| 3.6 | Scale test: Qwen3-Coder-30B-A3B + 0.5B draft | Cross-scale generalization |
+| 3.1 | Error taxonomy: which CL-bench failure modes does draft guidance fix? | Error breakdown |
+| 3.2 | Layer ablation: vary `target_layer_ids` (shallow / deep / single-layer) | Which layers carry the lost information |
+| 3.3 | Adaptive β: scale by per-token draft-target divergence | Improved guidance |
+| 3.4 | Scale test: Qwen3-Coder-30B-A3B + 0.5B draft | Cross-scale generalization |
+| 3.5 | Focus on hardest CL-bench subcategory (Empirical Discovery, <10% baseline) | Inductive reasoning analysis |
 
 ### Phase 4 — Integration & Writing (~2 weeks)
 
 | ID | Task | Deliverable |
 |----|------|-------------|
-| 4.1 | Unified pipeline: `ttt_adapt() → guided_generate()`, clean API | Reproducible codebase |
+| 4.1 | Unified pipeline: `ttt_adapt() → guided_generate()` | Clean API |
 | 4.2 | Full CL-bench evaluation (500 contexts, 1,899 tasks, 31,607 rubrics) | Final numbers |
 | 4.3 | Paper writing | Draft manuscript |
 
@@ -117,25 +136,24 @@ The term `(draft_logits − target_logits)` represents context-specific correcti
 
 ```
 Week 1       Phase 0  Infrastructure & baselines
-Week 2-3     Phase 1  TTT for τ improvement
-Week 3-5     Phase 2  Draft-guided decoding  ← critical decision point at week ~4
+Week 2-3     Phase 1  TTT for τ
+Week 3-5     Phase 2  Draft-guided decoding  ← decision point at week ~4
 Week 5-7     Phase 3  Analysis & optimization
 Week 7-9     Phase 4  Integration & writing
 ```
 
 ## Risks
 
-| Risk | Likelihood | Impact | Mitigation |
-|------|-----------|--------|------------|
-| TTT improves τ but not task accuracy | Medium | Phase 1 still publishable; direction must pivot | Phase 1 as standalone contribution (adaptive spec decode) |
-| Guided decoding introduces noise, hurts accuracy | Medium | Core approach questioned | Analyze per-token effects; try top-k constrained guidance; try reranking instead |
-| OOM: target + draft + LoRA + hidden states + computation graph | Medium | Can't run on single GPU | Gradient checkpointing; TTT only on fc layer (~0.66M LoRA params); validate on Qwen3-4B first |
-| CL-bench evaluation too slow for rapid iteration | High | Slow experiment cycles | Use 10% subset for development; full eval only at milestones |
-| Intermediate layers don't encode sufficient context info | Low-Med | Foundational assumption fails | Phase 2.2 (no-TTT guided) detects this early; probing experiments can independently verify |
+| Risk | Likelihood | Mitigation |
+|------|-----------|------------|
+| Intermediate layers don't encode sufficient context info | Low-Med | Phase 2.2 detects early; probing experiments verify independently |
+| Guided decoding hurts accuracy (noise injection) | Medium | Top-k constrained guidance; adaptive β; reranking fallback |
+| OOM: target + draft + LoRA + computation graph | Medium | Gradient checkpointing; TTT only on fc layer; validate on Qwen3-4B |
+| CL-bench evaluation too slow | High | 10% subset for dev; full eval at milestones only |
 
 ## References
 
-- [DFlash: Block Diffusion for Flash Speculative Decoding](https://arxiv.org/abs/2602.06036) (Chen et al., 2026)
-- [CL-bench: Learning from Context is Harder than We Thought](https://www.clbench.com) (Dou & Zhou, 2026)
-- [Contrastive Decoding](https://arxiv.org/abs/2210.15097) (Li et al., 2022)
-- [Learning to (Learn at Test Time)](https://arxiv.org/abs/2407.04620) (Sun et al., 2024)
+- [DFlash: Block Diffusion for Flash Speculative Decoding](https://arxiv.org/abs/2602.06036) — Chen et al., 2026. Draft model architecture; reads target intermediate layers via KV injection.
+- [Reasoning with Sampling: Your Base Model is Smarter Than You Think](https://arxiv.org/abs/2510.14901) — Karan & Du, 2025. Shows base models have latent capabilities not surfaced by standard decoding.
+- [CL-bench: Learning from Context is Harder than We Thought](https://www.clbench.com) — Dou & Zhou, 2026. Reveals context learning failure: models encode context but fail to decode it.
+- [Learning to (Learn at Test Time)](https://arxiv.org/abs/2407.04620) — Sun et al., 2024. TTT: adapt model weights at inference time via self-supervised learning.

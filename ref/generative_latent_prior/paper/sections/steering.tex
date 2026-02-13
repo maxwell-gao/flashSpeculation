@@ -1,0 +1,126 @@
+\section{On-Manifold Steering with~\methodname{}}\label{sec:steering}
+
+\begin{figure}[t]
+\begin{lstlisting}[language=Python, mathescape=true]
+# ============================================================
+# denoiser      - MLP denoiser network
+# scaler        - pre-computed activation stats
+# acts[n, d]    - minibatch of activations
+# w[d]          - steering vector
+# alpha         - steering strength
+# t_start       - noise level to begin sampling
+# num_steps     - number of total steps to discretize sampling
+# ============================================================
+
+# apply intervention to activations
+acts_edit = acts + alpha * w
+
+# standardize to zero mean & unit variance
+acts_edit = (acts_edit - scaler.mean) / scaler.std
+
+# noise activations according to pre-specified t_start
+# bigger t_start = stronger correction from diffusion sampling
+noise = np.random.normal()
+acts_noisy = (1 - t_start) * acts_edit + t_start * noise
+
+# init sampling at t=t_start from acts
+# instead of at t=1 from pure noise
+acts_sample = acts_noisy
+
+# run multi-step sampling
+timesteps = np.linspace(t_start, 0, num_steps)
+for i in range(len(timesteps) - 1):
+    t = timesteps[i]
+    dt = timesteps[i + 1] - timesteps[i]
+    pred_velocity = denoiser(acts=acts_sample, timesteps=t)
+    acts_sample = acts_sample + dt * pred_velocity
+
+# restore back to original mean & variance
+acts_sample = (acts_sample * scaler.std) + scaler.mean
+\end{lstlisting}
+\caption{
+On-manifold steering with~\methodname{}.
+Given a steered activation, we add noise and then denoise with~\methodname{}. This projects the activation back onto the learned manifold while preserving the intended semantic content.
+}
+\label{fig:pseudocode_steering_method}
+\end{figure}
+\begin{figure}
+\centering
+\includegraphics[width=0.80\linewidth]{figures/steer/sae.pdf}
+\captionof{figure}{
+Improving SAE steering in Llama8B-Base. We plot the Pareto frontier of concept vs. fluency as we vary the steering coefficient.~\methodname{} post-processing (pink) improves the concept-fluency tradeoff over SAE steering alone (yellow). Concept and fluency are scored by an LLM judge on a 0-2 scale~\cite{wu2025axbench}. Error bars show 95\% bootstrap CIs.
+}
+\label{fig:sae_quantitative}
+\end{figure}
+
+\begin{figure*}[t]
+\centering
+\includegraphics[width=0.85\textwidth]{figures/steer/persona.pdf}
+\caption{
+Eliciting personas in Llama8B-Instruct.~\methodname{} post-processing (green) expands the Pareto frontier over Persona Vectors alone (purple) for three behavioral traits. Concept and fluency are scored by an LLM judge on a 0-100 scale~\citet{chen2025personavectorsmonitoringcontrolling}. Error bars show 95\% bootstrap CIs.
+}
+\label{fig:persona_quantitative}
+\end{figure*}
+
+\input{figures/steer/qualitative}
+
+We now demonstrate the practical utility of \methodname{} for activation steering, a well-known method for controlling LLM behavior that adds linear direction vectors to activations at inference time.
+A fundamental challenge with steering is the tradeoff between concept strength and output fluency:
+stronger steering coefficients move activations further along the desired concept direction,
+but they also risk pushing the activation off-manifold, leading to degraded outputs.
+\methodname{} offers a natural solution, 
+by post-processing steered activations via diffusion sampling (see~\autoref{fig:pseudocode_steering_method}).
+
+\textbf{Method.} Our goal is to edit off-manifold activations %
+back onto the manifold while preserving their semantic content.
+To achieve this, we propose an activation-space analog
+of SDEdit~\cite{meng2022sdedit}, a popular image editing method.
+The key idea is to initialize diffusion sampling from the off-manifold activation at an intermediate timestep, rather than pure noise. 
+Intuitively, the timestep controls how much~\methodname{} modifies the input: earlier timesteps (more noise) give~\methodname{} more freedom to correct artifacts, while later timesteps (less noise) preserve more of the original signal.
+We provide pseudocode for this algorithm in~\autoref{fig:pseudocode_steering_method}.
+
+\textbf{Hyperparameters.}
+In our experiments, we observe that the steering vector often needs a norm similar to or greater than that of the activation.
+We therefore start with a relative coefficient $r$ and compute the absolute steering coefficient as $\alpha = r \cdot \bar{\|a\|}_2$, where $\bar{\|a\|}_2$ is the average activation norm computed from a validation set.
+We run the~\autoref{fig:pseudocode_steering_method} algorithm with $\text{t\_start}=0.5$ and $\text{num\_steps}=20$. We further detail each experimental configuration in~\autoref{tab:steering_configurations}.
+
+\subsection{Improving SAEs}\label{subsec:steering_sae}
+Now, we investigate an application for~\methodname{}: improving the alignment between SAE steering and feature descriptions.
+In the setting from~\citet{wu2025axbench}, feature descriptions are derived from the SAE encoder, while concept directions for steering are derived from the SAE decoder.
+We want to see whether~\methodname{} can help in the cases that steering fails because the decoder directions are off-manifold, rather than misaligned with the encoder.
+We apply~\methodname{} on top of the LlamaScope~\cite{he2024llamascope} SAE, both of which were trained on Llama8B-Base activations.
+We select 500 random directions and grade the steered outputs against the feature's description on Neuronpedia~\cite{neuronpedia}.
+As seen in~\autoref{fig:sae_quantitative},~\methodname{} pushes the Pareto frontier outward, suggesting that off-manifold artifacts, not just encoder-decoder misalignment, contribute to SAE steering failures.
+We depict qualitative examples in~\autoref{tab:sae_qualitative_long}; for coefficients with comparable fluency scores, post-processing with~\methodname{} evidently helps SAE steering better match its intended description.
+
+\subsection{Eliciting Personas}\label{subsec:steering_persona}
+Next, we evaluate~\methodname{} on a setting of broad interest: steering Llama8B-Instruct to exhibit certain behavioral traits, as proposed by~\citet{chen2025personavectorsmonitoringcontrolling}.
+We take the~\methodname{} trained on Llama8B-Base activations, also demonstrating its transferability to the instruction-tuned model.
+We apply~\methodname{} on top of the Persona Vector~\citep{chen2025personavectorsmonitoringcontrolling}, at varying steering coefficients which trade off concept and fluency.
+As seen in~\autoref{fig:persona_quantitative},~\methodname{} expands the Pareto frontier of the Persona Vector, achieving higher concept scores at the same fluency level.
+In~\autoref{tab:persona_qualitative} we depict qualitative examples comparing raw Persona Vector outputs versus those post-processed by~\methodname{}, for coefficients with matched fluency scores, demonstrating our method's ability to enhance persona elicitation.
+
+\subsection{Scaling Behavior of Sentiment Steering}\label{subsec:steering_sentiment}
+We finally validate that on-manifold steering performance improves as~\methodname{} scales, using Llama1B~\methodname{}s of varying model sizes and data scales.
+We evaluate on the controllable sentiment generation task from \citet{liu-etal-2021-dexperts}, where
+the goal is to complete a given prefix such that the resulting sequence has positive sentiment.
+We steer using DiffMean~\cite{marks2024geometry,belrose2023diffinmeans,wu2025axbench}, a popular baseline that extracts concept vectors as the difference in mean activations between two contrast sets.
+We post-process DiffMean at varying steering coefficients with~\methodname{} to regularize steering back onto the activation manifold.
+Following~\citet{wu2025axbench}, we score concept strength and fluency on a 0-2 scale with LLM-as-a-judge.
+
+As shown in~\autoref{fig:scaling:b}, \methodname{}s trained with more compute achieve better steering performance.
+We aggregate results over coefficient $r \geq 1$ (steering vector norm exceeds average activation norm), which is the regime in which~\methodname{} is most helpful (see~\autoref{fig:alpha_vs_steer}).
+Additional compute also improves the individualized, rather than averaged, concept and fluency scores (see~\autoref{fig:scaling_steer}).
+
+
+
+
+
+
+
+
+
+
+
+
+

@@ -1,0 +1,10 @@
+\begin{abstract}
+Existing approaches for analyzing neural network activations, such as PCA and sparse autoencoders, rely on strong structural assumptions.
+Generative models offer an alternative: they can uncover structure without such assumptions and act as priors that improve intervention fidelity.
+We explore this direction by training diffusion models on one billion residual stream activations, creating ``meta-models'' that learn the distribution of a network's internal states.
+We find that diffusion loss decreases smoothly with compute and reliably predicts downstream utility.
+In particular, applying the meta-model's learned prior to steering interventions improves fluency, with larger gains as loss decreases.
+Moreover, the meta-model's neurons increasingly isolate concepts into individual units, with sparse probing scores that scale as loss decreases.
+These results suggest generative meta-models offer a scalable path toward interpretability without restrictive structural assumptions.
+Project page: {\small\url{https://generative-latent-prior.github.io}}.
+\end{abstract}

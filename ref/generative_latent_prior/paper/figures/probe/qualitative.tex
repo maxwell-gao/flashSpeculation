@@ -1,0 +1,28 @@
+\begin{table*}
+    \centering
+    \caption{
+    Qualitative examples of~\methodname{} \metaact{}s discovered via 1-D probing on Llama8B. We show the top-3 maximally activating documents from FineWeb, with top tokens \textbf{bolded}. The~\metaact{}s exhibit activation patterns consistent with their associated concepts.
+    }
+    \label{tab:probe_qualitative}
+    \renewcommand{\arraystretch}{1.2}
+    \begin{tabularx}{\textwidth}{p{6cm} X @{}}
+        \toprule
+        Task Info & Top-3 Activating FineWeb Examples \\
+        \midrule
+        Task: 156\_athlete\_sport\_baseball 
+        \newline 1-D Probe AUC: 0.99
+        \newline Location: Layer 0, Neuron 769 & 
+        1. Hensley Meulens is the first Curacao native to play in the \textbf{Major} Leagues. \newline
+        2. When the winning \textbf{run crossed home} plate in the ninth inning Friday... \newline
+        3. Commissioner Bud Selig wants baseball, not the government, to determine the game's steroid policy... \textbf{Sel}ig said..\\
+        \midrule
+        Task: 138\_glue\_mnli\_contradiction\newline
+        1-D Probe AUC: 0.74 \newline
+        Location: Layer 4, Neuron 1654 & 
+        1. Henry Kissinger is arguing that the Vietnam War taught us the perils of military withdrawal. \textbf{But} the true lesson of the Vietnam War...\newline
+        2. The city of Surat has long been known as the diamond polishing hub of the world, \textbf{but} there \textbf{are} other facets that have led the city to shine... \newline
+        3. Yellow is one of my all-time favorite colors. But when it’s in the form of pollen on our driveway? \textbf{Not} \textbf{so} much.\\
+        \bottomrule
+    \end{tabularx}
+\end{table*}
+
