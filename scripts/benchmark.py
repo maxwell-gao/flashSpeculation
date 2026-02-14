@@ -165,10 +165,7 @@ def main() -> None:
 
             return True
         except ImportError:
-            logger.warning(
-                "flash_attn is not installed. Falling back to torch.sdpa."
-                " The speedup will be lower."
-            )
+            logger.warning("flash_attn is not installed. Falling back to torch.sdpa. The speedup will be lower.")
             return False
 
     installed_flash_attn = has_flash_attn()

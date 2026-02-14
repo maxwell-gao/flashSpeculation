@@ -241,9 +241,9 @@ def fig_signal_decomposition():
     # Add improvement arrows between bars
     arrow_data = [
         (0, 1, ""),
-        (1, 2, f"{ranks[1]/ranks[2]:.1f}x"),
-        (2, 3, f"{ranks[2]/ranks[3]:.1f}x"),
-        (3, 4, f"{ranks[3]/ranks[4]:.1f}x"),
+        (1, 2, f"{ranks[1] / ranks[2]:.1f}x"),
+        (2, 3, f"{ranks[2] / ranks[3]:.1f}x"),
+        (3, 4, f"{ranks[3] / ranks[4]:.1f}x"),
     ]
     for i_from, i_to, label in arrow_data:
         if not label:
@@ -606,13 +606,23 @@ def fig_layer_probe_ranks():
     width = 0.35
 
     bars_all = ax.bar(
-        x - width / 2, layer_ranks, width,
-        label="All tokens", color="#4C9ED9", edgecolor="white", linewidth=0.5,
+        x - width / 2,
+        layer_ranks,
+        width,
+        label="All tokens",
+        color="#4C9ED9",
+        edgecolor="white",
+        linewidth=0.5,
     )
     if all(v is not None for v in layer_ranks_low):
         ax.bar(
-            x + width / 2, layer_ranks_low, width,
-            label="Hard tokens (p<0.01)", color="#C75B5B", edgecolor="white", linewidth=0.5,
+            x + width / 2,
+            layer_ranks_low,
+            width,
+            label="Hard tokens (p<0.01)",
+            color="#C75B5B",
+            edgecolor="white",
+            linewidth=0.5,
         )
 
     # Add fc-only as a horizontal reference
@@ -625,8 +635,13 @@ def fig_layer_probe_ranks():
         y = bar.get_height()
         if y > 0:
             ax.text(
-                bar.get_x() + bar.get_width() / 2, y * 1.3,
-                f"{y:,.0f}", ha="center", va="bottom", fontsize=7, rotation=0,
+                bar.get_x() + bar.get_width() / 2,
+                y * 1.3,
+                f"{y:,.0f}",
+                ha="center",
+                va="bottom",
+                fontsize=7,
+                rotation=0,
             )
 
     ax.set_yscale("log")
@@ -662,19 +677,33 @@ def fig_layer_probe_ranks():
         blend_pct_low.append(low_conf.get(f"pct_rank_blend_{b}_better", 0) * 100)
 
     ax2.plot(
-        range(len(betas)), blend_ranks_all, "-o",
-        color="#4C9ED9", label="All tokens (mean rank)", markersize=6, linewidth=1.8,
+        range(len(betas)),
+        blend_ranks_all,
+        "-o",
+        color="#4C9ED9",
+        label="All tokens (mean rank)",
+        markersize=6,
+        linewidth=1.8,
     )
     ax2.plot(
-        range(len(betas)), blend_ranks_low, "-s",
-        color="#C75B5B", label="Hard tokens (mean rank)", markersize=6, linewidth=1.8,
+        range(len(betas)),
+        blend_ranks_low,
+        "-s",
+        color="#C75B5B",
+        label="Hard tokens (mean rank)",
+        markersize=6,
+        linewidth=1.8,
     )
 
     # Secondary axis for % beats target
     ax2r = ax2.twinx()
     ax2r.bar(
-        range(len(betas)), blend_pct_low, width=0.4,
-        alpha=0.25, color="#2D8E2D", label="% beats target (hard)",
+        range(len(betas)),
+        blend_pct_low,
+        width=0.4,
+        alpha=0.25,
+        color="#2D8E2D",
+        label="% beats target (hard)",
     )
     ax2r.set_ylabel("% beats target on hard tokens", color="#2D8E2D")
     ax2r.tick_params(axis="y", labelcolor="#2D8E2D")

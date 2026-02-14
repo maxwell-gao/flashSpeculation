@@ -1,6 +1,8 @@
 from . import data as data
 from . import distributed as distributed
 from . import eval as eval
+from . import grading as grading
+from . import guided as guided
 from .model import (
     DFlashDraftModel as DFlashDraftModel,
 )

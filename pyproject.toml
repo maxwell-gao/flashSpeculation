@@ -21,6 +21,8 @@ dependencies = [
     "ninja",
     "requests",
     "matplotlib>=3.10.8",
+    "pylatexenc",
+    "sympy",
 ]
 
 [project.optional-dependencies]
