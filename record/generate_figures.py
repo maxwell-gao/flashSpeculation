@@ -37,6 +37,16 @@ for m in ["gold", "mask", "random"]:
     with open(ROOT / f"results/phase0/test_{m}.json") as f:
         modes_data[m] = json.load(f)
 
+# Extended context experiment data
+ctx_data = {}
+for m in ["mask", "gold"]:
+    ctx_data[m] = {}
+    for variant in ["standard", "fullctx"]:
+        path = ROOT / f"results/phase0/ctx_exp_{m}_{variant}.json"
+        if path.exists():
+            with open(path) as f:
+                ctx_data[m][variant] = json.load(f)
+
 BS = 16
 
 
@@ -411,9 +421,83 @@ def fig_architecture_comparison():
     print(f"Saved: {OUT / 'fig_architecture.png'}")
 
 
+# =====================================================================
+# Figure 5: Extended context experiment — standard vs full context
+# =====================================================================
+def fig_extended_context():
+    if not ctx_data.get("mask", {}).get("standard") or not ctx_data["mask"].get("fullctx"):
+        print("Skipping fig_extended_context: ctx_exp data not found.")
+        return
+
+    fig, axes = plt.subplots(1, 2, figsize=(11, 4.5), gridspec_kw={"wspace": 0.35})
+
+    for panel_idx, m in enumerate(["mask", "gold"]):
+        ax = axes[panel_idx]
+        if m not in ctx_data or "standard" not in ctx_data[m] or "fullctx" not in ctx_data[m]:
+            ax.text(0.5, 0.5, f"No data for {m}", ha="center", va="center", transform=ax.transAxes)
+            continue
+
+        std_blocks = ctx_data[m]["standard"]["aggregate"]["by_block"]
+        full_blocks = ctx_data[m]["fullctx"]["aggregate"]["by_block"]
+
+        blocks = sorted(set(int(k) for k in std_blocks.keys()) & set(int(k) for k in full_blocks.keys()))
+
+        rank_target = [std_blocks[str(b)]["mean_rank_target"] for b in blocks]
+        rank_std = [std_blocks[str(b)]["mean_rank_draft"] for b in blocks]
+        rank_full = [full_blocks[str(b)]["mean_rank_draft"] for b in blocks]
+        ctx_std = [std_blocks[str(b)]["mean_ctx_positions"] for b in blocks]
+        ctx_full = [full_blocks[str(b)]["mean_ctx_positions"] for b in blocks]
+
+        ax.plot(blocks, rank_target, "k--o", label="Target", markersize=5, linewidth=1.5, zorder=5)
+        ax.plot(
+            blocks, rank_std, "-s",
+            color="#4C9ED9", label="Draft (standard ctx)", markersize=6, linewidth=1.8,
+        )
+        ax.plot(
+            blocks, rank_full, "^",
+            color="#C75B5B", label="Draft (full ctx)", markersize=6, linewidth=1.8,
+            linestyle="--",
+        )
+
+        # Annotate context positions for full mode
+        for i, b in enumerate(blocks):
+            if b > 0:
+                ax.annotate(
+                    f"{ctx_full[i]:.0f}",
+                    xy=(b, rank_full[i]),
+                    xytext=(0, 10),
+                    textcoords="offset points",
+                    fontsize=7, color="#C75B5B", ha="center",
+                )
+
+        ax.set_yscale("log")
+        ax.set_xlabel("Block index")
+        ax.set_ylabel("Mean rank (log scale)")
+        ax.set_xticks(blocks)
+        mode_label = "Mask" if m == "mask" else "Gold"
+        ax.set_title(f"({chr(ord('a') + panel_idx)}) {mode_label} mode: standard vs full context", fontweight="bold")
+        ax.legend(loc="upper right", framealpha=0.9, fontsize=9)
+        ax.yaxis.grid(True, alpha=0.3, linestyle="--")
+        ax.set_axisbelow(True)
+
+        # Add a text box with the conclusion
+        ax.text(
+            0.5, 0.02,
+            "Full context ≈ standard → context starvation falsified",
+            transform=ax.transAxes, fontsize=8, ha="center", va="bottom",
+            style="italic", color="#555",
+            bbox=dict(boxstyle="round,pad=0.3", facecolor="#FFF8E1", edgecolor="#DDD", alpha=0.9),
+        )
+
+    fig.savefig(OUT / "fig_extended_context.png")
+    plt.close(fig)
+    print(f"Saved: {OUT / 'fig_extended_context.png'}")
+
+
 if __name__ == "__main__":
     fig_bucket_rank_comparison()
     fig_signal_decomposition()
     fig_block_rank_decay()
     fig_architecture_comparison()
+    fig_extended_context()
     print("\nAll figures generated.")

@@ -11,6 +11,17 @@ Three modes to decompose the signal:
   --mode mask     Mask tokens as noise_embedding (fair: matches spec_generate)
   --mode random   Gold tokens as noise but randomized target_hidden (ablation)
 
+Extended context experiment (--extra-context):
+  Controls how much target_hidden context each block receives after Block 0.
+    0  = standard: 1 previous block (16 positions) + KV cache  [default]
+    K  = K extra blocks: total (K+1) blocks of direct target_hidden, no KV cache
+    -1 = full: ALL preceding target_hidden (prompt + all prior blocks), no KV cache
+
+  Block 0 always receives the full prompt context (unchanged).
+  The hypothesis: Block 0 achieves competitive rank (114 vs target 174) because
+  it receives rich direct context (~96 positions). If later blocks also receive
+  rich context, do they match Block 0's quality?
+
 Usage:
     uv run python scripts/diagnostic.py \
         --model Qwen/Qwen3-4B \
@@ -20,6 +31,15 @@ Usage:
         --max-samples 50 \
         --max-seq-len 2048 \
         --output results/phase0/diagnostic_gsm8k_mask.json
+
+    # Extended context — full oracle:
+    uv run python scripts/diagnostic.py \
+        --model Qwen/Qwen3-4B \
+        --draft z-lab/Qwen3-4B-DFlash-b16 \
+        --dataset gsm8k \
+        --mode mask --extra-context -1 \
+        --max-samples 5 \
+        --output results/phase0/diag_gsm8k_mask_fullctx.json
 
 Multi-GPU:
     torchrun --nproc_per_node=8 scripts/diagnostic.py \
@@ -111,6 +131,7 @@ def compute_logit_comparison(
     max_seq_len: int,
     device: torch.device,
     mode: str = "gold",
+    extra_context: int = 0,
 ) -> dict | None:
     """Teacher-forcing comparison of target vs draft on a single example.
 
@@ -121,6 +142,14 @@ def compute_logit_comparison(
     - Block i>0: context = previous block's hidden states (BS entries),
       noise = next BS embeddings, position_ids = [kv_len .. block_end).
       Crop KV cache to block_start.
+
+    Extended context (extra_context != 0):
+        Disables KV cache.  Each block gets a fresh forward pass with more
+        direct target_hidden context:
+        - extra_context = K > 0: (K+1) blocks of target_hidden before current
+          block (clamped at position 0).
+        - extra_context = -1: ALL preceding target_hidden from position 0.
+        Block 0 is unchanged (always receives full prompt).
 
     Modes:
         gold   — noise_embedding from gold tokens (non-causal info leakage possible)
@@ -174,7 +203,7 @@ def compute_logit_comparison(
     output = target(full_ids, output_hidden_states=True)
     target_logits = output.logits  # [1, total_len, vocab]
 
-    # ── Draft pathway (deep readout): block-by-block with KV cache ──
+    # ── Draft pathway (deep readout): block-by-block ──
     target_hidden = extract_context_feature(
         output.hidden_states,
         draft_model.target_layer_ids,
@@ -209,25 +238,47 @@ def compute_logit_comparison(
         device=device,
     ).unsqueeze(0)
 
-    past_kv_draft = DynamicCache()
+    # Choose between standard (KV cache) and extended (no KV cache) modes
+    use_kv_cache = extra_context == 0
+    past_kv_draft = DynamicCache() if use_kv_cache else None
     draft_logits_list: list[torch.Tensor] = []
+    # Track context size per block for analysis
+    ctx_positions_per_block: list[int] = []
 
     for block_idx in range(n_full_blocks):
         block_start = prompt_len + block_idx * block_size
         block_end = block_start + block_size
 
-        if block_idx == 0:
-            # First block: full prompt as context
-            ctx = target_hidden[:, :prompt_len, :]
-            noise = noise_embedding[:, block_start:block_end, :]
-            pos = all_position_ids[:, :block_end]
+        if use_kv_cache:
+            # ── Standard mode: mirrors spec_generate with KV cache ──
+            if block_idx == 0:
+                ctx = target_hidden[:, :prompt_len, :]
+                noise = noise_embedding[:, block_start:block_end, :]
+                pos = all_position_ids[:, :block_end]
+            else:
+                prev_start = prompt_len + (block_idx - 1) * block_size
+                ctx = target_hidden[:, prev_start:block_start, :]
+                noise = noise_embedding[:, block_start:block_end, :]
+                kv_len = past_kv_draft.get_seq_length()
+                pos = all_position_ids[:, kv_len:block_end]
         else:
-            # Subsequent blocks: previous block's positions as context
-            prev_start = prompt_len + (block_idx - 1) * block_size
-            ctx = target_hidden[:, prev_start:block_start, :]  # BS entries
+            # ── Extended context mode: no KV cache, fresh forward each block ──
+            if extra_context < 0:
+                # Full context: everything from position 0 to block_start
+                ctx_start = 0
+            else:
+                # (1 + extra_context) blocks of target_hidden, clamped at 0
+                total_ctx_positions = (1 + extra_context) * block_size
+                ctx_start = max(0, block_start - total_ctx_positions)
+                # For Block 0, ctx_start = max(0, prompt_len - ...) which
+                # includes part of (or all of) the prompt; clamped at 0
+
+            ctx = target_hidden[:, ctx_start:block_start, :]
             noise = noise_embedding[:, block_start:block_end, :]
-            kv_len = past_kv_draft.get_seq_length()
-            pos = all_position_ids[:, kv_len:block_end]
+            ctx_len = ctx.shape[1]
+            pos = all_position_ids[:, block_start - ctx_len:block_end]
+
+        ctx_positions_per_block.append(ctx.shape[1])
 
         # In random mode, replace ctx with norm-matched Gaussian noise
         if mode == "random":
@@ -240,7 +291,7 @@ def compute_logit_comparison(
             noise_embedding=noise,
             position_ids=pos,
             past_key_values=past_kv_draft,
-            use_cache=True,
+            use_cache=use_kv_cache,
             is_causal=False,
         )
 
@@ -249,7 +300,8 @@ def compute_logit_comparison(
         draft_logits_list.append(block_logits)
 
         # Crop KV cache to block_start (matching spec_generate's crop(start))
-        past_kv_draft.crop(block_start)
+        if use_kv_cache:
+            past_kv_draft.crop(block_start)
 
     draft_logits = torch.cat(draft_logits_list, dim=1)  # [1, N*(BS-1), vocab]
 
@@ -265,6 +317,7 @@ def compute_logit_comparison(
 
     for block_idx in range(n_full_blocks):
         block_start = prompt_len + block_idx * block_size
+        block_ctx_positions = ctx_positions_per_block[block_idx]
 
         for j in range(block_size - 1):
             gold_pos = block_start + j + 1  # position of gold token in full_ids
@@ -285,6 +338,8 @@ def compute_logit_comparison(
             token_results.append(
                 {
                     "pos": gold_pos,
+                    "block_idx": block_idx,
+                    "ctx_positions": block_ctx_positions,
                     "token_id": gold_id,
                     "token_str": tokenizer.decode([gold_id]),
                     "p_target": p_target,
@@ -408,7 +463,36 @@ def compute_aggregate_stats(results: list[dict]) -> dict:
             / len(bt),
         }
 
-    return {"overall": overall, "by_target_confidence": bucket_stats}
+    # Per-block statistics
+    block_indices = sorted(set(t["block_idx"] for t in all_tokens))
+    block_stats = {}
+    for bi in block_indices:
+        bt = [t for t in all_tokens if t["block_idx"] == bi]
+        if not bt:
+            continue
+        brt = [t["rank_target"] for t in bt]
+        brd = [t["rank_draft"] for t in bt]
+        ctx_positions_list = [t["ctx_positions"] for t in bt]
+        block_stats[bi] = {
+            "n_tokens": len(bt),
+            "mean_ctx_positions": float(np.mean(ctx_positions_list)),
+            "mean_p_target": float(np.mean([t["p_target"] for t in bt])),
+            "mean_p_draft": float(np.mean([t["p_draft"] for t in bt])),
+            "mean_rank_target": float(np.mean(brt)),
+            "mean_rank_draft": float(np.mean(brd)),
+            "median_rank_target": float(np.median(brt)),
+            "median_rank_draft": float(np.median(brd)),
+            "pct_rank_draft_better": sum(
+                1 for rt, rd in zip(brt, brd) if rd < rt
+            )
+            / len(bt),
+        }
+
+    return {
+        "overall": overall,
+        "by_target_confidence": bucket_stats,
+        "by_block": block_stats,
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -416,7 +500,7 @@ def compute_aggregate_stats(results: list[dict]) -> dict:
 # ---------------------------------------------------------------------------
 
 
-def print_summary(agg: dict, mode: str) -> None:
+def print_summary(agg: dict, mode: str, extra_context: int = 0) -> None:
     """Rich console summary of aggregate stats."""
     if not agg:
         console.print("[red]No results to display.[/red]")
@@ -424,10 +508,18 @@ def print_summary(agg: dict, mode: str) -> None:
 
     overall = agg["overall"]
     console.print()
+    ec_tag = ""
+    if extra_context != 0:
+        ec_tag = f", extra_ctx={'full' if extra_context < 0 else extra_context}"
     console.rule(
-        f"[bold]Phase 0.3 \u2014 Go/No-Go Diagnostic [mode={mode}][/bold]"
+        f"[bold]Phase 0.3 \u2014 Go/No-Go Diagnostic [mode={mode}{ec_tag}][/bold]"
     )
     console.print(f"[dim]{MODE_DESCRIPTIONS[mode]}[/dim]")
+    if extra_context != 0:
+        if extra_context < 0:
+            console.print("[dim]Extended context: full (all preceding target_hidden, no KV cache)[/dim]")
+        else:
+            console.print(f"[dim]Extended context: {extra_context} extra blocks (no KV cache)[/dim]")
     console.print()
 
     # Overall table
@@ -485,6 +577,38 @@ def print_summary(agg: dict, mode: str) -> None:
                 f"{stats['pct_rank_draft_better']:.1%}",
             )
     console.print(btbl)
+
+    # Per-block breakdown
+    by_block = agg.get("by_block", {})
+    if by_block:
+        console.print()
+        blk_tbl = Table(title="Breakdown by Block Index")
+        blk_tbl.add_column("Block", style="cyan", justify="right")
+        blk_tbl.add_column("N", justify="right")
+        blk_tbl.add_column("ctx_pos", justify="right")
+        blk_tbl.add_column("p_target", justify="right")
+        blk_tbl.add_column("p_draft", justify="right")
+        blk_tbl.add_column("rank_t", justify="right")
+        blk_tbl.add_column("rank_d", justify="right")
+        blk_tbl.add_column("med_rank_t", justify="right")
+        blk_tbl.add_column("med_rank_d", justify="right")
+        blk_tbl.add_column("% rank wins", justify="right")
+
+        for bi in sorted(by_block.keys(), key=lambda x: int(x)):
+            bs = by_block[bi]
+            blk_tbl.add_row(
+                str(bi),
+                str(bs["n_tokens"]),
+                f"{bs['mean_ctx_positions']:.0f}",
+                f"{bs['mean_p_target']:.4f}",
+                f"{bs['mean_p_draft']:.4f}",
+                f"{bs['mean_rank_target']:.0f}",
+                f"{bs['mean_rank_draft']:.0f}",
+                f"{bs['median_rank_target']:.0f}",
+                f"{bs['median_rank_draft']:.0f}",
+                f"{bs['pct_rank_draft_better']:.1%}",
+            )
+        console.print(blk_tbl)
 
     # Verdict — mode-aware, using rank as the primary metric
     console.print()
@@ -603,6 +727,15 @@ def main() -> None:
         help="Noise/hidden mode: gold (default), mask, or random",
     )
     parser.add_argument(
+        "--extra-context",
+        type=int,
+        default=0,
+        help="Extra blocks of target_hidden context for blocks after Block 0. "
+        "0 = standard (1 prev block + KV cache). "
+        "K > 0 = K extra blocks of direct context (no KV cache). "
+        "-1 = full context (all preceding target_hidden, no KV cache).",
+    )
+    parser.add_argument(
         "--max-samples",
         type=int,
         default=None,
@@ -669,6 +802,14 @@ def main() -> None:
     if dist.is_main():
         console.print(f"[bold]Loading dataset:[/bold] {args.dataset}")
         console.print(f"  Mode: {args.mode} ({MODE_DESCRIPTIONS[args.mode]})")
+        ec = args.extra_context
+        if ec == 0:
+            ctx_desc = "standard (1 prev block + KV cache)"
+        elif ec < 0:
+            ctx_desc = "full (all preceding target_hidden, no KV cache)"
+        else:
+            ctx_desc = f"{ec} extra blocks ({(1 + ec) * draft_model.block_size} positions, no KV cache)"
+        console.print(f"  Context: {ctx_desc}")
         console.print(f"  Block size: {draft_model.block_size}")
         console.print(f"  Target layers: {draft_model.target_layer_ids}")
 
@@ -697,6 +838,7 @@ def main() -> None:
             max_seq_len=args.max_seq_len,
             device=device,
             mode=args.mode,
+            extra_context=args.extra_context,
         )
         if result is None:
             skipped += 1
@@ -719,7 +861,7 @@ def main() -> None:
         )
 
         agg = compute_aggregate_stats(results)
-        print_summary(agg, mode=args.mode)
+        print_summary(agg, mode=args.mode, extra_context=args.extra_context)
 
         # Save JSON
         if args.output:
@@ -732,6 +874,7 @@ def main() -> None:
                     "draft": args.draft,
                     "dataset": args.dataset,
                     "mode": args.mode,
+                    "extra_context": args.extra_context,
                     "max_samples": args.max_samples,
                     "max_seq_len": args.max_seq_len,
                     "block_size": draft_model.block_size,

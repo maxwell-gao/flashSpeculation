@@ -1,6 +1,6 @@
 # Phase 0.3 Diagnostic Report: Is the Draft Model a Deep Readout?
 
-**Date**: 2026-02-13  
+**Date**: 2026-02-14 (updated)  
 **Model**: Qwen3-4B (target) + DFlash-b16 (draft)  
 **Dataset**: GSM8K test set (5 examples, 465 compared tokens)  
 **Script**: `scripts/diagnostic.py`
@@ -29,7 +29,20 @@ A critical confound exists: the draft model uses **non-causal attention** over t
 
 All three conditions share identical `target_logits` (the baseline). Only the draft pathway inputs differ.
 
-### 2.3 Metrics
+### 2.3 Extended Context Experiment
+
+An initial per-block analysis (Section 3.4) observed that Block 0 achieved competitive draft rank (114 vs target 174), while later blocks degraded sharply (rank >2,000). Block 0 receives the full prompt as direct `target_hidden` context (~84 positions), while subsequent blocks receive only 16 positions from the previous block plus indirect information via the KV cache.
+
+This suggested a **context starvation** hypothesis: later blocks perform worse because they lack direct access to rich `target_hidden` features. To test this, we added `--extra-context` support:
+
+| Setting | Block i>0 context | KV cache |
+|---------|------------------|----------|
+| `--extra-context 0` (standard) | Previous 1 block (16 positions) | Yes — accumulates across blocks |
+| `--extra-context -1` (full) | ALL preceding target_hidden (position 0 to block start) | No — fresh forward each block |
+
+In full-context mode, Block 1 receives ~100 positions, Block 6 receives ~179 positions — comparable to or exceeding Block 0's 84 positions. If context starvation were the bottleneck, later blocks should improve dramatically.
+
+### 2.4 Metrics
 
 - **Probability (p)**: `softmax(logits)[gold_token_id]`. Sensitive to entropy — a uniform distribution trivially "wins" on tokens where the reference model is uncertain.
 - **Rank**: Position of the gold token in the probability-sorted vocabulary (1 = top prediction). **Immune to entropy effects**: a uniform distribution yields rank ~V/2 ≈ 76,000 and can never "win".
@@ -81,17 +94,58 @@ Using the low-confidence bucket as the diagnostic window:
 
 **Figure 3** (see `fig_block_rank_decay.png`)
 
-Block 0 receives the full prompt's intermediate features as context (~96 positions). Subsequent blocks receive only the previous block's 16 positions.
+Block 0 receives the full prompt's intermediate features as context (~84 positions). Subsequent blocks receive only the previous block's 16 positions (+ KV cache).
 
 | Block | Context positions | rank_target | rank_draft (mask) | rank_draft (gold) |
 |:---:|:---:|:---:|:---:|:---:|
-| 0 | 96 (full prompt) | 174 | **114** | 171 |
+| 0 | 84 (full prompt) | 174 | **114** | 171 |
 | 1 | 16 | 5 | 2,570 | 1,726 |
 | 2 | 16 | 4 | 115 | 260 |
 | 3 | 16 | 2 | 166 | 94 |
 | 4 | 16 | 2 | 195 | 221 |
+| 5 | 16 | 9 | 43 | 285 |
+| 6 | 16 | 169 | 123 | 1,162 |
 
-**Block 0 is the only block where the draft's rank (114) is competitive with the target's rank (174).** This is also the only block where the draft receives rich, multi-position context directly from the target's intermediate layers. Starting from Block 1, context drops to 16 positions and the draft's rank degrades sharply, though it partially recovers via KV cache accumulation.
+Block 0 is the only block where the draft's rank (114) is competitive with the target's rank (174). However, as Section 3.5 shows, this is **not** caused by richer context — it is a confound from the different difficulty distribution of tokens across blocks.
+
+### 3.5 Extended Context Experiment: Context Starvation Falsified
+
+**Figure 5** (see `fig_extended_context.png`)
+
+We ran the full-context oracle (`--extra-context -1`) alongside the standard configuration for both mask and gold modes. Results:
+
+| Block | ctx (std) | rank_d (std) | ctx (full) | rank_d (full) | Δ rank |
+|:---:|:---:|:---:|:---:|:---:|:---:|
+| 0 | 84 | 114 | 84 | 114 | 0 |
+| 1 | 16 | 2,570 | 100 | 2,561 | **−9** |
+| 2 | 16 | 115 | 116 | 116 | **+1** |
+| 3 | 16 | 166 | 132 | 163 | **−3** |
+| 4 | 16 | 195 | 148 | 192 | **−3** |
+| 5 | 16 | 43 | 163 | 43 | **0** |
+| 6 | 16 | 123 | 179 | 124 | **+1** |
+
+*Table: mask mode. Gold mode shows identical pattern (all Δ < 10).*
+
+**Extending context from 16 to 100–179 positions produces zero improvement.** The result is consistent across all 7 blocks, both modes (mask and gold), and all metrics (mean rank, median rank, % rank wins).
+
+**Why extending context does not help**: The DFlash attention architecture projects `target_hidden` through per-layer `k_proj`/`v_proj` linear transforms and stores the results in the KV cache:
+
+```python
+k_ctx = self.k_proj(target_hidden)   # projected and cached
+k, v = past_key_values.update(k, v, ...)  # appended to cache
+```
+
+Since `k_proj`/`v_proj` are **position-independent linear transforms**, the KV cache projections carry the same information as fresh `target_hidden` projections. The cache from Block 0 already contains all prompt context — providing the same `target_hidden` again as fresh input is algebraically redundant (modulo negligible RoPE position differences).
+
+**Reinterpretation of the Block 0 phenomenon**: Block 0's competitive rank (114 vs target 174) is not a context effect. The actual cause is that Block 0 predicts the **hardest tokens** (first tokens after the prompt), where `rank_target = 174` (target is uncertain). Later blocks predict continuation tokens where `rank_target = 2–9` (target is near-certain). The draft cannot match near-certain predictions but can compete when the target is uncertain:
+
+| Block | mean p_target | rank_target | rank_draft | Draft competitive? |
+|:---:|:---:|:---:|:---:|:---:|
+| 0 | 0.53 | 174 | 114 | Yes — target is uncertain |
+| 1 | 0.76 | 5 | 2,561 | No — target is confident |
+| 2–4 | 0.72–0.82 | 2–4 | 115–195 | No — target is confident |
+
+This is a **target difficulty confound**, not a context quantity effect.
 
 ## 4. Architecture Analysis
 
@@ -113,7 +167,7 @@ The `fc` projection compresses five layers of 2560-dim hidden states (total 12,8
 
 2. **`lm_head` alignment**: `lm_head` was co-trained with the target's 36 layers. It expects the specific representation geometry that Layer 36 produces. The draft's 5-layer output occupies a different region of representation space, which `lm_head` was never optimized to decode.
 
-3. **Context starvation after Block 0**: In `spec_generate` (and our mask mode), the draft receives only 16 new positions of `target_hidden` per block after Block 0. The KV cache retains projections from earlier blocks, but these are indirect (filtered through 5 shallow layers), degrading rapidly.
+3. **~~Context starvation after Block 0~~ (FALSIFIED)**: The extended context experiment (Section 3.5) definitively rules out context starvation as a bottleneck. The KV cache already provides comprehensive access to all prior `target_hidden` projections. Providing 6–11× more direct context positions produces no improvement.
 
 4. **Mask-mode information poverty**: With mask tokens at positions 1–15, all queries are identical (same mask embedding, differentiated only by RoPE). The draft must reconstruct 15 different predictions from position encoding + context attention alone — a much harder task than what the autoregressive target faces.
 
@@ -123,7 +177,7 @@ The `fc` projection compresses five layers of 2560-dim hidden states (total 12,8
 
 2. **Dataset mismatch**: GSM8K tests mathematical reasoning, not context learning. The tokens where p_target < 0.01 largely reflect stylistic differences between human-written and model-preferred phrasing, not failures of context understanding. CL-bench evaluation is needed to test the actual hypothesis.
 
-3. **Context length**: GSM8K prompts are ~100 tokens. CL-bench contexts are 20K–90K tokens. The Block 0 advantage (which depends on rich context) may be more pronounced with longer prompts, but information decay through shallow KV cache would also be more severe.
+3. **Context length**: GSM8K prompts are ~100 tokens. CL-bench contexts are 20K–90K tokens. While context starvation is ruled out as a bottleneck for short prompts, the information compression through `fc` may become more limiting with much longer contexts.
 
 ## 6. Conclusions
 
@@ -132,15 +186,32 @@ The `fc` projection compresses five layers of 2560-dim hidden states (total 12,8
 | Intermediate layers carry real signal | mask vs random: 6x rank improvement | The `fc` + 5-layer architecture extracts useful information from intermediate representations |
 | Signal is insufficient for guided decoding | mask rank 2,161 vs target rank 305 (7x gap) | Vanilla draft logits would degrade, not improve, target predictions |
 | Original "87% draft wins" was an entropy artifact | random mode also shows 73% prob wins with rank 12,920 | Raw probability comparison is invalid for models with different entropy |
-| Block 0 shows competitive rank when context is rich | Block 0: draft rank 114 ≈ target rank 174 | With sufficient context positions, the draft architecture CAN approach target quality |
+| **Context starvation is NOT the bottleneck** | Full context (100–179 pos) ≈ standard (16 pos): Δ rank < 10 | KV cache already provides complete context; the Block 0 phenomenon was a target difficulty confound |
+| Bottleneck is capacity + `lm_head` alignment | 5 layers (504.7M) vs 36 layers (3,244.6M), linear `fc` compression | The draft cannot reconstruct Layer 36's representation geometry from intermediate features |
 
 ### Recommendation
 
-The vanilla draft model is **not suitable for guided decoding** (Phase 2 of the roadmap). The path forward is:
+The vanilla draft model is **not suitable for guided decoding** (Phase 2 of the roadmap). The three originally hypothesized bottlenecks have been narrowed to two:
 
-- **Phase 1 (TTT)** remains valuable as a method to improve speculative decoding acceptance rate (τ), which is a standalone publishable contribution.
-- **Block 0 phenomenon** warrants investigation: if the draft performs well with rich context, modifications to the context delivery mechanism (e.g., providing more target_hidden positions to later blocks, or periodic re-injection of prompt features) could improve draft quality.
-- **CL-bench evaluation** is necessary to test whether the context learning failure mode differs from GSM8K's stylistic mismatch.
+- ~~Context starvation~~ — **falsified** (Section 3.5)
+- **`fc` compression** (12800→2560, linear, no gating) — untested, requires training experiments
+- **Capacity / `lm_head` alignment** (5 layers trying to reconstruct Layer 36 geometry) — most likely dominant bottleneck
+
+The most promising architectural direction is **not to improve the draft model**, but to design a **Residual Correction Module** that computes a small correction to the target's Layer 36 output using intermediate-layer features:
+
+```
+guided_repr = h_36 + β · correction(h_36, h_inter)
+logits = lm_head(guided_repr)
+```
+
+This approach:
+- Bypasses the capacity asymmetry (the correction only needs to learn a delta, not a full representation)
+- Bypasses `lm_head` alignment (starts from h_36 which is already in the correct geometry)
+- Bypasses `fc` compression (can use cross-attention over raw per-layer features)
+
+**Phase 1 (TTT)** remains valuable as a method to improve speculative decoding acceptance rate (τ), which is a standalone publishable contribution.
+
+**CL-bench evaluation** is still necessary to test whether the context learning failure mode differs from GSM8K's stylistic mismatch.
 
 ## Appendix: Reproduction
 
@@ -154,6 +225,25 @@ for mode in gold mask random; do
     --mode $mode \
     --max-samples 5 \
     --output results/phase0/test_${mode}.json
+done
+
+# Extended context experiment
+for mode in mask gold; do
+  CUDA_VISIBLE_DEVICES=0 uv run python scripts/diagnostic.py \
+    --model Qwen/Qwen3-4B \
+    --draft z-lab/Qwen3-4B-DFlash-b16 \
+    --dataset gsm8k \
+    --mode $mode --extra-context 0 \
+    --max-samples 5 \
+    --output results/phase0/ctx_exp_${mode}_standard.json
+
+  CUDA_VISIBLE_DEVICES=0 uv run python scripts/diagnostic.py \
+    --model Qwen/Qwen3-4B \
+    --draft z-lab/Qwen3-4B-DFlash-b16 \
+    --dataset gsm8k \
+    --mode $mode --extra-context -1 \
+    --max-samples 5 \
+    --output results/phase0/ctx_exp_${mode}_fullctx.json
 done
 
 # Generate figures
