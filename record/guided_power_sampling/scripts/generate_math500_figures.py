@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import json
-import os
 from pathlib import Path
 
 import matplotlib.pyplot as plt
@@ -38,7 +37,13 @@ def load_results() -> list[dict]:
 def fig_accuracy_comparison(results: list[dict]) -> None:
     """Bar chart: accuracy across all 5 conditions."""
     conditions = ["greedy", "temp", "blend_greedy", "ps", "blend_ps"]
-    labels = ["Greedy", "Temp\n(T=0.25)", "Blend\nGreedy\n(β=0.05)", "Power\nSampling\n(α=4)", "Blend\n× Power\n(β=0.05, α=4)"]
+    labels = [
+        "Greedy",
+        "Temp\n(T=0.25)",
+        "Blend\nGreedy\n(β=0.05)",
+        "Power\nSampling\n(α=4)",
+        "Blend\n× Power\n(β=0.05, α=4)",
+    ]
     colors = ["#7f8c8d", "#95a5a6", "#3498db", "#e67e22", "#e74c3c"]
 
     accs = []
@@ -48,16 +53,27 @@ def fig_accuracy_comparison(results: list[dict]) -> None:
         accs.append(correct / total if total else 0)
 
     fig, ax = plt.subplots(figsize=(8, 5))
-    bars = ax.bar(range(len(conditions)), [a * 100 for a in accs], color=colors, width=0.6, edgecolor="white", linewidth=1.5)
+    bars = ax.bar(
+        range(len(conditions)), [a * 100 for a in accs], color=colors, width=0.6, edgecolor="white", linewidth=1.5
+    )
 
     for bar, acc in zip(bars, accs):
-        ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.8,
-                f"{acc:.1%}", ha="center", va="bottom", fontsize=12, fontweight="bold")
+        ax.text(
+            bar.get_x() + bar.get_width() / 2,
+            bar.get_height() + 0.8,
+            f"{acc:.1%}",
+            ha="center",
+            va="bottom",
+            fontsize=12,
+            fontweight="bold",
+        )
 
     ax.set_xticks(range(len(conditions)))
     ax.set_xticklabels(labels, fontsize=10)
     ax.set_ylabel("Accuracy (%)", fontsize=12)
-    ax.set_title("MATH-500 Accuracy: LogitBlend × PowerSampling\n(Qwen3-4B, 104 problems)", fontsize=13, fontweight="bold")
+    ax.set_title(
+        "MATH-500 Accuracy: LogitBlend × PowerSampling\n(Qwen3-4B, 104 problems)", fontsize=13, fontweight="bold"
+    )
     ax.set_ylim(0, 90)
     ax.spines["top"].set_visible(False)
     ax.spines["right"].set_visible(False)
@@ -97,16 +113,31 @@ def fig_difficulty_stratification(results: list[dict]) -> None:
 
     for bar, val in zip(bars1, easy_accs):
         if val > 0:
-            ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 1,
-                    f"{val:.0f}%", ha="center", va="bottom", fontsize=9)
+            ax.text(
+                bar.get_x() + bar.get_width() / 2,
+                bar.get_height() + 1,
+                f"{val:.0f}%",
+                ha="center",
+                va="bottom",
+                fontsize=9,
+            )
     for bar, val in zip(bars2, hard_accs):
-        ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 1,
-                f"{val:.0f}%", ha="center", va="bottom", fontsize=9, fontweight="bold")
+        ax.text(
+            bar.get_x() + bar.get_width() / 2,
+            bar.get_height() + 1,
+            f"{val:.0f}%",
+            ha="center",
+            va="bottom",
+            fontsize=9,
+            fontweight="bold",
+        )
 
     ax.set_xticks(x)
     ax.set_xticklabels(labels, fontsize=10)
     ax.set_ylabel("Accuracy (%)", fontsize=12)
-    ax.set_title("Difficulty Stratification: Easy vs Hard Problems\n(Hard = greedy fails)", fontsize=13, fontweight="bold")
+    ax.set_title(
+        "Difficulty Stratification: Easy vs Hard Problems\n(Hard = greedy fails)", fontsize=13, fontweight="bold"
+    )
     ax.legend(loc="upper right", fontsize=10)
     ax.set_ylim(0, 115)
     ax.spines["top"].set_visible(False)
@@ -135,13 +166,19 @@ def fig_overlap_venn(results: list[dict]) -> None:
     incorrect = [bps_only + neither, ps_only + neither]
 
     ax.barh(categories, correct_shared, color="#2ecc71", label=f"Both correct ({both})", height=0.5)
-    ax.barh(categories, correct_unique, left=correct_shared, color=["#f39c12", "#e74c3c"],
-            label=None, height=0.5)
-    ax.barh(categories, incorrect, left=[s + u for s, u in zip(correct_shared, correct_unique)],
-            color="#ecf0f1", label=f"Wrong ({neither} neither)", height=0.5)
+    ax.barh(categories, correct_unique, left=correct_shared, color=["#f39c12", "#e74c3c"], label=None, height=0.5)
+    ax.barh(
+        categories,
+        incorrect,
+        left=[s + u for s, u in zip(correct_shared, correct_unique)],
+        color="#ecf0f1",
+        label=f"Wrong ({neither} neither)",
+        height=0.5,
+    )
 
     # Custom legend
     from matplotlib.patches import Patch
+
     legend_elements = [
         Patch(facecolor="#2ecc71", label=f"Both correct ({both})"),
         Patch(facecolor="#f39c12", label=f"PS only ({ps_only})"),
@@ -190,7 +227,16 @@ def fig_architecture_diagram() -> None:
     ax = axes[1]
     ax.set_title("Blend Greedy (β=0.05)", fontsize=13, fontweight="bold", pad=15)
     ax.add_patch(plt.Rectangle((0.5, 6), 9, 2.5, facecolor="#ecf0f1", edgecolor="#2c3e50", linewidth=2, zorder=2))
-    ax.text(5, 7.25, "Qwen3-4B\n(36 layers, output_hidden_states)", ha="center", va="center", fontsize=10, fontweight="bold", zorder=3)
+    ax.text(
+        5,
+        7.25,
+        "Qwen3-4B\n(36 layers, output_hidden_states)",
+        ha="center",
+        va="center",
+        fontsize=10,
+        fontweight="bold",
+        zorder=3,
+    )
     # Two lm_head boxes
     ax.add_patch(plt.Rectangle((0.8, 3.5), 3.5, 1.2, facecolor="#3498db", edgecolor="#2c3e50", linewidth=1.5, zorder=2))
     ax.text(2.55, 4.1, "lm_head(h₃₅)", ha="center", va="center", fontsize=9, color="white", fontweight="bold", zorder=3)
@@ -198,7 +244,17 @@ def fig_architecture_diagram() -> None:
     ax.text(7.45, 4.1, "lm_head(h₃₃)", ha="center", va="center", fontsize=9, color="white", fontweight="bold", zorder=3)
     # Blend box
     ax.add_patch(plt.Rectangle((2, 1.7), 6, 1.2, facecolor="#9b59b6", edgecolor="#2c3e50", linewidth=2, zorder=2))
-    ax.text(5, 2.3, "0.95 × logits₃₅ + 0.05 × logits₃₃", ha="center", va="center", fontsize=9, color="white", fontweight="bold", zorder=3)
+    ax.text(
+        5,
+        2.3,
+        "0.95 × logits₃₅ + 0.05 × logits₃₃",
+        ha="center",
+        va="center",
+        fontsize=9,
+        color="white",
+        fontweight="bold",
+        zorder=3,
+    )
     ax.add_patch(plt.Rectangle((3, 0.1), 4, 1, facecolor="#2ecc71", edgecolor="#2c3e50", linewidth=2, zorder=2))
     ax.text(5, 0.6, "argmax", ha="center", va="center", fontsize=10, fontweight="bold", zorder=3)
     # Arrows
@@ -215,18 +271,41 @@ def fig_architecture_diagram() -> None:
     ax.set_title("Blend × Power Sampling", fontsize=13, fontweight="bold", pad=15)
     # MCMC loop
     from matplotlib.patches import FancyBboxPatch
-    ax.add_patch(FancyBboxPatch((0.5, 0.3), 9, 9, boxstyle="round,pad=0.3",
-                                facecolor="#fdf2e9", edgecolor="#e74c3c", linewidth=2.5, zorder=1))
+
+    ax.add_patch(
+        FancyBboxPatch(
+            (0.5, 0.3),
+            9,
+            9,
+            boxstyle="round,pad=0.3",
+            facecolor="#fdf2e9",
+            edgecolor="#e74c3c",
+            linewidth=2.5,
+            zorder=1,
+        )
+    )
     ax.text(5, 9.6, "MCMC Loop (16 blocks × 2 steps)", ha="center", fontsize=9, color="#e74c3c", fontweight="bold")
     # Proposal
     ax.add_patch(plt.Rectangle((1, 7), 3.5, 1.5, facecolor="#95a5a6", edgecolor="#2c3e50", linewidth=1.5, zorder=2))
     ax.text(2.75, 7.75, "Propose\n(T=0.25)", ha="center", va="center", fontsize=9, fontweight="bold", zorder=3)
     # Guided eval
     ax.add_patch(plt.Rectangle((5.5, 7), 3.5, 1.5, facecolor="#9b59b6", edgecolor="#2c3e50", linewidth=1.5, zorder=2))
-    ax.text(7.25, 7.75, "Guided\nlog p", ha="center", va="center", fontsize=9, color="white", fontweight="bold", zorder=3)
+    ax.text(
+        7.25, 7.75, "Guided\nlog p", ha="center", va="center", fontsize=9, color="white", fontweight="bold", zorder=3
+    )
     # MH
     ax.add_patch(plt.Rectangle((2.5, 4), 5, 2, facecolor="#e74c3c", edgecolor="#2c3e50", linewidth=2, zorder=2))
-    ax.text(5, 5, "Metropolis-Hastings\nAccept / Reject", ha="center", va="center", fontsize=10, color="white", fontweight="bold", zorder=3)
+    ax.text(
+        5,
+        5,
+        "Metropolis-Hastings\nAccept / Reject",
+        ha="center",
+        va="center",
+        fontsize=10,
+        color="white",
+        fontweight="bold",
+        zorder=3,
+    )
     # Output
     ax.add_patch(plt.Rectangle((2.5, 1), 5, 1.5, facecolor="#2ecc71", edgecolor="#2c3e50", linewidth=2, zorder=2))
     ax.text(5, 1.75, "Refined sequence", ha="center", va="center", fontsize=10, fontweight="bold", zorder=3)
@@ -258,39 +337,63 @@ def fig_paper_comparison() -> None:
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5), sharey=True)
 
     # Paper
-    bars1 = ax1.bar(range(len(paper_methods)), paper_accs, color=paper_colors,
-                    width=0.6, edgecolor="white", linewidth=1.5)
+    bars1 = ax1.bar(
+        range(len(paper_methods)), paper_accs, color=paper_colors, width=0.6, edgecolor="white", linewidth=1.5
+    )
     for bar, acc in zip(bars1, paper_accs):
-        ax1.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.8,
-                 f"{acc}%", ha="center", va="bottom", fontsize=11, fontweight="bold")
+        ax1.text(
+            bar.get_x() + bar.get_width() / 2,
+            bar.get_height() + 0.8,
+            f"{acc}%",
+            ha="center",
+            va="bottom",
+            fontsize=11,
+            fontweight="bold",
+        )
     ax1.set_xticks(range(len(paper_methods)))
     ax1.set_xticklabels(paper_methods, fontsize=9)
     ax1.set_ylabel("Accuracy (%)", fontsize=12)
-    ax1.set_title("Original Paper\nQwen2.5-Math-7B · 500 problems\n10 MCMC steps · 3072 tokens",
-                   fontsize=11, fontweight="bold")
+    ax1.set_title(
+        "Original Paper\nQwen2.5-Math-7B · 500 problems\n10 MCMC steps · 3072 tokens", fontsize=11, fontweight="bold"
+    )
     ax1.set_ylim(0, 92)
     ax1.spines["top"].set_visible(False)
     ax1.spines["right"].set_visible(False)
     # PS gain annotation
-    ax1.annotate("", xy=(2, 74.8), xytext=(0, 49.6),
-                 arrowprops=dict(arrowstyle="->", lw=1.5, color="#e67e22", connectionstyle="arc3,rad=0.3"))
+    ax1.annotate(
+        "",
+        xy=(2, 74.8),
+        xytext=(0, 49.6),
+        arrowprops=dict(arrowstyle="->", lw=1.5, color="#e67e22", connectionstyle="arc3,rad=0.3"),
+    )
     ax1.text(0.5, 58, "+25.2 pp", fontsize=9, color="#e67e22", fontweight="bold")
 
     # Ours
-    bars2 = ax2.bar(range(len(our_methods)), our_accs, color=our_colors,
-                    width=0.6, edgecolor="white", linewidth=1.5)
+    bars2 = ax2.bar(range(len(our_methods)), our_accs, color=our_colors, width=0.6, edgecolor="white", linewidth=1.5)
     for bar, acc in zip(bars2, our_accs):
-        ax2.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.8,
-                 f"{acc}%", ha="center", va="bottom", fontsize=11, fontweight="bold")
+        ax2.text(
+            bar.get_x() + bar.get_width() / 2,
+            bar.get_height() + 0.8,
+            f"{acc}%",
+            ha="center",
+            va="bottom",
+            fontsize=11,
+            fontweight="bold",
+        )
     ax2.set_xticks(range(len(our_methods)))
     ax2.set_xticklabels(our_methods, fontsize=9)
-    ax2.set_title("Ours (This Work)\nQwen3-4B · 104 problems\n2 MCMC steps · 1024 tokens",
-                   fontsize=11, fontweight="bold")
+    ax2.set_title(
+        "Ours (This Work)\nQwen3-4B · 104 problems\n2 MCMC steps · 1024 tokens", fontsize=11, fontweight="bold"
+    )
     ax2.spines["top"].set_visible(False)
     ax2.spines["right"].set_visible(False)
     # Blend×PS gain annotation
-    ax2.annotate("", xy=(3, 77.9), xytext=(0, 71.2),
-                 arrowprops=dict(arrowstyle="->", lw=1.5, color="#e74c3c", connectionstyle="arc3,rad=0.3"))
+    ax2.annotate(
+        "",
+        xy=(3, 77.9),
+        xytext=(0, 71.2),
+        arrowprops=dict(arrowstyle="->", lw=1.5, color="#e74c3c", connectionstyle="arc3,rad=0.3"),
+    )
     ax2.text(0.8, 73, "+6.7 pp", fontsize=9, color="#e74c3c", fontweight="bold")
     # Paper PS reference line
     ax2.axhline(y=74.8, color="#e67e22", linestyle="--", alpha=0.5, linewidth=1)

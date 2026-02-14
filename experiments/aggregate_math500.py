@@ -75,8 +75,12 @@ def main() -> None:
         accuracy = correct / max(total, 1)
 
         table.add_row(
-            cond, str(correct), str(total),
-            f"{accuracy:.1%}", f"{avg_tok:.0f}", f"{avg_time:.1f}",
+            cond,
+            str(correct),
+            str(total),
+            f"{accuracy:.1%}",
+            f"{avg_tok:.0f}",
+            f"{avg_time:.1f}",
         )
         summary[cond] = {
             "correct": correct,

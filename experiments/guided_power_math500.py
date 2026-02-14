@@ -2,11 +2,12 @@
 """MATH-500 experiment: LogitBlend x PowerSampling.
 
 Conditions:
-  greedy        Standard greedy decoding (T=0)
-  temp          Temperature sampling (T=1/alpha)
-  ps            Power Sampling (alpha, T=1/alpha)
-  blend_greedy  LogitBlend(beta) + greedy
-  blend_ps      LogitBlend(beta) + Power Sampling (alpha)
+  greedy          Standard greedy decoding (T=0)
+  temp            Temperature sampling (T=1/alpha)
+  ps              Power Sampling (alpha, T=1/alpha)
+  blend_greedy    LogitBlend(beta) + greedy
+  blend_ps        LogitBlend(beta) + Power Sampling (alpha)
+  draft_blend_ps  DFlash draft model logits as blend source + Power Sampling
 
 Usage (single GPU, fast conditions only):
     export HF_HOME=$(pwd)/.cache/huggingface
@@ -20,6 +21,16 @@ Multi-GPU for expensive MCMC conditions:
         CUDA_VISIBLE_DEVICES=$i uv run python experiments/guided_power_math500.py \
             --conditions ps blend_ps --shard $i --n-shards 8 \
             --output results/math500/ps_shard_${i}.json &
+    done
+    wait
+
+Draft-blend (requires --draft model):
+    export HF_HOME=$(pwd)/.cache/huggingface
+    for i in $(seq 0 7); do
+        CUDA_VISIBLE_DEVICES=$i uv run python experiments/guided_power_math500.py \
+            --conditions draft_blend_ps --draft z-lab/Qwen3-4B-DFlash-b16 \
+            --shard $i --n-shards 8 \
+            --output results/math500/draft_blend_shard_${i}.json &
     done
     wait
 """
@@ -42,11 +53,13 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 
 from dg_ttt.grading import grade_answer, parse_answer
 from dg_ttt.guided.blend import compute_guided_sequence_log_probs, guided_generate
+from dg_ttt.guided.draft_blend import compute_draft_blend_sequence_log_probs
 from dg_ttt.guided.power_sampling import mcmc_power_samp
+from dg_ttt.model import DFlashDraftModel
 
 console = Console()
 
-CONDITION_CHOICES = ["greedy", "temp", "ps", "blend_greedy", "blend_ps"]
+CONDITION_CHOICES = ["greedy", "temp", "ps", "blend_greedy", "blend_ps", "draft_blend_ps"]
 
 PROMPT_TEMPLATE = (
     "Can you solve the following math problem? {problem}"
@@ -212,12 +225,58 @@ def run_blend_ps(
     return {"completion": completion, "n_tokens": len(gen_ids), "acceptance_ratio": acc_ratio}
 
 
+def run_draft_blend_ps(
+    model: AutoModelForCausalLM,
+    tokenizer: AutoTokenizer,
+    input_ids: torch.Tensor,
+    max_new_tokens: int,
+    temp: float,
+    mcmc_steps: int,
+    block_num: int,
+    beta: float,
+    device: torch.device,
+    draft_model: DFlashDraftModel | None = None,
+    **_kwargs,
+) -> dict:
+    """DFlash draft-model LogitBlend + Power Sampling (p_draft_guided^alpha via MCMC)."""
+    assert draft_model is not None, "draft_blend_ps requires --draft model"
+    context = input_ids[0].tolist()
+
+    target_fn = partial(
+        compute_draft_blend_sequence_log_probs,
+        target_model=model,
+        draft_model=draft_model,
+        alpha=1.0 / temp,
+        beta=beta,
+        device=device,
+    )
+
+    # Wrap to match TargetLogProbFn signature: fn(sequence, eval_start) -> list[float]
+    def draft_guided_target(sequence: list[int], eval_start: int) -> list[float]:
+        return target_fn(sequence_ids=sequence, eval_start=eval_start)
+
+    gen_ids, acc_ratio = mcmc_power_samp(
+        model=model,
+        tokenizer=tokenizer,
+        context=context,
+        temp=temp,
+        mcmc_steps=mcmc_steps,
+        max_new_tokens=max_new_tokens,
+        block_num=block_num,
+        target_log_prob_fn=draft_guided_target,
+        device=device,
+    )
+    completion = tokenizer.decode(gen_ids, skip_special_tokens=True)
+    return {"completion": completion, "n_tokens": len(gen_ids), "acceptance_ratio": acc_ratio}
+
+
 RUNNERS = {
     "greedy": run_greedy,
     "temp": run_temp,
     "ps": run_ps,
     "blend_greedy": run_blend_greedy,
     "blend_ps": run_blend_ps,
+    "draft_blend_ps": run_draft_blend_ps,
 }
 
 
@@ -229,6 +288,12 @@ RUNNERS = {
 def main() -> None:
     parser = argparse.ArgumentParser(description="MATH-500: LogitBlend x PowerSampling experiment")
     parser.add_argument("--model", type=str, default="Qwen/Qwen3-4B")
+    parser.add_argument(
+        "--draft",
+        type=str,
+        default="z-lab/Qwen3-4B-DFlash-b16",
+        help="DFlash draft model (required for draft_blend_ps)",
+    )
     parser.add_argument(
         "--conditions",
         nargs="+",
@@ -274,6 +339,22 @@ def main() -> None:
     )
     tokenizer = AutoTokenizer.from_pretrained(args.model)
 
+    # --- Optionally load draft model ---
+    draft_model = None
+    needs_draft = any(c.startswith("draft_") for c in args.conditions)
+    if needs_draft:
+        console.print(f"[bold]Loading draft model:[/bold] {args.draft}")
+        draft_model = (
+            DFlashDraftModel.from_pretrained(
+                args.draft,
+                attn_implementation=attn_impl,
+                dtype=torch.bfloat16,
+            )
+            .to(device)
+            .eval()
+        )
+        console.print(f"  Draft block_size={draft_model.block_size}, target_layer_ids={draft_model.target_layer_ids}")
+
     console.print(f"  alpha={args.alpha}, beta={args.beta}, blend_layer={args.blend_layer}")
     console.print(f"  mcmc_steps={args.mcmc_steps}, block_num={args.block_num}")
     console.print(f"  conditions: {args.conditions}")
@@ -295,6 +376,7 @@ def main() -> None:
         beta=args.beta,
         blend_layer=args.blend_layer,
         device=device,
+        draft_model=draft_model,
     )
 
     t_start = time.time()
@@ -371,6 +453,7 @@ def main() -> None:
     output_data = {
         "config": {
             "model": args.model,
+            "draft": args.draft if needs_draft else None,
             "alpha": args.alpha,
             "beta": args.beta,
             "blend_layer": args.blend_layer,
