@@ -449,8 +449,7 @@ def fig_draft_comparison(results: list[dict]) -> None:
     ax.set_xticklabels(labels, fontsize=10)
     ax.set_ylabel("Accuracy (%)", fontsize=12)
     ax.set_title(
-        "DFlash Draft Model as Blend Source\n"
-        "Does the trained draft model improve guided Power Sampling?",
+        "DFlash Draft Model as Blend Source\nDoes the trained draft model improve guided Power Sampling?",
         fontsize=13,
         fontweight="bold",
     )

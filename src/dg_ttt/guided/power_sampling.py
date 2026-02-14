@@ -1,7 +1,9 @@
 """Power Sampling via MCMC (Metropolis-Hastings).
 
 Adapted from reasoning-with-sampling/llm_experiments/power_samp_utils.py.
-Extended with a pluggable ``target_log_prob_fn`` to support LogitBlend targets.
+Extended with a pluggable ``target_log_prob_fn`` to support custom targets,
+and a fused LogitBlend mode that extracts blend logits from the same generate
+call (zero extra forward passes).
 
 Key functions:
 - naive_temp()       — generate proposal tokens with temperature-scaled sampling
@@ -39,18 +41,28 @@ def naive_temp(
     temp: float,
     n_new_tokens: int,
     device: torch.device | None = None,
+    blend_layer: int | None = None,
+    beta: float = 0.0,
 ) -> tuple[list[int], list[float], list[float]]:
     """Generate *n_new_tokens* continuation of *context* using temperature-scaled sampling.
 
+    When ``blend_layer`` and ``beta > 0`` are provided, the target log-probs are
+    computed from the **guided** distribution (fused — no extra forward pass)::
+
+        guided = (1 - beta) * logits_final + beta * lm_head(h_{blend_layer})
+
     Returns:
-        (full_sequence, proposal_log_probs, standard_target_log_probs)
+        (full_sequence, proposal_log_probs, target_log_probs)
 
     Where:
-        proposal_log_probs    = log q(token)  (temperature-scaled, normalised)
-        standard_target_log_probs = (1/temp) * log p(token)  (un-normalised α·log p)
+        proposal_log_probs = log q(token)  (temperature-scaled, normalised)
+        target_log_probs   = (1/temp) * log p_target(token)
+                             p_target is p_guided when blending, p otherwise.
     """
     if device is None:
         device = next(model.parameters()).device
+
+    use_blend = blend_layer is not None and beta > 0
 
     input_ids = torch.tensor([context], dtype=torch.long, device=device)
     output = model.generate(
@@ -63,6 +75,7 @@ def naive_temp(
         return_dict_in_generate=True,
         output_scores=True,
         output_logits=True,
+        output_hidden_states=use_blend,
     )
 
     c = len(context)
@@ -76,10 +89,29 @@ def naive_temp(
 
     idx = tokens.view(n_gen, 1, 1)
 
-    # α · log p(token)  (standard target log-prob)
-    target_lp = ((1.0 / temp) * torch.gather(F.log_softmax(unscaled_logits, dim=-1), -1, idx)).view(-1).tolist()
+    if use_blend:
+        # Extract h_{blend_layer} for each generated token from the generate output.
+        # hidden_states layout:
+        #   step 0 (prefill): tuple of (n_layers+1) tensors, each [batch, prompt_len, hidden]
+        #   step i (decode):  tuple of (n_layers+1) tensors, each [batch, 1, hidden]
+        hs_idx = blend_layer + 1  # type: ignore[operator]
+        h_list = []
+        for step in range(n_gen):
+            step_hs = output.hidden_states[step][hs_idx]
+            if step == 0:
+                h_list.append(step_hs[:, -1:, :])  # last prompt position → [1, 1, H]
+            else:
+                h_list.append(step_hs)  # already [1, 1, H]
+        h_blend = torch.cat(h_list, dim=1)  # [1, n_gen, H]
+        blend_logits = model.lm_head(h_blend).permute(1, 0, 2)  # [n_gen, 1, vocab]
 
-    # log q(token)  (proposal log-prob)
+        guided_logits = (1 - beta) * unscaled_logits + beta * blend_logits
+        target_lp = ((1.0 / temp) * torch.gather(F.log_softmax(guided_logits, dim=-1), -1, idx)).view(-1).tolist()
+    else:
+        # Standard α · log p(token)
+        target_lp = ((1.0 / temp) * torch.gather(F.log_softmax(unscaled_logits, dim=-1), -1, idx)).view(-1).tolist()
+
+    # log q(token)  (proposal log-prob — always from standard temperature-scaled distribution)
     proposal_lp = torch.gather(F.log_softmax(scaled_logits, dim=-1), -1, idx).view(-1).tolist()
 
     assert len(target_lp) == len(proposal_lp) == n_gen
@@ -100,10 +132,19 @@ def mcmc_power_samp(
     max_new_tokens: int,
     block_num: int = 16,
     target_log_prob_fn: TargetLogProbFn | None = None,
+    blend_layer: int | None = None,
+    beta: float = 0.0,
     device: torch.device | None = None,
     verbose: bool = False,
 ) -> tuple[list[int], float]:
     """Block-wise progressive MCMC to sample from p^alpha (or p_guided^alpha).
+
+    Two mechanisms for guided targets (use one, not both):
+
+    1. **Fused blend** (``blend_layer`` + ``beta``): extracts h_{blend_layer}
+       from the same ``model.generate`` call — zero extra forward passes.
+    2. **External callback** (``target_log_prob_fn``): runs a separate evaluation
+       per MCMC step — needed for non-standard targets (e.g. draft model blend).
 
     Args:
         model:              Target LLM.
@@ -113,9 +154,9 @@ def mcmc_power_samp(
         mcmc_steps:         Number of MH steps per block.
         max_new_tokens:     Total new tokens to generate.
         block_num:          Number of blocks to divide generation into.
-        target_log_prob_fn: If provided, replaces the standard ``(1/temp) · log p``
-                            target log-probs with custom values (e.g. guided blend).
-                            Signature: fn(sequence, eval_start) -> list[float].
+        target_log_prob_fn: External target log-prob evaluator (slow path).
+        blend_layer:        Layer index for fused LogitBlend (fast path).
+        beta:               Blend coefficient for fused LogitBlend.
         device:             CUDA device.
         verbose:            Print progress.
 
@@ -129,6 +170,9 @@ def mcmc_power_samp(
     c = len(context)  # prompt length
     assert max_new_tokens % block_num == 0
     jump = max_new_tokens // block_num
+
+    # Blend params passed through to naive_temp (no-op when blend_layer is None)
+    blend_kwargs = dict(blend_layer=blend_layer, beta=beta)
 
     gen = list(context)
     log_probs_norm: list[float] = []  # proposal log-probs
@@ -146,8 +190,9 @@ def mcmc_power_samp(
             temp,
             jump,
             device=device,
+            **blend_kwargs,
         )
-        # If target_log_prob_fn is provided, recompute target log-probs for new block
+        # External callback overrides (for draft_blend_ps etc.)
         if target_log_prob_fn is not None:
             eval_start = c + blk * jump
             lp_unnorm = target_log_prob_fn(gen, eval_start)
@@ -169,6 +214,7 @@ def mcmc_power_samp(
                 temp,
                 t - idx,
                 device=device,
+                **blend_kwargs,
             )
 
             s = len(prop)
@@ -176,7 +222,7 @@ def mcmc_power_samp(
             assert len(prop_lp_norm) == n_new
             assert len(prop_lp_unnorm) == n_new
 
-            # If target_log_prob_fn, recompute target log-probs for proposal
+            # External callback overrides
             if target_log_prob_fn is not None:
                 prop_lp_unnorm = target_log_prob_fn(prop, idx)
 

@@ -52,7 +52,7 @@ from tqdm import tqdm
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
 from dg_ttt.grading import grade_answer, parse_answer
-from dg_ttt.guided.blend import compute_guided_sequence_log_probs, guided_generate
+from dg_ttt.guided.blend import guided_generate
 from dg_ttt.guided.draft_blend import compute_draft_blend_sequence_log_probs
 from dg_ttt.guided.power_sampling import mcmc_power_samp
 from dg_ttt.model import DFlashDraftModel
@@ -194,21 +194,12 @@ def run_blend_ps(
     device: torch.device,
     **_kwargs,
 ) -> dict:
-    """LogitBlend + Power Sampling (p_guided^alpha via MCMC)."""
+    """LogitBlend + Power Sampling (p_guided^alpha via MCMC).
+
+    Uses fused blend evaluation: h_{blend_layer} is extracted from the same
+    model.generate call that produces proposals — zero extra forward passes.
+    """
     context = input_ids[0].tolist()
-
-    target_fn = partial(
-        compute_guided_sequence_log_probs,
-        model=model,
-        alpha=1.0 / temp,
-        beta=beta,
-        blend_layer=blend_layer,
-        device=device,
-    )
-
-    # Wrap to match TargetLogProbFn signature: fn(sequence, eval_start) -> list[float]
-    def guided_target(sequence: list[int], eval_start: int) -> list[float]:
-        return target_fn(sequence_ids=sequence, eval_start=eval_start)
 
     gen_ids, acc_ratio = mcmc_power_samp(
         model=model,
@@ -218,7 +209,8 @@ def run_blend_ps(
         mcmc_steps=mcmc_steps,
         max_new_tokens=max_new_tokens,
         block_num=block_num,
-        target_log_prob_fn=guided_target,
+        blend_layer=blend_layer,
+        beta=beta,
         device=device,
     )
     completion = tokenizer.decode(gen_ids, skip_special_tokens=True)
