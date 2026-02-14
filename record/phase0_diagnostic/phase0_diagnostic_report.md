@@ -61,7 +61,7 @@ The draft model is a substantially weaker decoder than the target across all con
 
 ### 3.2 Breakdown by Target Confidence
 
-**Figure 1** (see `fig_bucket_rank_comparison.png`)
+**Figure 1** (see `figures/fig_bucket_rank_comparison.png`)
 
 Low-confidence bucket (p_target < 0.01, n = 1,637 tokens):
 
@@ -77,7 +77,7 @@ The 81% "probability wins" in `gold` mode — the original result that appeared 
 
 Using the low-confidence bucket as the diagnostic window:
 
-![Signal decomposition](fig_signal_decomposition.png)
+![Signal decomposition](figures/fig_signal_decomposition.png)
 
 | Component | Computation | Rank improvement | Factor |
 |-----------|-------------|:---:|:---:|
@@ -92,7 +92,7 @@ Using the low-confidence bucket as the diagnostic window:
 
 ### 3.4 Per-Block Analysis
 
-**Figure 3** (see `fig_block_rank_decay.png`)
+**Figure 3** (see `figures/fig_block_rank_decay.png`)
 
 Block 0 receives the full prompt's intermediate features as context (~87 positions). Subsequent blocks receive only the previous block's 16 positions (+ KV cache).
 
@@ -110,7 +110,7 @@ With 128 examples, the Block 0 "advantage" observed with 5 samples disappears �
 
 ### 3.5 Extended Context Experiment: Context Starvation Falsified
 
-**Figure 5** (see `fig_extended_context.png`)
+**Figure 5** (see `figures/fig_extended_context.png`)
 
 We ran the full-context oracle (`--extra-context -1`) alongside the standard configuration for both mask and gold modes. Results:
 
@@ -149,7 +149,7 @@ This is a **target difficulty confound**, not a context quantity effect.
 
 ### 3.6 Layer Probe Experiments: Where Is the Information Lost?
 
-**Figure 6** (see `fig_layer_probe_ranks.png`)
+**Figure 6** (see `figures/fig_layer_probe_ranks.png`)
 
 To decompose exactly where information is lost in the DFlash draft pipeline, we ran four zero-training probes that require no additional learning — only reusing existing model weights. All probes evaluate rank of gold tokens at autoregressive answer positions (standard `logits[pos-1]` predicts `token[pos]`), producing `answer_len - 1` evaluation points per example. Script: `experiments/probe.py`.
 
@@ -310,5 +310,5 @@ CUDA_VISIBLE_DEVICES=0 uv run python experiments/probe.py \
   --output results/phase0/probe_gsm8k.json
 
 # Generate figures
-uv run python record/generate_figures.py
+uv run python record/phase0_diagnostic/scripts/generate_figures.py
 ```

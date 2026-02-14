@@ -31,7 +31,7 @@ plt.rcParams.update(
 )
 
 ROOT = Path(__file__).resolve().parent.parent
-OUT = ROOT / "record"
+OUT = ROOT / "record" / "phase0_diagnostic" / "figures"
 
 # ── Load data ──
 modes_data = {}
