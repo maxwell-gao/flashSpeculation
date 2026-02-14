@@ -158,19 +158,86 @@ LogitBlend alone *hurts* greedy by −2.9%, but combined with Power Sampling it 
 
 3. **Guided distribution improves the target**: The MH ratio uses p_guided^α as the target. When Layer 33's information is genuinely complementary (as shown in the probe experiments on hard tokens), the guided target assigns higher probability to correct reasoning chains, making MCMC more likely to accept them.
 
-## 5. Relationship to Prior Work
+## 5. Comparison with Original Power Sampling Paper
 
-### 5.1 Power Sampling (Brown et al., 2024)
+### 5.1 Reference Results (Brown et al., 2024)
 
-Our standard PS condition replicates the Power Sampling framework with reduced MCMC budget (2 steps instead of 10). The modest +0.9% gain over greedy is consistent with the budget reduction — the original paper shows larger gains with more MCMC iterations.
+The Power Sampling paper reports results on MATH-500 with three base models. The most relevant comparison is Qwen2.5-Math-7B (a math-specialized 7B model):
 
-### 5.2 Connection to the Phase 0 Probe Experiments
+| Method | Model | MATH-500 | Config |
+|--------|-------|:--------:|--------|
+| Base (greedy) | Qwen2.5-Math-7B | 49.6% | — |
+| Low-temperature | Qwen2.5-Math-7B | 69.0% | T = 0.25 |
+| **Power Sampling** | **Qwen2.5-Math-7B** | **74.8%** | α=4.0, 10 steps, 16 blocks, 3072 tokens |
+| GRPO (trained) | Qwen2.5-Math-7B | 78.5% | Post-training on MATH |
+| | | | |
+| Base (greedy) | Qwen2.5-7B | 49.8% | — |
+| Low-temperature | Qwen2.5-7B | 62.8% | T = 0.25 |
+| **Power Sampling** | **Qwen2.5-7B** | **70.6%** | α=4.0, 10 steps, 16 blocks, 3072 tokens |
+
+### 5.2 Our Results
+
+| Method | Model | MATH-500 (104 problems) | Config |
+|--------|-------|:-----------------------:|--------|
+| Greedy | Qwen3-4B | 71.2% | — |
+| Temperature | Qwen3-4B | 70.2% | T = 0.25 |
+| Power Sampling | Qwen3-4B | 72.1% | α=4.0, **2 steps**, 16 blocks, **1024 tokens** |
+| Blend Greedy | Qwen3-4B | 68.3% | β=0.05 |
+| **Blend × PS** | **Qwen3-4B** | **77.9%** | β=0.05, α=4.0, **2 steps**, 16 blocks, **1024 tokens** |
+
+![Paper comparison](figures/fig_math500_paper_comparison.png)
+
+### 5.3 Side-by-Side Analysis
+
+#### Configuration Differences
+
+| Parameter | Paper | Ours | Impact |
+|-----------|:-----:|:----:|--------|
+| Model | Qwen2.5-Math-7B (7B, math-tuned) | Qwen3-4B (4B, general) | Different base capability |
+| MCMC steps | 10 per block | **2** per block | 5× less MCMC compute |
+| max_new_tokens | 3072 | **1024** | Shorter reasoning chains |
+| Problems | 500 | **104** | Wider confidence intervals |
+| Block size | 192 (3072/16) | **64** (1024/16) | Finer-grained MCMC |
+
+#### Relative Improvement Patterns
+
+| Metric | Paper (Qwen2.5-Math-7B) | Ours (Qwen3-4B) |
+|--------|:------------------------:|:----------------:|
+| Greedy baseline | 49.6% | 71.2% |
+| PS over greedy | **+25.2 pp** (49.6→74.8%) | +0.9 pp (71.2→72.1%) |
+| Low-temp over greedy | +19.4 pp (49.6→69.0%) | −1.0 pp (71.2→70.2%) |
+| PS over low-temp | +5.8 pp (69.0→74.8%) | +1.9 pp (70.2→72.1%) |
+| **Blend×PS over greedy** | — | **+6.7 pp** (71.2→77.9%) |
+
+#### Interpreting the Gap
+
+The paper's PS achieves a massive +25.2 pp gain over greedy, while our standard PS shows only +0.9 pp. Three factors explain this:
+
+1. **Stronger baseline**: Qwen3-4B starts at 71.2% greedy (vs the paper's 49.6%), leaving much less room for improvement. The model is already confident on most problems, so MCMC refinement has less margin to exploit.
+
+2. **Reduced MCMC budget**: 2 steps vs 10 steps means 5× fewer refinement opportunities. The paper's ablation shows diminishing but non-trivial gains from additional MCMC steps. With our budget, standard PS barely moves the needle.
+
+3. **Shorter generation**: 1024 vs 3072 max tokens means less room for long reasoning chains and fewer MCMC blocks with meaningful content.
+
+Despite these handicaps, **Blend×PS at +6.7 pp** achieves a meaningful gain even in this high-baseline, low-budget regime. This suggests that guided MCMC is more sample-efficient than standard MCMC — the improved target distribution compensates for fewer iterations.
+
+#### Absolute Performance Comparison
+
+| Method | Accuracy | Notes |
+|--------|:--------:|-------|
+| Paper: PS (Qwen2.5-Math-7B, 10 steps) | 74.8% | Full budget, math-specialized model |
+| Paper: GRPO (Qwen2.5-Math-7B, trained) | 78.5% | Requires RL training on MATH |
+| **Ours: Blend×PS (Qwen3-4B, 2 steps)** | **77.9%** | Zero training, 5× less MCMC, smaller model |
+
+Our Blend×PS with a 4B general model and 2 MCMC steps achieves accuracy **comparable to GRPO** (a post-trained 7B math model) and **exceeds the paper's standard PS** (74.8%), despite using a significantly smaller compute budget. This comparison should be interpreted cautiously due to different models, problem subsets (104 vs 500), and generation lengths, but the magnitude is notable.
+
+### 5.4 Connection to the Phase 0 Probe Experiments
 
 The Phase 0 logit-blend probe (Section 3.6 of the diagnostic report) evaluated blend quality on a per-token basis in teacher-forcing mode. It found β=0.05–0.1 beats the target on 20.5% of hard tokens.
 
 This experiment demonstrates that the per-token signal translates to *end-to-end* task improvement when paired with MCMC — but **not** when used with greedy decoding. The probe's per-token analysis was necessary but not sufficient to predict end-to-end behavior.
 
-### 5.3 Implications for DFlash Draft Model
+### 5.5 Implications for DFlash Draft Model
 
 The DFlash draft model's 504.7M-parameter pipeline (fc + 5-layer transformer) was designed to *approximate* target logits for speculative decoding acceptance. Our experiment shows that the simplest possible alternative — a zero-parameter logit blend at β=0.05 — can achieve genuine task-level improvement when paired with the right sampling strategy.
 
@@ -264,7 +331,8 @@ record/
     │   ├── fig_math500_accuracy.png
     │   ├── fig_math500_architecture.png
     │   ├── fig_math500_difficulty.png
-    │   └── fig_math500_overlap.png
+    │   ├── fig_math500_overlap.png
+    │   └── fig_math500_paper_comparison.png
     └── scripts/
         └── generate_math500_figures.py
 ```

@@ -243,6 +243,68 @@ def fig_architecture_diagram() -> None:
     print("  Saved fig_math500_architecture.png")
 
 
+def fig_paper_comparison() -> None:
+    """Bar chart comparing our results with the original Power Sampling paper."""
+    # Paper results (Qwen2.5-Math-7B, 500 problems, 10 MCMC steps, 3072 tokens)
+    paper_methods = ["Base\n(greedy)", "Low-temp\n(T=0.25)", "Power\nSampling", "GRPO\n(trained)"]
+    paper_accs = [49.6, 69.0, 74.8, 78.5]
+    paper_colors = ["#bdc3c7", "#95a5a6", "#e67e22", "#8e44ad"]
+
+    # Our results (Qwen3-4B, 104 problems, 2 MCMC steps, 1024 tokens)
+    our_methods = ["Greedy", "Temp\n(T=0.25)", "Power\nSampling", "Blend\n× PS"]
+    our_accs = [71.2, 70.2, 72.1, 77.9]
+    our_colors = ["#bdc3c7", "#95a5a6", "#e67e22", "#e74c3c"]
+
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5), sharey=True)
+
+    # Paper
+    bars1 = ax1.bar(range(len(paper_methods)), paper_accs, color=paper_colors,
+                    width=0.6, edgecolor="white", linewidth=1.5)
+    for bar, acc in zip(bars1, paper_accs):
+        ax1.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.8,
+                 f"{acc}%", ha="center", va="bottom", fontsize=11, fontweight="bold")
+    ax1.set_xticks(range(len(paper_methods)))
+    ax1.set_xticklabels(paper_methods, fontsize=9)
+    ax1.set_ylabel("Accuracy (%)", fontsize=12)
+    ax1.set_title("Original Paper\nQwen2.5-Math-7B · 500 problems\n10 MCMC steps · 3072 tokens",
+                   fontsize=11, fontweight="bold")
+    ax1.set_ylim(0, 92)
+    ax1.spines["top"].set_visible(False)
+    ax1.spines["right"].set_visible(False)
+    # PS gain annotation
+    ax1.annotate("", xy=(2, 74.8), xytext=(0, 49.6),
+                 arrowprops=dict(arrowstyle="->", lw=1.5, color="#e67e22", connectionstyle="arc3,rad=0.3"))
+    ax1.text(0.5, 58, "+25.2 pp", fontsize=9, color="#e67e22", fontweight="bold")
+
+    # Ours
+    bars2 = ax2.bar(range(len(our_methods)), our_accs, color=our_colors,
+                    width=0.6, edgecolor="white", linewidth=1.5)
+    for bar, acc in zip(bars2, our_accs):
+        ax2.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.8,
+                 f"{acc}%", ha="center", va="bottom", fontsize=11, fontweight="bold")
+    ax2.set_xticks(range(len(our_methods)))
+    ax2.set_xticklabels(our_methods, fontsize=9)
+    ax2.set_title("Ours (This Work)\nQwen3-4B · 104 problems\n2 MCMC steps · 1024 tokens",
+                   fontsize=11, fontweight="bold")
+    ax2.spines["top"].set_visible(False)
+    ax2.spines["right"].set_visible(False)
+    # Blend×PS gain annotation
+    ax2.annotate("", xy=(3, 77.9), xytext=(0, 71.2),
+                 arrowprops=dict(arrowstyle="->", lw=1.5, color="#e74c3c", connectionstyle="arc3,rad=0.3"))
+    ax2.text(0.8, 73, "+6.7 pp", fontsize=9, color="#e74c3c", fontweight="bold")
+    # Paper PS reference line
+    ax2.axhline(y=74.8, color="#e67e22", linestyle="--", alpha=0.5, linewidth=1)
+    ax2.text(3.4, 75.3, "Paper PS", fontsize=8, color="#e67e22", alpha=0.7)
+    # Paper GRPO reference line
+    ax2.axhline(y=78.5, color="#8e44ad", linestyle="--", alpha=0.5, linewidth=1)
+    ax2.text(3.4, 79.0, "Paper GRPO", fontsize=8, color="#8e44ad", alpha=0.7)
+
+    plt.tight_layout()
+    plt.savefig(OUTPUT_DIR / "fig_math500_paper_comparison.png", dpi=150, bbox_inches="tight")
+    plt.close()
+    print("  Saved fig_math500_paper_comparison.png")
+
+
 def main() -> None:
     print("Loading results...")
     results = load_results()
@@ -253,6 +315,7 @@ def main() -> None:
     fig_difficulty_stratification(results)
     fig_overlap_venn(results)
     fig_architecture_diagram()
+    fig_paper_comparison()
     print("Done!")
 
 
