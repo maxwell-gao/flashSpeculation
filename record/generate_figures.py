@@ -5,28 +5,30 @@ import json
 from pathlib import Path
 
 import matplotlib
+
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-import matplotlib.ticker as mticker
 import numpy as np
 
 # ── Style ──
-plt.rcParams.update({
-    "font.family": "serif",
-    "font.serif": ["Times New Roman", "DejaVu Serif"],
-    "font.size": 11,
-    "axes.titlesize": 13,
-    "axes.labelsize": 12,
-    "xtick.labelsize": 10,
-    "ytick.labelsize": 10,
-    "legend.fontsize": 10,
-    "figure.dpi": 200,
-    "savefig.dpi": 200,
-    "savefig.bbox": "tight",
-    "savefig.pad_inches": 0.15,
-    "axes.spines.top": False,
-    "axes.spines.right": False,
-})
+plt.rcParams.update(
+    {
+        "font.family": "serif",
+        "font.serif": ["Times New Roman", "DejaVu Serif"],
+        "font.size": 11,
+        "axes.titlesize": 13,
+        "axes.labelsize": 12,
+        "xtick.labelsize": 10,
+        "ytick.labelsize": 10,
+        "legend.fontsize": 10,
+        "figure.dpi": 200,
+        "savefig.dpi": 200,
+        "savefig.bbox": "tight",
+        "savefig.pad_inches": 0.15,
+        "axes.spines.top": False,
+        "axes.spines.right": False,
+    }
+)
 
 ROOT = Path(__file__).resolve().parent.parent
 OUT = ROOT / "record"
@@ -88,7 +90,7 @@ def fig_bucket_rank_comparison():
         for bk in bucket_keys:
             d = agg.get(bk, {})
             ranks.append(d.get("mean_rank_draft", 0) if d.get("n_tokens", 0) > 0 else 0)
-        bars = ax.bar(
+        ax.bar(
             x + (i - 1) * width,
             ranks,
             width,
@@ -138,24 +140,42 @@ def fig_bucket_rank_comparison():
         rank_wins.append(d["pct_rank_draft_better"] * 100)
 
     bars_p = ax2.bar(
-        x2 - w2 / 2, prob_wins, w2,
-        label="% prob wins", color="#A8D8A8", edgecolor="white", linewidth=0.5,
+        x2 - w2 / 2,
+        prob_wins,
+        w2,
+        label="% prob wins",
+        color="#A8D8A8",
+        edgecolor="white",
+        linewidth=0.5,
     )
     bars_r = ax2.bar(
-        x2 + w2 / 2, rank_wins, w2,
-        label="% rank wins", color="#6B98C9", edgecolor="white", linewidth=0.5,
+        x2 + w2 / 2,
+        rank_wins,
+        w2,
+        label="% rank wins",
+        color="#6B98C9",
+        edgecolor="white",
+        linewidth=0.5,
     )
 
     # Add value labels
     for bar in bars_p:
         ax2.text(
-            bar.get_x() + bar.get_width() / 2, bar.get_height() + 1.5,
-            f"{bar.get_height():.0f}%", ha="center", va="bottom", fontsize=9,
+            bar.get_x() + bar.get_width() / 2,
+            bar.get_height() + 1.5,
+            f"{bar.get_height():.0f}%",
+            ha="center",
+            va="bottom",
+            fontsize=9,
         )
     for bar in bars_r:
         ax2.text(
-            bar.get_x() + bar.get_width() / 2, bar.get_height() + 1.5,
-            f"{bar.get_height():.0f}%", ha="center", va="bottom", fontsize=9,
+            bar.get_x() + bar.get_width() / 2,
+            bar.get_height() + 1.5,
+            f"{bar.get_height():.0f}%",
+            ha="center",
+            va="bottom",
+            fontsize=9,
         )
 
     ax2.axhline(50, color="gray", linewidth=0.8, linestyle=":", alpha=0.6)
@@ -166,7 +186,8 @@ def fig_bucket_rank_comparison():
     ax2.set_ylim(0, 100)
     ax2.legend(loc="upper left", framealpha=0.9)
     ax2.set_title(
-        "(b) Prob wins vs rank wins (p_target < 0.01)", fontweight="bold",
+        "(b) Prob wins vs rank wins (p_target < 0.01)",
+        fontweight="bold",
     )
 
     fig.savefig(OUT / "fig_bucket_rank_comparison.png")
@@ -201,7 +222,10 @@ def fig_signal_decomposition():
             bar.get_x() + bar.get_width() / 2,
             y * 1.15,
             f"{rank:,}",
-            ha="center", va="bottom", fontsize=10, fontweight="bold",
+            ha="center",
+            va="bottom",
+            fontsize=10,
+            fontweight="bold",
         )
 
     # Add improvement arrows between bars
@@ -219,16 +243,25 @@ def fig_signal_decomposition():
         mid_x = (x[i_from] + x[i_to]) / 2
         mid_y = np.sqrt(y_from * y_to)  # geometric mean for log scale
         ax.annotate(
-            "", xy=(x[i_to], y_to * 1.3), xytext=(x[i_from], y_from * 0.8),
+            "",
+            xy=(x[i_to], y_to * 1.3),
+            xytext=(x[i_from], y_from * 0.8),
             arrowprops=dict(
-                arrowstyle="->", color="#555555", lw=1.2,
+                arrowstyle="->",
+                color="#555555",
+                lw=1.2,
                 connectionstyle="arc3,rad=-0.2",
             ),
         )
         ax.text(
-            mid_x, mid_y * 1.5, label,
-            ha="center", va="center", fontsize=9,
-            color="#555555", fontweight="bold",
+            mid_x,
+            mid_y * 1.5,
+            label,
+            ha="center",
+            va="center",
+            fontsize=9,
+            color="#555555",
+            fontweight="bold",
             bbox=dict(boxstyle="round,pad=0.2", facecolor="white", edgecolor="#CCCCCC", alpha=0.9),
         )
 
@@ -239,7 +272,8 @@ def fig_signal_decomposition():
     ax.set_ylabel("Mean rank of gold token (lower is better)")
     ax.set_title(
         "Signal Decomposition on Hard Tokens (p_target < 0.01, n=71)",
-        fontweight="bold", pad=12,
+        fontweight="bold",
+        pad=12,
     )
 
     # Add a subtle grid
@@ -287,12 +321,22 @@ def fig_block_rank_decay():
 
     ax.plot(blocks, mean_rt, "k--o", label="Target", markersize=5, linewidth=1.5)
     ax.plot(
-        blocks, mean_rd_mask, "-s",
-        color="#4C9ED9", label="Draft (mask)", markersize=5, linewidth=1.5,
+        blocks,
+        mean_rd_mask,
+        "-s",
+        color="#4C9ED9",
+        label="Draft (mask)",
+        markersize=5,
+        linewidth=1.5,
     )
     ax.plot(
-        blocks, mean_rd_gold, "-^",
-        color="#E8A838", label="Draft (gold)", markersize=5, linewidth=1.5,
+        blocks,
+        mean_rd_gold,
+        "-^",
+        color="#E8A838",
+        label="Draft (gold)",
+        markersize=5,
+        linewidth=1.5,
     )
 
     # Highlight Block 0
@@ -324,12 +368,22 @@ def fig_block_rank_decay():
 
     ax2.plot(blocks, med_rt, "k--o", label="Target", markersize=5, linewidth=1.5)
     ax2.plot(
-        blocks, med_rd_mask, "-s",
-        color="#4C9ED9", label="Draft (mask)", markersize=5, linewidth=1.5,
+        blocks,
+        med_rd_mask,
+        "-s",
+        color="#4C9ED9",
+        label="Draft (mask)",
+        markersize=5,
+        linewidth=1.5,
     )
     ax2.plot(
-        blocks, med_rd_gold, "-^",
-        color="#E8A838", label="Draft (gold)", markersize=5, linewidth=1.5,
+        blocks,
+        med_rd_gold,
+        "-^",
+        color="#E8A838",
+        label="Draft (gold)",
+        markersize=5,
+        linewidth=1.5,
     )
 
     ax2.axvspan(-0.3, 0.3, alpha=0.08, color="green")
@@ -386,7 +440,9 @@ def fig_architecture_comparison():
     for i in tap_layers:
         y = 5.3 - i * 0.55
         ax.annotate(
-            "", xy=(5.5, y + 0.2), xytext=(4.1, y + 0.2),
+            "",
+            xy=(5.5, y + 0.2),
+            xytext=(4.1, y + 0.2),
             arrowprops=dict(arrowstyle="->", lw=0.8, color="#E8A838", linestyle="--"),
         )
 
@@ -410,9 +466,12 @@ def fig_architecture_comparison():
     # "same lm_head" connector
     ax.annotate(
         "shared weights",
-        xy=(3.8, 1.55), xytext=(6.2, 1.55),
+        xy=(3.8, 1.55),
+        xytext=(6.2, 1.55),
         arrowprops=dict(arrowstyle="<->", lw=1.2, color="#333"),
-        ha="center", va="center", fontsize=8,
+        ha="center",
+        va="center",
+        fontsize=8,
         color="#333",
     )
 
@@ -445,17 +504,27 @@ def fig_extended_context():
         rank_target = [std_blocks[str(b)]["mean_rank_target"] for b in blocks]
         rank_std = [std_blocks[str(b)]["mean_rank_draft"] for b in blocks]
         rank_full = [full_blocks[str(b)]["mean_rank_draft"] for b in blocks]
-        ctx_std = [std_blocks[str(b)]["mean_ctx_positions"] for b in blocks]
+        [std_blocks[str(b)]["mean_ctx_positions"] for b in blocks]
         ctx_full = [full_blocks[str(b)]["mean_ctx_positions"] for b in blocks]
 
         ax.plot(blocks, rank_target, "k--o", label="Target", markersize=5, linewidth=1.5, zorder=5)
         ax.plot(
-            blocks, rank_std, "-s",
-            color="#4C9ED9", label="Draft (standard ctx)", markersize=6, linewidth=1.8,
+            blocks,
+            rank_std,
+            "-s",
+            color="#4C9ED9",
+            label="Draft (standard ctx)",
+            markersize=6,
+            linewidth=1.8,
         )
         ax.plot(
-            blocks, rank_full, "^",
-            color="#C75B5B", label="Draft (full ctx)", markersize=6, linewidth=1.8,
+            blocks,
+            rank_full,
+            "^",
+            color="#C75B5B",
+            label="Draft (full ctx)",
+            markersize=6,
+            linewidth=1.8,
             linestyle="--",
         )
 
@@ -467,7 +536,9 @@ def fig_extended_context():
                     xy=(b, rank_full[i]),
                     xytext=(0, 10),
                     textcoords="offset points",
-                    fontsize=7, color="#C75B5B", ha="center",
+                    fontsize=7,
+                    color="#C75B5B",
+                    ha="center",
                 )
 
         ax.set_yscale("log")
@@ -482,10 +553,15 @@ def fig_extended_context():
 
         # Add a text box with the conclusion
         ax.text(
-            0.5, 0.02,
+            0.5,
+            0.02,
             "Full context ≈ standard → context starvation falsified",
-            transform=ax.transAxes, fontsize=8, ha="center", va="bottom",
-            style="italic", color="#555",
+            transform=ax.transAxes,
+            fontsize=8,
+            ha="center",
+            va="bottom",
+            style="italic",
+            color="#555",
             bbox=dict(boxstyle="round,pad=0.3", facecolor="#FFF8E1", edgecolor="#DDD", alpha=0.9),
         )
 
@@ -494,10 +570,137 @@ def fig_extended_context():
     print(f"Saved: {OUT / 'fig_extended_context.png'}")
 
 
+# =====================================================================
+# Figure 6: Layer probe rank profile
+# =====================================================================
+def fig_layer_probe_ranks():
+    probe_path = ROOT / "results/phase0/probe_gsm8k.json"
+    if not probe_path.exists():
+        print(f"Skipping fig_layer_probe_ranks: {probe_path} not found.")
+        return
+
+    with open(probe_path) as f:
+        probe_data = json.load(f)
+
+    agg = probe_data["aggregate"]
+    overall = agg["overall"]
+    low_conf = agg["by_target_confidence"].get("p_target < 0.01", {})
+
+    fig, axes = plt.subplots(1, 2, figsize=(12, 5), gridspec_kw={"wspace": 0.32})
+
+    # ── Panel A: Per-layer rank profile ──
+    ax = axes[0]
+
+    # Collect per-layer data in order
+    layer_ids = [1, 9, 17, 25, 33, 35]
+    layer_labels = ["L1", "L9", "L17", "L25", "L33", "L35\n(target)"]
+    layer_ranks = [overall.get(f"mean_rank_layer_{lid}", None) for lid in layer_ids]
+    layer_ranks_low = [low_conf.get(f"mean_rank_layer_{lid}", None) for lid in layer_ids]
+
+    x = np.arange(len(layer_ids))
+    width = 0.35
+
+    bars_all = ax.bar(
+        x - width / 2, layer_ranks, width,
+        label="All tokens", color="#4C9ED9", edgecolor="white", linewidth=0.5,
+    )
+    if all(v is not None for v in layer_ranks_low):
+        ax.bar(
+            x + width / 2, layer_ranks_low, width,
+            label="Hard tokens (p<0.01)", color="#C75B5B", edgecolor="white", linewidth=0.5,
+        )
+
+    # Add fc-only as a horizontal reference
+    fc_rank = overall.get("mean_rank_fc_only", None)
+    if fc_rank is not None:
+        ax.axhline(fc_rank, color="#E8A838", linewidth=1.5, linestyle="--", label=f"fc-only ({fc_rank:,.0f})")
+
+    # Add rank labels on bars
+    for bar in bars_all:
+        y = bar.get_height()
+        if y > 0:
+            ax.text(
+                bar.get_x() + bar.get_width() / 2, y * 1.3,
+                f"{y:,.0f}", ha="center", va="bottom", fontsize=7, rotation=0,
+            )
+
+    ax.set_yscale("log")
+    ax.set_ylim(10, 300000)
+    ax.set_xticks(x)
+    ax.set_xticklabels(layer_labels)
+    ax.set_xlabel("Layer index")
+    ax.set_ylabel("Mean rank (log scale, lower is better)")
+    ax.set_title("(a) Per-layer rank profile", fontweight="bold")
+    ax.legend(loc="upper left", framealpha=0.9, fontsize=9)
+    ax.yaxis.grid(True, alpha=0.3, linestyle="--")
+    ax.set_axisbelow(True)
+
+    # ── Panel B: Blend sweep ──
+    ax2 = axes[1]
+
+    betas = [0.0, 0.01, 0.05, 0.1, 0.2, 0.3, 0.5]
+    beta_labels = ["0\n(target)", "0.01", "0.05", "0.1", "0.2", "0.3", "0.5"]
+
+    # Overall mean ranks
+    blend_ranks_all = [overall["mean_rank_target"]]
+    for b in betas[1:]:
+        blend_ranks_all.append(overall.get(f"mean_rank_blend_{b}", 0))
+
+    # Low-conf mean ranks
+    blend_ranks_low = [low_conf.get("mean_rank_target", 0)]
+    for b in betas[1:]:
+        blend_ranks_low.append(low_conf.get(f"mean_rank_blend_{b}", 0))
+
+    # % beats target on low-conf
+    blend_pct_low = [0]
+    for b in betas[1:]:
+        blend_pct_low.append(low_conf.get(f"pct_rank_blend_{b}_better", 0) * 100)
+
+    ax2.plot(
+        range(len(betas)), blend_ranks_all, "-o",
+        color="#4C9ED9", label="All tokens (mean rank)", markersize=6, linewidth=1.8,
+    )
+    ax2.plot(
+        range(len(betas)), blend_ranks_low, "-s",
+        color="#C75B5B", label="Hard tokens (mean rank)", markersize=6, linewidth=1.8,
+    )
+
+    # Secondary axis for % beats target
+    ax2r = ax2.twinx()
+    ax2r.bar(
+        range(len(betas)), blend_pct_low, width=0.4,
+        alpha=0.25, color="#2D8E2D", label="% beats target (hard)",
+    )
+    ax2r.set_ylabel("% beats target on hard tokens", color="#2D8E2D")
+    ax2r.tick_params(axis="y", labelcolor="#2D8E2D")
+    ax2r.set_ylim(0, 40)
+
+    ax2.set_yscale("log")
+    ax2.set_ylim(10, 50000)
+    ax2.set_xticks(range(len(betas)))
+    ax2.set_xticklabels(beta_labels)
+    ax2.set_xlabel("Blend coefficient β")
+    ax2.set_ylabel("Mean rank (log scale)")
+    ax2.set_title("(b) Logit blend: (1−β)·target + β·layer_33", fontweight="bold")
+
+    # Combine legends
+    lines1, labels1 = ax2.get_legend_handles_labels()
+    lines2, labels2 = ax2r.get_legend_handles_labels()
+    ax2.legend(lines1 + lines2, labels1 + labels2, loc="upper left", framealpha=0.9, fontsize=8)
+
+    ax2.yaxis.grid(True, alpha=0.3, linestyle="--")
+    ax2.set_axisbelow(True)
+
+    fig.savefig(OUT / "fig_layer_probe_ranks.png")
+    plt.close(fig)
+    print(f"Saved: {OUT / 'fig_layer_probe_ranks.png'}")
+
+
 if __name__ == "__main__":
     fig_bucket_rank_comparison()
     fig_signal_decomposition()
     fig_block_rank_decay()
     fig_architecture_comparison()
     fig_extended_context()
+    fig_layer_probe_ranks()
     print("\nAll figures generated.")

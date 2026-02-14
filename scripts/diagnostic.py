@@ -101,17 +101,11 @@ def load_diagnostic_dataset(name: str) -> list[tuple[str, str]]:
     elif name == "alpaca":
         ds = load_dataset("tatsu-lab/alpaca", split="train")
         for ex in ds:
-            prompt = (
-                f"{ex['instruction']}\n\nInput:\n{ex['input']}"
-                if ex["input"]
-                else ex["instruction"]
-            )
+            prompt = f"{ex['instruction']}\n\nInput:\n{ex['input']}" if ex["input"] else ex["instruction"]
             pairs.append((prompt, ex["output"]))
 
     else:
-        raise ValueError(
-            f"Unknown dataset: {name}. Supported: gsm8k, math500, alpaca"
-        )
+        raise ValueError(f"Unknown dataset: {name}. Supported: gsm8k, math500, alpaca")
 
     return pairs
 
@@ -219,7 +213,10 @@ def compute_logit_comparison(
         prompt_emb = target.model.embed_tokens(prompt_ids)
         mask_id = draft_model.mask_token_id
         mask_answer_ids = torch.full(
-            (1, answer_len), mask_id, dtype=torch.long, device=device,
+            (1, answer_len),
+            mask_id,
+            dtype=torch.long,
+            device=device,
         )
         # Position 0 of each block is the "known" token — overwrite with gold
         for b in range(n_full_blocks):
@@ -276,7 +273,7 @@ def compute_logit_comparison(
             ctx = target_hidden[:, ctx_start:block_start, :]
             noise = noise_embedding[:, block_start:block_end, :]
             ctx_len = ctx.shape[1]
-            pos = all_position_ids[:, block_start - ctx_len:block_end]
+            pos = all_position_ids[:, block_start - ctx_len : block_end]
 
         ctx_positions_per_block.append(ctx.shape[1])
 
@@ -371,20 +368,13 @@ def compute_logit_comparison(
         "pct_draft_wins": sum(1 for d in deltas if d > 0) / n_tokens,
         "mean_p_target": float(np.mean([t["p_target"] for t in token_results])),
         "mean_p_draft": float(np.mean([t["p_draft"] for t in token_results])),
-        "mean_log_p_target": float(
-            np.mean([t["log_p_target"] for t in token_results])
-        ),
-        "mean_log_p_draft": float(
-            np.mean([t["log_p_draft"] for t in token_results])
-        ),
+        "mean_log_p_target": float(np.mean([t["log_p_target"] for t in token_results])),
+        "mean_log_p_draft": float(np.mean([t["log_p_draft"] for t in token_results])),
         "mean_rank_target": float(np.mean(ranks_t)),
         "mean_rank_draft": float(np.mean(ranks_d)),
         "median_rank_target": float(np.median(ranks_t)),
         "median_rank_draft": float(np.median(ranks_d)),
-        "pct_rank_draft_better": sum(
-            1 for rt, rd in zip(ranks_t, ranks_d) if rd < rt
-        )
-        / n_tokens,
+        "pct_rank_draft_better": sum(1 for rt, rd in zip(ranks_t, ranks_d) if rd < rt) / n_tokens,
         "tokens": token_results,
     }
 
@@ -414,20 +404,13 @@ def compute_aggregate_stats(results: list[dict]) -> dict:
         "pct_draft_wins": sum(1 for d in deltas if d > 0) / len(deltas),
         "mean_p_target": float(np.mean([t["p_target"] for t in all_tokens])),
         "mean_p_draft": float(np.mean([t["p_draft"] for t in all_tokens])),
-        "mean_log_p_target": float(
-            np.mean([t["log_p_target"] for t in all_tokens])
-        ),
-        "mean_log_p_draft": float(
-            np.mean([t["log_p_draft"] for t in all_tokens])
-        ),
+        "mean_log_p_target": float(np.mean([t["log_p_target"] for t in all_tokens])),
+        "mean_log_p_draft": float(np.mean([t["log_p_draft"] for t in all_tokens])),
         "mean_rank_target": float(np.mean(ranks_t)),
         "mean_rank_draft": float(np.mean(ranks_d)),
         "median_rank_target": float(np.median(ranks_t)),
         "median_rank_draft": float(np.median(ranks_d)),
-        "pct_rank_draft_better": sum(
-            1 for rt, rd in zip(ranks_t, ranks_d) if rd < rt
-        )
-        / len(all_tokens),
+        "pct_rank_draft_better": sum(1 for rt, rd in zip(ranks_t, ranks_d) if rd < rt) / len(all_tokens),
     }
 
     # Buckets by target confidence
@@ -457,10 +440,7 @@ def compute_aggregate_stats(results: list[dict]) -> dict:
             "mean_p_draft": float(np.mean([t["p_draft"] for t in bt])),
             "mean_rank_target": float(np.mean(brt)),
             "mean_rank_draft": float(np.mean(brd)),
-            "pct_rank_draft_better": sum(
-                1 for rt, rd in zip(brt, brd) if rd < rt
-            )
-            / len(bt),
+            "pct_rank_draft_better": sum(1 for rt, rd in zip(brt, brd) if rd < rt) / len(bt),
         }
 
     # Per-block statistics
@@ -482,10 +462,7 @@ def compute_aggregate_stats(results: list[dict]) -> dict:
             "mean_rank_draft": float(np.mean(brd)),
             "median_rank_target": float(np.median(brt)),
             "median_rank_draft": float(np.median(brd)),
-            "pct_rank_draft_better": sum(
-                1 for rt, rd in zip(brt, brd) if rd < rt
-            )
-            / len(bt),
+            "pct_rank_draft_better": sum(1 for rt, rd in zip(brt, brd) if rd < rt) / len(bt),
         }
 
     return {
@@ -511,9 +488,7 @@ def print_summary(agg: dict, mode: str, extra_context: int = 0) -> None:
     ec_tag = ""
     if extra_context != 0:
         ec_tag = f", extra_ctx={'full' if extra_context < 0 else extra_context}"
-    console.rule(
-        f"[bold]Phase 0.3 \u2014 Go/No-Go Diagnostic [mode={mode}{ec_tag}][/bold]"
-    )
+    console.rule(f"[bold]Phase 0.3 \u2014 Go/No-Go Diagnostic [mode={mode}{ec_tag}][/bold]")
     console.print(f"[dim]{MODE_DESCRIPTIONS[mode]}[/dim]")
     if extra_context != 0:
         if extra_context < 0:
@@ -544,7 +519,8 @@ def print_summary(agg: dict, mode: str, extra_context: int = 0) -> None:
     tbl.add_row("Median rank target", f"{overall['median_rank_target']:.0f}")
     tbl.add_row("Median rank draft", f"{overall['median_rank_draft']:.0f}")
     tbl.add_row(
-        "% draft better rank", f"{overall['pct_rank_draft_better']:.1%}",
+        "% draft better rank",
+        f"{overall['pct_rank_draft_better']:.1%}",
     )
     console.print(tbl)
 
@@ -766,9 +742,7 @@ def main() -> None:
 
         attn_impl = "flash_attention_2"
     except ImportError:
-        console.print(
-            "[yellow]flash_attn not installed, falling back to SDPA[/yellow]"
-        )
+        console.print("[yellow]flash_attn not installed, falling back to SDPA[/yellow]")
         attn_impl = "sdpa"
 
     # Load models
@@ -888,9 +862,7 @@ def main() -> None:
             if len(results) > 100:
                 for ex in output_data["examples"]:
                     del ex["tokens"]
-                console.print(
-                    "[dim]Per-token data stripped from JSON (>100 examples)[/dim]"
-                )
+                console.print("[dim]Per-token data stripped from JSON (>100 examples)[/dim]")
 
             with open(out_path, "w") as f:
                 json.dump(output_data, f, indent=2, ensure_ascii=False)

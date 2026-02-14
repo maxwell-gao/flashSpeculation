@@ -75,7 +75,10 @@ def load_and_process_dataset(data_name: str):
     # Coding datasets
     elif data_name == "humaneval":
         dataset = load_dataset("openai/openai_humaneval", split="test")
-        prompt_fmt = "Write a solution to the following problem and make sure that it passes the tests:\n```python\n{prompt}\n```"
+        prompt_fmt = (
+            "Write a solution to the following problem and make sure that it passes"
+            " the tests:\n```python\n{prompt}\n```"
+        )
         dataset = dataset.map(lambda x: {"turns": [prompt_fmt.format(**x)]})
 
     elif data_name == "mbpp":

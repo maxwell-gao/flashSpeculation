@@ -256,7 +256,8 @@ def main() -> None:
     parser.add_argument(
         "--batch-requests",
         action="store_true",
-        help="Send prompts as server-side batched /generate requests (batch size = concurrency) instead of client-side concurrent requests.",
+        help="Send prompts as server-side batched /generate requests"
+        " (batch size = concurrency) instead of client-side concurrent requests.",
     )
     parser.add_argument("--max-new-tokens", type=int, default=2048)
     parser.add_argument("--timeout-s", type=int, default=3600)

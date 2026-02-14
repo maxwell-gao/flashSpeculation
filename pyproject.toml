@@ -45,6 +45,7 @@ flash-attn = ["torch", "setuptools"]
 [tool.ruff]
 line-length = 120
 target-version = "py311"
+exclude = ["ref"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "W"]
