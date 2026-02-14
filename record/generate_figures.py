@@ -209,7 +209,17 @@ def fig_signal_decomposition():
         "+Gold\nleakage",
         "Target\n(36 layers)",
     ]
-    ranks = [76000, 12920, 2161, 1476, 305]
+    # Read from actual data: low-conf bucket
+    lc_random = modes_data["random"]["aggregate"]["by_target_confidence"]["p_target < 0.01"]
+    lc_mask = modes_data["mask"]["aggregate"]["by_target_confidence"]["p_target < 0.01"]
+    lc_gold = modes_data["gold"]["aggregate"]["by_target_confidence"]["p_target < 0.01"]
+    ranks = [
+        76000,
+        int(round(lc_random["mean_rank_draft"])),
+        int(round(lc_mask["mean_rank_draft"])),
+        int(round(lc_gold["mean_rank_draft"])),
+        int(round(lc_mask["mean_rank_target"])),
+    ]
     colors_bar = ["#CCCCCC", "#C75B5B", "#4C9ED9", "#E8A838", "#2D8E2D"]
 
     x = np.arange(len(labels))
@@ -231,9 +241,9 @@ def fig_signal_decomposition():
     # Add improvement arrows between bars
     arrow_data = [
         (0, 1, ""),
-        (1, 2, "6.0x"),
-        (2, 3, "1.5x"),
-        (3, 4, "4.8x"),
+        (1, 2, f"{ranks[1]/ranks[2]:.1f}x"),
+        (2, 3, f"{ranks[2]/ranks[3]:.1f}x"),
+        (3, 4, f"{ranks[3]/ranks[4]:.1f}x"),
     ]
     for i_from, i_to, label in arrow_data:
         if not label:
@@ -271,7 +281,7 @@ def fig_signal_decomposition():
     ax.set_xticklabels(labels)
     ax.set_ylabel("Mean rank of gold token (lower is better)")
     ax.set_title(
-        "Signal Decomposition on Hard Tokens (p_target < 0.01, n=71)",
+        f"Signal Decomposition on Hard Tokens (p_target < 0.01, n={lc_mask['n_tokens']:,})",
         fontweight="bold",
         pad=12,
     )
@@ -291,24 +301,19 @@ def fig_signal_decomposition():
 def fig_block_rank_decay():
     fig, axes = plt.subplots(1, 2, figsize=(11, 4.2), gridspec_kw={"wspace": 0.35})
 
-    # Collect per-block data for both modes
+    # Use aggregate by_block data from JSON
     block_data = {}
     for m in ["mask", "gold"]:
-        by_block = {}
-        for ex in modes_data[m]["examples"]:
-            pl = ex["prompt_len"]
-            for t in ex["tokens"]:
-                bi = (t["pos"] - pl) // BS
-                by_block.setdefault(bi, []).append(t)
+        by_block_raw = modes_data[m]["aggregate"]["by_block"]
         block_data[m] = {}
-        for bi in sorted(by_block.keys()):
-            toks = by_block[bi]
+        for bi_str, bs in by_block_raw.items():
+            bi = int(bi_str)
             block_data[m][bi] = {
-                "n": len(toks),
-                "mean_rank_target": np.mean([t["rank_target"] for t in toks]),
-                "mean_rank_draft": np.mean([t["rank_draft"] for t in toks]),
-                "median_rank_target": np.median([t["rank_target"] for t in toks]),
-                "median_rank_draft": np.median([t["rank_draft"] for t in toks]),
+                "n": bs["n_tokens"],
+                "mean_rank_target": bs["mean_rank_target"],
+                "mean_rank_draft": bs["mean_rank_draft"],
+                "median_rank_target": bs.get("median_rank_target", bs["mean_rank_target"]),
+                "median_rank_draft": bs.get("median_rank_draft", bs["mean_rank_draft"]),
             }
 
     blocks = sorted(block_data["mask"].keys())

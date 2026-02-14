@@ -2,7 +2,7 @@
 
 **Date**: 2026-02-14 (updated)  
 **Model**: Qwen3-4B (target) + DFlash-b16 (draft)  
-**Dataset**: GSM8K test set (5 examples, 465 compared tokens)  
+**Dataset**: GSM8K test set (128 examples, 13,275 compared tokens)  
 **Scripts**: `experiments/diagnostic.py`, `experiments/probe.py`
 
 ## 1. Motivation
@@ -53,25 +53,25 @@ In full-context mode, Block 1 receives ~100 positions, Block 6 receives ~179 pos
 
 | Mode | Mean p_target | Mean p_draft | Mean rank_target | Mean rank_draft | % rank draft wins |
 |------|:---:|:---:|:---:|:---:|:---:|
-| gold | 0.7484 | 0.1320 | 48 | 539 | 3.9% |
-| mask | 0.7484 | 0.1168 | 48 | 526 | 3.0% |
-| random | 0.7484 | 0.0509 | 48 | 9,145 | 3.2% |
+| gold | 0.7862 | 0.1755 | 16 | 515 | 3.8% |
+| mask | 0.7862 | 0.1963 | 16 | 697 | 2.3% |
+| random | 0.7862 | 0.0564 | 16 | 6,489 | 2.2% |
 
-The draft model is a substantially weaker decoder than the target across all conditions. The target's mean rank of 48 indicates it typically places the gold token in its top 50 predictions; the draft, even in the best case (mask, rank 526), places it ~10x further down.
+The draft model is a substantially weaker decoder than the target across all conditions. The target's mean rank of 16 indicates it typically places the gold token in its top 16 predictions; the draft, even in the best case (gold, rank 515), places it ~32x further down.
 
 ### 3.2 Breakdown by Target Confidence
 
 **Figure 1** (see `fig_bucket_rank_comparison.png`)
 
-Low-confidence bucket (p_target < 0.01, n = 71 tokens):
+Low-confidence bucket (p_target < 0.01, n = 1,637 tokens):
 
 | Mode | Mean rank_target | Mean rank_draft | % rank draft wins | % prob draft wins |
 |------|:---:|:---:|:---:|:---:|
-| gold | 305 | 1,476 | 18.3% | 87.3% |
-| mask | 305 | 2,161 | 14.1% | 78.9% |
-| random | 305 | 12,920 | 16.9% | 73.2% |
+| gold | 119 | 1,783 | 21.9% | 80.5% |
+| mask | 119 | 2,869 | 12.6% | 68.8% |
+| random | 119 | 8,986 | 13.7% | 69.5% |
 
-The 87% "probability wins" in `gold` mode — the original result that appeared to show draft advantage — **collapses to 18% on rank**, and the `random` ablation achieves 73% probability wins despite having no meaningful signal (rank 12,920). This conclusively demonstrates the probability metric was dominated by entropy effects.
+The 81% "probability wins" in `gold` mode — the original result that appeared to show draft advantage — **collapses to 22% on rank**, and the `random` ablation achieves 70% probability wins despite having no meaningful signal (rank 8,986). This conclusively demonstrates the probability metric was dominated by entropy effects.
 
 ### 3.3 Causal Decomposition
 
@@ -81,32 +81,32 @@ Using the low-confidence bucket as the diagnostic window:
 
 | Component | Computation | Rank improvement | Factor |
 |-----------|-------------|:---:|:---:|
-| Random baseline | — | 12,920 | 1.0x |
-| + Intermediate layer signal | random → mask | 12,920 → 2,161 | **6.0x** |
-| + Gold token leakage | mask → gold | 2,161 → 1,476 | 1.5x |
-| Combined | random → gold | 12,920 → 1,476 | 8.8x |
-| Target (36 layers) | — | 305 | 42.3x |
-| Chance level | — | ~76,000 | 0.17x |
+| Random baseline | — | 8,986 | 1.0x |
+| + Intermediate layer signal | random → mask | 8,986 → 2,869 | **3.1x** |
+| + Gold token leakage | mask → gold | 2,869 → 1,783 | 1.6x |
+| Combined | random → gold | 8,986 → 1,783 | 5.0x |
+| Target (36 layers) | — | 119 | 75.5x |
+| Chance level | — | ~76,000 | 0.12x |
 
-**The intermediate layers provide genuine signal** (6x rank improvement over random), but **this signal falls far short** of the target's 36-layer processing (305 vs 2,161 = 7x gap remains).
+**The intermediate layers provide genuine signal** (3.1x rank improvement over random), but **this signal falls far short** of the target's 36-layer processing (119 vs 2,869 = 24x gap remains).
 
 ### 3.4 Per-Block Analysis
 
 **Figure 3** (see `fig_block_rank_decay.png`)
 
-Block 0 receives the full prompt's intermediate features as context (~84 positions). Subsequent blocks receive only the previous block's 16 positions (+ KV cache).
+Block 0 receives the full prompt's intermediate features as context (~87 positions). Subsequent blocks receive only the previous block's 16 positions (+ KV cache).
 
 | Block | Context positions | rank_target | rank_draft (mask) | rank_draft (gold) |
 |:---:|:---:|:---:|:---:|:---:|
-| 0 | 84 (full prompt) | 174 | **114** | 171 |
-| 1 | 16 | 5 | 2,570 | 1,726 |
-| 2 | 16 | 4 | 115 | 260 |
-| 3 | 16 | 2 | 166 | 94 |
-| 4 | 16 | 2 | 195 | 221 |
-| 5 | 16 | 9 | 43 | 285 |
-| 6 | 16 | 169 | 123 | 1,162 |
+| 0 | 87 (full prompt) | 57 | **1,990** | 1,247 |
+| 1 | 16 | 6 | 1,595 | 1,419 |
+| 2 | 16 | 9 | 348 | 239 |
+| 3 | 16 | 2 | 360 | 233 |
+| 4 | 16 | 3 | 308 | 196 |
+| 5 | 16 | 3 | 129 | 114 |
+| 6 | 16 | 59 | 213 | 212 |
 
-Block 0 is the only block where the draft's rank (114) is competitive with the target's rank (174). However, as Section 3.5 shows, this is **not** caused by richer context — it is a confound from the different difficulty distribution of tokens across blocks.
+With 128 examples, the Block 0 "advantage" observed with 5 samples disappears — Block 0 now shows rank 1,990, worse than later blocks. The higher target rank (57) at Block 0 confirms this position predicts harder tokens (first tokens after prompt). As Section 3.5 shows, this is a **target difficulty confound**, not a context quantity effect.
 
 ### 3.5 Extended Context Experiment: Context Starvation Falsified
 
@@ -116,17 +116,17 @@ We ran the full-context oracle (`--extra-context -1`) alongside the standard con
 
 | Block | ctx (std) | rank_d (std) | ctx (full) | rank_d (full) | Δ rank |
 |:---:|:---:|:---:|:---:|:---:|:---:|
-| 0 | 84 | 114 | 84 | 114 | 0 |
-| 1 | 16 | 2,570 | 100 | 2,561 | **−9** |
-| 2 | 16 | 115 | 116 | 116 | **+1** |
-| 3 | 16 | 166 | 132 | 163 | **−3** |
-| 4 | 16 | 195 | 148 | 192 | **−3** |
-| 5 | 16 | 43 | 163 | 43 | **0** |
-| 6 | 16 | 123 | 179 | 124 | **+1** |
+| 0 | 87 | 1,990 | 87 | 1,990 | 0 |
+| 1 | 16 | 1,595 | 103 | 1,596 | **+1** |
+| 2 | 16 | 348 | 119 | 349 | **+1** |
+| 3 | 16 | 360 | 138 | 361 | **+1** |
+| 4 | 16 | 308 | 157 | 308 | **0** |
+| 5 | 16 | 129 | 177 | 129 | **0** |
+| 6 | 16 | 213 | 195 | 212 | **−1** |
 
-*Table: mask mode. Gold mode shows identical pattern (all Δ < 10).*
+*Table: mask mode (128 examples). Gold mode shows identical pattern (all Δ < 5).*
 
-**Extending context from 16 to 100–179 positions produces zero improvement.** The result is consistent across all 7 blocks, both modes (mask and gold), and all metrics (mean rank, median rank, % rank wins).
+**Extending context from 16 to 103–392 positions produces zero improvement.** The result is consistent across all blocks, both modes (mask and gold), and all metrics (mean rank, median rank, % rank wins).
 
 **Why extending context does not help**: The DFlash attention architecture projects `target_hidden` through per-layer `k_proj`/`v_proj` linear transforms and stores the results in the KV cache:
 
@@ -137,13 +137,13 @@ k, v = past_key_values.update(k, v, ...)  # appended to cache
 
 Since `k_proj`/`v_proj` are **position-independent linear transforms**, the KV cache projections carry the same information as fresh `target_hidden` projections. The cache from Block 0 already contains all prompt context — providing the same `target_hidden` again as fresh input is algebraically redundant (modulo negligible RoPE position differences).
 
-**Reinterpretation of the Block 0 phenomenon**: Block 0's competitive rank (114 vs target 174) is not a context effect. The actual cause is that Block 0 predicts the **hardest tokens** (first tokens after the prompt), where `rank_target = 174` (target is uncertain). Later blocks predict continuation tokens where `rank_target = 2–9` (target is near-certain). The draft cannot match near-certain predictions but can compete when the target is uncertain:
+**Reinterpretation of the Block 0 phenomenon**: Block 0 predicts the **hardest tokens** (first tokens after the prompt), where `rank_target = 57` (target is most uncertain). Later blocks predict continuation tokens where `rank_target = 2–9` (target is near-certain). The draft's absolute rank degrades on these early tokens too, but the *relative* gap varies with difficulty:
 
-| Block | mean p_target | rank_target | rank_draft | Draft competitive? |
-|:---:|:---:|:---:|:---:|:---:|
-| 0 | 0.53 | 174 | 114 | Yes — target is uncertain |
-| 1 | 0.76 | 5 | 2,561 | No — target is confident |
-| 2–4 | 0.72–0.82 | 2–4 | 115–195 | No — target is confident |
+| Block | rank_target | rank_draft | Ratio (draft/target) |
+|:---:|:---:|:---:|:---:|
+| 0 | 57 | 1,990 | 35x |
+| 1 | 6 | 1,595 | 266x |
+| 2–5 | 2–9 | 129–360 | 36–180x |
 
 This is a **target difficulty confound**, not a context quantity effect.
 
@@ -161,40 +161,41 @@ To decompose exactly where information is lost in the DFlash draft pipeline, we 
 
 **Probe D — logit-space blend**: `(1-β) · lm_head(h_35) + β · lm_head(h_33)` for β ∈ {0.01, 0.05, 0.1, 0.2, 0.3, 0.5}. The simplest possible guided decoding — zero extra parameters, zero training.
 
-#### Results (5 examples, 491 tokens)
+#### Results (128 examples, 14,032 tokens)
 
 | Probe | Mean Rank | Median Rank | % beats target | Notes |
 |-------|:---------:|:-----------:|:--------------:|-------|
-| **Target (h_35)** | **47** | **1** | --- | baseline |
-| Layer 35 | 47 | 1 | 0.0% | sanity check = target |
-| Layer 33 | 17,002 | 10 | 1.4% | deepest tapped layer |
-| Layer 25 | 49,816 | 27,322 | 0.2% | |
-| Layer 17 | 100,662 | 119,565 | 0.0% | |
-| Layer 9 | 123,164 | 140,097 | 0.0% | ~random |
-| Layer 1 | 109,135 | 123,116 | 0.0% | ~random |
-| fc-only | 64,275 | 55,125 | 0.0% | **worse than layer 33 alone** |
-| Layer average | 22,845 | 234 | 1.2% | dilutes layer 33 signal |
-| Blend β=0.01 | 49 | 1 | 3.9% | near-target quality |
-| **Blend β=0.1** | **103** | **1** | **6.5%** | best % wins overall |
-| Blend β=0.5 | 4,106 | 1 | 3.5% | too much layer 33 |
+| **Target (h_35)** | **15** | **1** | --- | baseline |
+| Layer 35 | 15 | 1 | 0.0% | sanity check = target |
+| Layer 33 | 12,520 | 12 | 1.4% | deepest tapped layer |
+| Layer 25 | 46,218 | 21,981 | 0.4% | |
+| Layer 17 | 102,804 | 118,558 | 0.0% | |
+| Layer 9 | 124,345 | 140,013 | 0.0% | ~random |
+| Layer 1 | 109,162 | 123,972 | 0.0% | ~random |
+| fc-only | 60,979 | 52,565 | 0.0% | **worse than layer 33 alone** |
+| Layer average | 18,680 | 226 | 1.0% | dilutes layer 33 signal |
+| Blend β=0.01 | 15 | 1 | 2.1% | near-target quality |
+| **Blend β=0.05** | **18** | **1** | **4.1%** | best balance |
+| **Blend β=0.1** | **25** | **1** | **4.6%** | best % wins overall |
+| Blend β=0.5 | 2,634 | 1 | 2.6% | too much layer 33 |
 
-On hard tokens (p_target < 0.01, n=77):
+On hard tokens (p_target < 0.01, n=1,637):
 
 | Probe | Mean Rank | Median Rank | % beats target |
 |-------|:---------:|:-----------:|:--------------:|
-| Target | 294 | 8 | --- |
-| Blend β=0.01 | 303 | 8 | 19.5% |
-| Blend β=0.05 | 389 | 8 | 23.4% |
-| **Blend β=0.1** | **652** | **10** | **26.0%** |
-| Blend β=0.2 | 1,878 | 16 | 15.6% |
+| Target | 115 | 8 | --- |
+| Blend β=0.01 | 117 | 8 | 12.9% |
+| Blend β=0.05 | 136 | 8 | **20.5%** |
+| **Blend β=0.1** | **192** | **10** | **21.1%** |
+| Blend β=0.2 | 823 | 16 | 16.8% |
 
 #### Key Findings
 
-1. **Information profile is extremely steep**: Layer 33 (mean rank 17,002) is ~361× worse than Layer 35 (47), despite being only 2 transformer layers earlier. Information relevant to `lm_head` decoding concentrates overwhelmingly in the final 2–3 layers.
+1. **Information profile is extremely steep**: Layer 33 (mean rank 12,520) is ~835× worse than Layer 35 (15), despite being only 2 transformer layers earlier. Information relevant to `lm_head` decoding concentrates overwhelmingly in the final 2–3 layers.
 
-2. **fc compression destroys information**: fc-only (rank 64,275) is 3.8× *worse* than simply using Layer 33 alone (17,002). The trained fc linear projection from 12800→2560 dims actively degrades the deepest tapped layer's signal by contaminating it with much worse layers (1, 9, 17, 25).
+2. **fc compression destroys information**: fc-only (rank 60,979) is 4.9× *worse* than simply using Layer 33 alone (12,520). The trained fc linear projection from 12800→2560 dims actively degrades the deepest tapped layer's signal by contaminating it with much worse layers (1, 9, 17, 25).
 
-3. **Blend achieves genuine improvement on hard tokens**: At β=0.1, the logit-space blend beats the target on 26% of low-confidence tokens. This is the first experimental evidence that intermediate-layer information can *improve* predictions when used correctly — but the mechanism is additive logit perturbation, not the draft's reconstruct-from-scratch approach.
+3. **Blend achieves genuine improvement on hard tokens**: At β=0.05–0.1, the logit-space blend beats the target on 20–21% of low-confidence tokens with only modest degradation to mean rank (136–192 vs 115). This is the first experimental evidence that intermediate-layer information can *improve* predictions when used correctly — but the mechanism is additive logit perturbation, not the draft's reconstruct-from-scratch approach.
 
 4. **The draft architecture is fundamentally misaligned with guided decoding**: The DFlash draft was designed to *approximate* target logits (for speculative acceptance), not to *complement* them. Its fc+5-layer pipeline reconstructs from scratch, losing the target's representation geometry. The blend probe shows that the simplest possible approach (linear logit mixing) already outperforms the full 504.7M-parameter draft on the "improving target predictions" task.
 
@@ -224,7 +225,7 @@ The `fc` projection compresses five layers of 2560-dim hidden states (total 12,8
 
 ## 5. Limitations
 
-1. **Sample size**: 5 examples, 465 tokens. Results are directional, not statistically robust. Block-level analysis (n=45–75 per block) has high variance.
+1. **Sample size**: 128 examples, 13,275 tokens (diagnostic) / 14,032 tokens (probes). Results are statistically robust for overall and per-bucket analyses. Block-level analysis has reasonable sample sizes (n≥500 per block).
 
 2. **Dataset mismatch**: GSM8K tests mathematical reasoning, not context learning. The tokens where p_target < 0.01 largely reflect stylistic differences between human-written and model-preferred phrasing, not failures of context understanding. CL-bench evaluation is needed to test the actual hypothesis.
 
@@ -234,23 +235,23 @@ The `fc` projection compresses five layers of 2560-dim hidden states (total 12,8
 
 | Finding | Evidence | Implication |
 |---------|----------|-------------|
-| Intermediate layers carry real signal | mask vs random: 6x rank improvement | The `fc` + 5-layer architecture extracts useful information from intermediate representations |
-| Signal is insufficient for guided decoding | mask rank 2,161 vs target rank 305 (7x gap) | Vanilla draft logits would degrade, not improve, target predictions |
-| Original "87% draft wins" was an entropy artifact | random mode also shows 73% prob wins with rank 12,920 | Raw probability comparison is invalid for models with different entropy |
-| **Context starvation is NOT the bottleneck** | Full context (100–179 pos) ≈ standard (16 pos): Δ rank < 10 | KV cache already provides complete context; the Block 0 phenomenon was a target difficulty confound |
-| **fc compression destroys information** | fc-only rank 64,275 vs layer 33 alone rank 17,002 (3.8× worse) | The trained fc actively degrades the best signal by contaminating it with weaker layers |
-| **Information profile is extremely steep** | Layer 33 rank 17,002 vs Layer 35 rank 47 (361× gap in 2 layers) | Useful decoding information concentrates in the final 2–3 layers; earlier layers are near-random for `lm_head` |
-| **Logit-space blending beats the draft** | Blend β=0.1: 26% beats target on hard tokens; full draft: 3% | Zero-parameter linear mixing outperforms 504.7M-param draft for the "improve target" task |
+| Intermediate layers carry real signal | mask vs random: 3.1x rank improvement | The `fc` + 5-layer architecture extracts useful information from intermediate representations |
+| Signal is insufficient for guided decoding | mask rank 2,869 vs target rank 119 (24x gap) | Vanilla draft logits would degrade, not improve, target predictions |
+| Original "81% draft wins" was an entropy artifact | random mode also shows 70% prob wins with rank 8,986 | Raw probability comparison is invalid for models with different entropy |
+| **Context starvation is NOT the bottleneck** | Full context (103–392 pos) ≈ standard (16 pos): Δ rank < 5 | KV cache already provides complete context; the Block 0 phenomenon was a target difficulty confound |
+| **fc compression destroys information** | fc-only rank 60,979 vs layer 33 alone rank 12,520 (4.9× worse) | The trained fc actively degrades the best signal by contaminating it with weaker layers |
+| **Information profile is extremely steep** | Layer 33 rank 12,520 vs Layer 35 rank 15 (835× gap in 2 layers) | Useful decoding information concentrates in the final 2–3 layers; earlier layers are near-random for `lm_head` |
+| **Logit-space blending beats the draft** | Blend β=0.05–0.1: 20–21% beats target on hard tokens; full draft: 2.3% | Zero-parameter linear mixing outperforms 504.7M-param draft for the "improve target" task |
 
 ### Recommendation
 
 The vanilla draft model is **not suitable for guided decoding**. The probe experiments (Section 3.6) have now decomposed the three original bottleneck hypotheses:
 
 - ~~Context starvation~~ — **falsified** (Section 3.5)
-- **`fc` compression** — **confirmed harmful** (Section 3.6): fc-only is 3.8× worse than using Layer 33 alone. The linear compression from 12800→2560 cannot be the path forward.
-- **`lm_head` alignment** — **confirmed dominant** (Section 3.6): only the final 2 layers produce representations that `lm_head` can decode. The information cliff between Layer 33 and Layer 35 is 361×.
+- **`fc` compression** — **confirmed harmful** (Section 3.6): fc-only is 4.9× worse than using Layer 33 alone. The linear compression from 12800→2560 cannot be the path forward.
+- **`lm_head` alignment** — **confirmed dominant** (Section 3.6): only the final 2 layers produce representations that `lm_head` can decode. The information cliff between Layer 33 and Layer 35 is 835×.
 
-The logit-space blend (Probe D) provides a concrete proof of concept: by mixing just 10% of Layer 33's logits into the target's logits, we improve predictions on 26% of hard tokens with zero training. This validates the core hypothesis — **intermediate layers carry complementary information** — while showing that the draft's reconstruct-from-scratch architecture is the wrong approach.
+The logit-space blend (Probe D) provides a concrete proof of concept: by mixing just 5–10% of Layer 33's logits into the target's logits, we improve predictions on 20–21% of hard tokens with zero training. This validates the core hypothesis — **intermediate layers carry complementary information** — while showing that the draft's reconstruct-from-scratch architecture is the wrong approach.
 
 The most promising directions:
 
@@ -277,7 +278,7 @@ for mode in gold mask random; do
     --draft z-lab/Qwen3-4B-DFlash-b16 \
     --dataset gsm8k \
     --mode $mode \
-    --max-samples 5 \
+    --max-samples 128 \
     --output results/phase0/test_${mode}.json
 done
 
@@ -288,7 +289,7 @@ for mode in mask gold; do
     --draft z-lab/Qwen3-4B-DFlash-b16 \
     --dataset gsm8k \
     --mode $mode --extra-context 0 \
-    --max-samples 5 \
+    --max-samples 128 \
     --output results/phase0/ctx_exp_${mode}_standard.json
 
   CUDA_VISIBLE_DEVICES=0 uv run python experiments/diagnostic.py \
@@ -296,7 +297,7 @@ for mode in mask gold; do
     --draft z-lab/Qwen3-4B-DFlash-b16 \
     --dataset gsm8k \
     --mode $mode --extra-context -1 \
-    --max-samples 5 \
+    --max-samples 128 \
     --output results/phase0/ctx_exp_${mode}_fullctx.json
 done
 
@@ -305,7 +306,7 @@ CUDA_VISIBLE_DEVICES=0 uv run python experiments/probe.py \
   --model Qwen/Qwen3-4B \
   --draft z-lab/Qwen3-4B-DFlash-b16 \
   --dataset gsm8k \
-  --max-samples 5 \
+  --max-samples 128 \
   --output results/phase0/probe_gsm8k.json
 
 # Generate figures
