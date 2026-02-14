@@ -408,6 +408,89 @@ def fig_paper_comparison() -> None:
     print("  Saved fig_math500_paper_comparison.png")
 
 
+def fig_draft_comparison(results: list[dict]) -> None:
+    """Bar chart: comparing blend sources (ps vs draft_blend_ps vs blend_ps)."""
+    conditions = ["ps", "draft_blend_ps", "blend_ps"]
+    labels = [
+        "Power Sampling\n(standard p^α)",
+        "Draft-Blend PS\n(DFlash logits,\nβ=0.05)",
+        "Layer-33 Blend PS\n(lm_head(h₃₃),\nβ=0.05)",
+    ]
+    colors = ["#e67e22", "#3498db", "#e74c3c"]
+
+    accs = []
+    for cond in conditions:
+        correct = sum(1 for r in results if r.get(f"{cond}_correct", False))
+        total = sum(1 for r in results if f"{cond}_correct" in r)
+        accs.append(correct / total * 100 if total else 0)
+
+    fig, ax = plt.subplots(figsize=(8, 5))
+    bars = ax.bar(
+        range(len(conditions)),
+        accs,
+        color=colors,
+        width=0.5,
+        edgecolor="white",
+        linewidth=1.5,
+    )
+
+    for bar, acc in zip(bars, accs):
+        ax.text(
+            bar.get_x() + bar.get_width() / 2,
+            bar.get_height() + 0.8,
+            f"{acc:.1f}%",
+            ha="center",
+            va="bottom",
+            fontsize=13,
+            fontweight="bold",
+        )
+
+    ax.set_xticks(range(len(conditions)))
+    ax.set_xticklabels(labels, fontsize=10)
+    ax.set_ylabel("Accuracy (%)", fontsize=12)
+    ax.set_title(
+        "DFlash Draft Model as Blend Source\n"
+        "Does the trained draft model improve guided Power Sampling?",
+        fontsize=13,
+        fontweight="bold",
+    )
+    ax.set_ylim(0, 90)
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+
+    # Greedy baseline
+    greedy_acc = sum(1 for r in results if r.get("greedy_correct", False)) / len(results) * 100
+    ax.axhline(y=greedy_acc, color="#7f8c8d", linestyle="--", alpha=0.5, linewidth=1)
+    ax.text(2.35, greedy_acc + 0.5, "greedy baseline", fontsize=8, color="#7f8c8d", alpha=0.7)
+
+    # Annotation: draft_blend_ps = ps
+    ax.annotate(
+        "Same accuracy\n(72.1% = 72.1%)",
+        xy=(0.5, accs[0]),
+        xytext=(0.5, accs[0] - 12),
+        fontsize=9,
+        color="#7f8c8d",
+        fontweight="bold",
+        ha="center",
+        arrowprops=dict(arrowstyle="->", color="#7f8c8d", lw=1.2),
+    )
+
+    # Annotation: blend_ps >> draft_blend_ps
+    mid = 1.5
+    ax.annotate(
+        "",
+        xy=(2, accs[2]),
+        xytext=(1, accs[1]),
+        arrowprops=dict(arrowstyle="->", lw=1.5, color="#e74c3c", connectionstyle="arc3,rad=0.2"),
+    )
+    ax.text(mid, (accs[1] + accs[2]) / 2 + 1, "+5.8 pp", fontsize=10, color="#e74c3c", fontweight="bold", ha="center")
+
+    plt.tight_layout()
+    plt.savefig(OUTPUT_DIR / "fig_math500_draft_comparison.png", dpi=150, bbox_inches="tight")
+    plt.close()
+    print("  Saved fig_math500_draft_comparison.png")
+
+
 def main() -> None:
     print("Loading results...")
     results = load_results()
@@ -419,6 +502,7 @@ def main() -> None:
     fig_overlap_venn(results)
     fig_architecture_diagram()
     fig_paper_comparison()
+    fig_draft_comparison(results)
     print("Done!")
 
 
