@@ -1,0 +1,305 @@
+﻿A Unified View of Logit-Space Interpolation and Extrapolation Between Transformer Layers for Sampling-Based Decoding
+1. Introduction: The Geometry of Inference-Time Intervention
+The rapid advancement of Large Language Models (LLMs) has shifted the research frontier from architecture design and pre-training strategies toward inference-time interventions. While the parametric knowledge encoded within models like GPT-4, LLaMA, and Claude is vast, the mechanism by which this knowledge is elicited—the decoding strategy—remains a critical bottleneck. Standard autoregressive decoding methods, such as greedy search, nucleus sampling, and beam search, operate on the premise that the final output distribution $P(x_t | x_{<t})$, derived from the final hidden state $h_N$, is the optimal representation of the model's intent. However, a converging body of literature suggests that the trajectory of hidden states leading up to $h_N$ contains latent signals that, when properly manipulated, can significantly enhance reasoning, factuality, and robustness.
+This report establishes a unified mathematical and theoretical framework for a specific class of inference-time interventions: those that linearly combine the logit outputs from different layers of the same Transformer model. We center our analysis on the unified intervention formula provided in the research query:
+
+
+$$\text{guided\_logits} = (1 - \beta) \cdot \text{lm\_head}(h_N) + \beta \cdot \text{lm\_head}(h_L)$$
+Here, $h_N$ represents the final layer's hidden state, $h_L$ represents the hidden state of an intermediate layer $L$, and $\beta$ is a real-valued scalar control parameter. This formulation is not merely a heuristic; it represents a geometric operation within the residual stream of the Transformer. Because the language model head (lm_head) is a linear projection $W \in \mathbb{R}^{V \times d}$, this operation in logit space is mathematically isomorphic to an intervention in the hidden state space (ignoring bias terms or assuming they cancel in specific contrastive setups):
+
+
+$$\text{guided\_logits} \approx \text{lm\_head}(h_N - \beta (h_N - h_L))$$
+This unified view allows us to categorize a wide array of seemingly disparate techniques into two distinct topological regimes based on the sign and magnitude of $\beta$:
+1. Logit-Space Extrapolation ($\beta < 0$): In this regime, the intervention moves the representation beyond the final state $h_N$ along the vector defined by the layer update direction $\Delta_{L \to N} = h_N - h_L$. This effectively amplifies the computational work performed by the later layers of the network. We will demonstrate that this regime encompasses Contrastive Decoding (CD), DoLa (Decoding by Contrasting Layers), and Classifier-Free Guidance (CFG). These methods function as "sharpening filters," enhancing the signal-to-noise ratio of the output distribution to improve performance on rigorous logic and factuality benchmarks such as GSM8K and MATH.
+2. Logit-Space Interpolation ($0 < \beta < 1$): In this regime, the intervention blends the final state with the intermediate state, pulling the representation back towards the higher-entropy, "noisier" prior of the early layers. We will explore how this relates to Model Soups, Ensembling, and calibration techniques used to mitigate overfitting and improve out-of-distribution (OOD) robustness.
+By synthesizing over 50 recent research papers (2023–2025), this report provides a comprehensive survey of these methods. We dissect the exact mathematical formulations used in the literature, report key quantitative results on reasoning benchmarks, and analyze the specific role of the final transformer layers—arguing that they function primarily as "confidence refiners" rather than information retrievers, a hypothesis that justifies the efficacy of extrapolation strategies.
+________________
+2. Theoretical Foundations: The Residual Stream and Logit Linearity
+To fully appreciate the unified view, we must first rigorously define the underlying mechanics of the Transformer decoder and the geometric properties of its latent space.
+2.1 The Residual Stream as a Trajectory
+The Transformer architecture is fundamentally defined by its residual connections. For a model with $N$ layers, the hidden state at layer $l$, denoted $h_l$, is the sum of the output of the previous layer and the transformation $F_l$ (encompassing Self-Attention and MLP blocks) applied at layer $l$:
+
+
+$$h_l = h_{l-1} + F_l(h_{l-1})$$
+This recursive definition implies that the final hidden state $h_N$ is the accumulation of the initial token embedding $h_0$ and the sum of all subsequent layer updates. If we select an intermediate layer $L$, we can decompose the final state as:
+
+
+$$h_N = h_L + \sum_{i=L+1}^{N} F_i(h_{i-1})$$
+The term $\sum_{i=L+1}^{N} F_i(h_{i-1})$ represents the specific contribution of the "late" layers. Let us denote this aggregate update vector as $\Delta_{L \to N}$. The unified intervention formula effectively scales this update vector. Substituting the linear projection $W$ of the lm_head:
+
+
+$$G = (1 - \beta) W h_N + \beta W h_L$$
+
+
+$$G = W ((1 - \beta) h_N + \beta h_L)$$
+Substituting $h_L = h_N - \Delta_{L \to N}$:
+
+
+$$G = W ((1 - \beta) h_N + \beta (h_N - \Delta_{L \to N}))$$
+
+
+$$G = W (h_N - \beta \Delta_{L \to N})$$
+If we introduce a guidance scale parameter $\gamma = -\beta$, the equation becomes:
+
+
+$$G = W (h_N + \gamma \Delta_{L \to N})$$
+This derivation exposes the geometric interpretation of the user's query:
+* When $\beta < 0$ (so $\gamma > 0$): The system extrapolates. We add a multiple of the late-layer update vector $\Delta_{L \to N}$ to the final state. If the late layers are responsible for "refining" the distribution (e.g., distinguishing the correct answer '5' from a close distractor '4'), then extrapolation amplifies this refinement. This is the theoretical basis for DoLa and Contrastive Decoding.
+* When $0 < \beta < 1$ (so $\gamma < 0$): The system interpolates. We subtract a portion of the late-layer update, effectively dampening the refinement. This is theoretically aligned with calibration and regularization, where the goal is to prevent the model from becoming overconfident in its late-stage predictions.
+2.2 Linearity Assumptions and the Softmax Bottleneck
+While the lm_head is a linear map, the final probability distribution is obtained via the softmax function: $P(y) = \text{softmax}(G)$. The intervention occurs in the pre-softmax logit space. This distinction is crucial. Operations that are linear in logit space result in power-law scaling in probability space.
+If we consider the simplified case where $h_N \approx \alpha h_L$ (i.e., the late layers just scale up the confidence of the early layers), then the unified intervention acts as a temperature scaling mechanism.
+
+
+$$G \approx (1 - \beta) W h_N + \beta W (\frac{1}{\alpha} h_N) \approx \left( 1 - \beta + \frac{\beta}{\alpha} \right) W h_N$$
+For $\beta < 0$, the scalar multiplier is greater than 1 (assuming $\alpha > 1$), which effectively increases the logits' magnitude. This is equivalent to lowering the temperature, sharpening the distribution. However, recent work by Velickovic et al. (2025) titled "Softmax is Not Enough" 1 challenges the assumption that the model can learn to be arbitrarily sharp. They argue that the dot-product attention mechanism and the final linear projection have a bounded capacity to separate close vectors in high-dimensional space. Consequently, the standard forward pass often results in a distribution that is "under-confident" or "over-smoothed" relative to the ground truth (which is often a Dirac delta in reasoning tasks). This provides a strong theoretical justification for extrapolation ($\beta < 0$): it is a manual intervention to overcome the "Softmax Bottleneck" and enforce the sharpness required for rigorous logical deduction.
+________________
+3. Layer-wise Logit and Hidden-State Contrasting (Single Model)
+The first major application of the unified formula is strictly within a single model, contrasting the final layer $N$ with an intermediate layer $L$. The most prominent method in this category is DoLa (Decoding by Contrasting Layers).
+3.1 DoLa: Decoding by Contrasting Layers
+Citations: Chuang et al. (2023) 3; He (2023).7
+Mathematical Formulation:
+DoLa operates on the premise that factual knowledge is localized in specific transformer layers, while "hallucinations" (plausible but incorrect text) are often generated by the early layers or by over-fitting to linguistic priors.
+DoLa dynamically selects the "premature" layer $L$ at each token step. It computes the Jensen-Shannon Divergence (JSD) between the output distribution of the final layer, $P_N$, and the distributions of candidate intermediate layers, $P_i$ (typically searching the later half of the model, e.g., layers $N/2$ to $N$).
+Let $L^*$ be the layer that maximizes $JSD(P_N |
+| P_i)$. The DoLa logits are then computed via a log-domain subtraction:
+
+
+$$\mathcal{F}(P_N, P_{L^*}) = \begin{cases} \log P_N(x_t) - \log P_{L^*}(x_t) & \text{if } x_t \in \mathcal{V}_{\text{head}} \\ -\infty & \text{otherwise} \end{cases}$$
+where $\mathcal{V}_{\text{head}}$ is the set of top-$k$ tokens from the final layer (acting as a plausibility constraint).
+In terms of the unified formula, $\log P_N - \log P_L$ corresponds to subtracting the logits. This is equivalent to setting:
+
+
+$$\beta = -1$$
+The resulting logit vector is $G = \text{logits}_N - \text{logits}_L = 2\text{logits}_N - (\text{logits}_N + \text{logits}_L)$. Or more simply, using the residual form: $G \approx \Delta_{L \to N}$. DoLa essentially isolates the update vector and uses it as the sole driving force for generation, discarding the "base" probability mass contained in $h_L$.
+Key Quantitative Results:
+* Factuality: On the TruthfulQA benchmark, DoLa demonstrates significant improvements. Chuang et al. report an increase in TruthfulQA scores by 12–17% absolute points across the LLaMA family (7B, 13B, 33B, 65B) compared to baseline greedy decoding.5 This result validates the hypothesis that early layers contain "distractors" (common misconceptions) that the subtraction removes.
+* Reasoning (GSM8K): The performance on math benchmarks is model-dependent.
+   * For larger models (LLaMA-13B, 33B, 65B), DoLa achieves a modest ~2% accuracy improvement on GSM8K.5
+   * For the smaller LLaMA-7B, performance on GSM8K remains flat or degrades slightly. This suggests that in smaller models, the separation of "reasoning" and "linguistic" capabilities across layers is less distinct; removing layer $L$ might remove necessary context.
+* MATH-500: Recent evaluations on the more difficult MATH-500 benchmark show that contrastive methods like DoLa can improve pass rates, but they are often outperformed by methods that integrate sampling or search (discussed in Section 5).7
+Failure Modes and Limitations:
+* Multilingual Mismatch: A critical failure mode identified in 8 is Language Mismatch. In non-English tasks, the early layers ($h_L$) may still be processing the input in an abstract or English-centric embedding space, while the final layer ($h_N$) has converged to the target language. Subtracting $h_L$ from $h_N$ in this case results in incoherent logits because the "amateur" distribution is not a valid subset of the "expert" distribution.
+* Latency Overhead: DoLa requires computing the projection lm_head for multiple candidate layers to find the JSD maximizer. This increases inference latency by approximately 4–15% compared to standard decoding.3
+3.2 Auto-Contrastive Decoding ("The Benefits of Bad Advice")
+Citations: Li et al. (2023); O'Brien & Lewis (2023).9
+Methodology:
+Unlike DoLa's dynamic layer selection, Auto-Contrastive Decoding (ACD) designates a fixed intermediate layer (e.g., layer 24 of a 48-layer GPT-2) as the "Amateur." The method masks "implausible" tokens (those with low probability in the Expert layer) and then applies a penalty based on the Amateur's confidence.
+The unified formula applies here with a tunable $\beta$. While DoLa effectively uses $\beta=-1$, ACD often explores $\beta \in [-0.5, -1.0]$ (or equivalently, a penalty weight $\alpha$ where $\beta = -\alpha$).
+Quantitative Insights:
+* Reasoning Consistency: ACD is particularly effective at reducing "looping" and repetitive behaviors in open-ended generation. By penalizing the high-probability tokens of the early layers (which often favor simple n-gram repetitions), the model is forced to select lower-probability, more information-dense tokens that are characteristic of "deep" reasoning.
+* Layer Sensitivity: The success of ACD is highly sensitive to the choice of $L$. If $L$ is too early (e.g., Layer 2), it contains almost no useful signal, and $\beta < 0$ just adds noise. If $L$ is too late (e.g., Layer $N-1$), $h_N \approx h_L$, and the contrastive signal vanishes.
+________________
+4. Contrastive and Subtractive Decoding Methods (Dual Model)
+While the previous section focused on single-model interventions, the broader field of Contrastive Decoding (CD) applies the same subtractive logic ($\beta < 0$) using two distinct models: a strong "Expert" and a weak "Amateur." This is mathematically identical to the single-model case if we view the Amateur model as a proxy for $h_L$.
+4.1 Contrastive Decoding (CD)
+Citations: Li et al. (2022) 9; O'Brien & Lewis (2023).12
+Mathematical Formulation:
+
+
+$$\text{Logits}_{\text{CD}} = (1 + \alpha) \text{Logits}_{\text{Expert}} - \alpha \text{Logits}_{\text{Amateur}}$$
+Mapping to the unified formula:
+* $h_N \to$ Expert Model Logits
+* $h_L \to$ Amateur Model Logits
+* $\beta = -\alpha$ (where $\alpha > 0$ is the penalty strength).
+Key Quantitative Results:
+* HellaSwag & GSM8K: CD consistently outperforms greedy decoding on reasoning benchmarks. By penalizing the "easy" tokens predicted by the Amateur (e.g., a small GPT-2), the Expert (e.g., GPT-XL) is steered towards more complex, context-dependent completions. 13 notes that CD outperforms larger baselines on HellaSwag.
+* Refusal Loops (The "Safety" Failure Mode): A major limitation identified in 5 is the interaction with safety tuning. If the Expert model is RLHF-aligned (and thus prone to refusal responses like "I cannot answer that") and the Amateur model is not, the subtraction $(Expert - Amateur)$ creates a massive positive logit for the refusal tokens (which the Amateur does not predict). This causes the model to refuse even benign prompts. This "safety loop" phenomenon is a direct consequence of logit-space extrapolation amplifying differences in alignment.
+4.2 Speculative Contrastive Decoding (SCD)
+Citations: Yuan et al. (2024).14
+Methodology:
+SCD unifies Speculative Decoding (acceleration) with Contrastive Decoding (quality). In speculative decoding, a small "draft" model generates candidate tokens which are verified by the target model.
+SCD proposes that when the target model accepts a token, we should not just accept it greedily. Instead, we should use the draft model as the Amateur for a contrastive step.
+
+
+$$\text{Logits}_{\text{SCD}} = \text{Logits}_{\text{Target}} - \lambda \text{Logits}_{\text{Draft}}$$
+This effectively gives the quality boost of CD "for free" because the draft logits are already computed for the speculative verification.
+Quantitative Results:
+* Efficiency: SCD maintains the 2x–3x speedup typical of speculative decoding.
+* Reasoning: On reasoning benchmarks, SCD improves upon the target model's baseline accuracy, leveraging the draft model to filter out "lazy" token choices. This confirms that the draft model in speculative setups acts similarly to the early layers in DoLa: a source of "shallow" predictions that should be subtracted.
+4.3 Classifier-Free Guidance (CFG) in LLMs
+Citations: Sanchez et al. (2023) 18; Gafni et al. (2022).20
+Unified Mapping:
+CFG, originally from diffusion models, is applied to LLMs by contrasting a conditional forward pass (Prompt + Context) with an unconditional one (Context only, or Empty Prompt).
+
+
+$$\text{Logits}_{\text{guided}} = \text{Logits}_{\text{cond}} + \gamma (\text{Logits}_{\text{cond}} - \text{Logits}_{\text{uncond}})$$
+
+
+$$\text{Logits}_{\text{guided}} = (1 + \gamma) \text{Logits}_{\text{cond}} - \gamma \text{Logits}_{\text{uncond}}$$
+This maps to the unified formula with:
+* $h_N \to$ Conditional Logits
+* $h_L \to$ Unconditional Logits
+* $\beta = -\gamma$ (typically $\gamma \in [1.0, 2.0]$, so $\beta \in [-1.0, -2.0]$).
+Key Quantitative Results:
+* LAMBADA SOTA: Sanchez et al. 18 report that LLaMA-7B with CFG achieves state-of-the-art results on the LAMBADA prediction task, outperforming the much larger PaLM-540B. This illustrates the power of extrapolation to "super-sharpen" predictions when the answer is deterministic.
+* GSM8K and Chain-of-Thought: CFG improves the syntactic validity of Chain-of-Thought (CoT) reasoning traces. 18 finds that for low guidance strengths ($\gamma \approx 1.5$), the percentage of valid reasoning chains increases.
+* Failure Mode - "Over-Focus": As $\gamma$ increases ($\beta$ becomes more negative), the entropy of the output distribution collapses. While this is good for single-token logic, for long-form generation it leads to repetition loops and "mode collapse." The model becomes "tunnel-visioned" on the most likely path and loses the ability to recover from errors.
+________________
+5. MCMC and Search-Based Sampling Interacting with Sharpening
+The interventions discussed above ($\beta < 0$) effectively reshape the energy landscape of the model, creating deeper "basins of attraction" around high-probability tokens. This section explores how advanced sampling algorithms utilize this sharpened landscape.
+5.1 "Reasoning with Sampling" and Power Scaling
+Citations: Karan & Du (2025).21
+Theoretical Formulation:
+Karan & Du propose that the "true" reasoning capability of a base model is often masked by the high entropy of the standard sampling distribution. They define a target distribution proportional to the power of the base probability:
+
+
+$$P_{\text{target}}(x) \propto (P_{\text{base}}(x))^\alpha$$
+In logit space, this corresponds to scaling the logits by $\alpha$:
+
+
+$$\text{Logits}_{\text{target}} = \alpha \cdot \text{Logits}_{\text{base}}$$
+If we consider the unified formula where $h_L$ is a uniform distribution (zero logits), then:
+
+
+$$G = (1 - \beta) h_N = \text{scalar} \times h_N$$
+Setting $1 - \beta = \alpha$, we see that extrapolation is implicitly a form of temperature scaling (where $T = 1/\alpha$). If $\beta < 0$, then $\alpha > 1$, which corresponds to $T < 1$ (low temperature / sharpening).
+MCMC Algorithm:
+Directly sampling from $P^\alpha$ is intractable due to the partition function. The authors employ a Metropolis-Hastings MCMC approach:
+1. Proposal: Use the base model $P_{\text{base}}$ to generate a candidate token $x'$.
+2. Acceptance Ratio: Calculate the acceptance probability based on the ratio $(P(x')/P(x))^{\alpha-1}$.
+3. Search: This effectively performs a "soft" search in the token space, accepting moves that increase the probability density according to the sharpened distribution.
+Key Quantitative Results:
+* MATH-500: The authors demonstrate that setting $\alpha \approx 4.0$ coupled with MCMC sampling yields substantial improvements on the MATH-500 benchmark.21
+* Comparison: This method outperforms both greedy decoding (which is liable to get stuck in local optima) and standard sampling (which is too noisy). It confirms that the "latent" reasoning ability of the model is best elicited by aggressively sharpening the distribution—consistent with the unified view that $\beta < 0$ is the regime for reasoning.
+* HumanEval: Similar gains are reported on code generation benchmarks, where precision is paramount.
+________________
+6. Interpolation vs. Extrapolation in Ensemble and Model Merging
+We now shift focus to the regime where $h_N$ and $h_L$ represent different sets of model weights rather than layers. The math of Task Vectors and Model Soups is isomorphic to logit interpolation/extrapolation under the assumption of linearity.
+6.1 Task Vectors and Arithmetic
+Citations: Ilharco et al. (2023) 24; Ortiz-Jimenez et al. (2023).28
+Mathematical Formulation:
+A Task Vector is defined as the difference between fine-tuned weights $\theta_{\text{ft}}$ and pre-trained weights $\theta_{\text{pre}}$:
+
+
+$$\tau = \theta_{\text{ft}} - \theta_{\text{pre}}$$
+The merged model is defined as:
+
+
+$$\theta_{\text{new}} = \theta_{\text{pre}} + \lambda \tau$$
+This maps to the unified formula:
+* $\theta_{\text{new}} \approx h_{\text{guided}}$
+* $\theta_{\text{pre}} \approx h_L$
+* $\theta_{\text{ft}} \approx h_N$
+* $\lambda$ corresponds to $1 - \beta$ (specifically, if $\lambda=1$, we recover the fine-tuned state; if $\lambda > 1$, we extrapolate).
+Key Quantitative Results on MATH:
+* Extrapolation Failure: Unlike logit-space contrasting where extrapolation ($\beta < 0$) helps reasoning, weight-space extrapolation ($\lambda > 1$) typically degrades performance on math tasks.
+   * Snippet 29 analyzes scaling coefficients for math models and finds optimal $\lambda$ values in the range of 0.51–0.64 (Interpolation).
+   * Snippet 30 on "Reasoning Vectors" finds that $\lambda = 1.0$ is optimal, and $\lambda = 1.5$ causes accuracy to drop from 50.0% to 48.1%.
+* Reasoning: This discrepancy suggests that fine-tuned weights for reasoning are already at a "sharp" local optimum. Pushing them further ($\lambda > 1$) likely breaks the fragile internal mechanisms required for multi-step logic. In contrast, logit-space extrapolation works because it operates on the activations, which may not be fully saturated even if the weights are optimized.
+6.2 Model Soups and Interpolation
+Citations: Wortsman et al. (2022).20
+Mechanism:
+Model Soups involve averaging the weights of multiple fine-tuned models: $\theta_{\text{soup}} = \frac{1}{K} \sum \theta_k$. This is a convex combination, strictly within the Interpolation regime ($\beta \in $).
+Impact:
+* Robustness: Interpolation flattens the loss landscape, finding a solution that is robust to shifts in the data distribution.
+* Reasoning: While Soups improve average performance and calibration, they rarely produce the "peak" reasoning spikes seen with extrapolation methods like DoLa. They are "safer" but less "sharp."
+________________
+7. The Role of the Final Few Transformer Layers
+The validity of the unified intervention $h_N + \gamma(h_N - h_L)$ hinges on the nature of the update vector $\Delta_{L \to N}$. What exactly are the final layers doing?
+7.1 The "Refinement" and "Sharpening" Hypothesis
+Citations: Logit Lens studies 33; Tuned Lens.36
+Findings:
+Research applying the Logit Lens (projecting intermediate hidden states to the vocabulary) consistently shows that:
+1. Semantic Locking: The "concept" of the answer (e.g., that the answer is a city in France) is often resolved by layer $N/2$ or $2N/3$.
+2. Confidence Boosting: The final 20–30% of layers primarily serve to increase the logit magnitude of the correct token relative to distractors. Snippet 33 explicitly states: "Later layers are devoted primarily to refining the output probability distributions, rather than to performing new kind of computation."
+3. Entropy Reduction: The entropy of the implicit distribution drops precipitously in the final layers.
+Implication for Extrapolation:
+If the primary role of the final layers is sharpening, then the vector $\Delta_{L \to N}$ points in the direction of "higher confidence."
+* Extrapolation ($\beta < 0$): Artificially extends this vector. We are essentially saying to the model: "Do what you were doing in the last 5 layers, but more." This explains why DoLa and CD are effective—they are manual accelerators for the model's native refinement process.
+7.2 "Softmax is Not Enough"
+Citations: Velickovic et al. (2025).1
+Theoretical Insight:
+This paper provides a critical theoretical justification for inference-time intervention. The authors prove that due to the structure of the dot-product attention and the softmax bottleneck, standard Transformers struggle to approximate "sharp" functions (like $\max$) as the context size grows. The model may know the correct answer but be unable to assign it probability $1.0$ due to architectural constraints.
+* Connection: Extrapolation ($\beta < 0$) acts as a post-hoc correction to this bottleneck. By stretching the logit distances, it allows the distribution to approach the sharpness of the true posterior, which is necessary for tasks like exact math.
+7.3 Layer Pruning and Failure Modes
+Citations:.38
+The Collapse of Reasoning:
+While DoLa suggests we can "subtract" early layers, layer pruning research warns against removing late layers entirely.
+* Result: Pruning the final 10% of layers causes performance on AIME24 (complex math) to collapse to near zero, whereas knowledge tasks (MMLU) degrade much more slowly.38
+* Synthesis: This confirms that the final layers are not redundant. They contain the fine-grained logic circuits. DoLa works not because the final layers are bad, but because the contrast against the early layers highlights the signal generated by those critical final layers.
+________________
+8. Comparative Summary and Quantitative Analysis
+The following table summarizes the key methods discussed under the unified framework, mapping their standard formulations to the unified parameter $\beta$ and reporting their impact on key benchmarks.
+Method
+	Unified β Regime
+	Interpretation
+	Key Quantitative Result (Math/Reasoning)
+	Failure Mode
+	DoLa
+	$\beta \approx -1$ (Dynamic)
+	Extrapolate vs. Early Layer
+	+2% GSM8K (LLaMA-13B+); +12-17% TruthfulQA
+	Multilingual mismatch; Ineffective on small models
+	Contrastive Decoding
+	$\beta < 0$ (Fixed)
+	Extrapolate vs. Amateur
+	Outperforms greedy on HellaSwag/GSM8K
+	"Safety loops" (refusals); Incoherence if $\beta$ too low
+	CFG
+	$\beta \in [-1.0, -2.0]$
+	Extrapolate vs. Uncond.
+	SOTA on LAMBADA; Increases CoT validity
+	Repetition loops; Over-confidence
+	Reasoning w/ Sampling
+	$\beta < 0$ (Implicit)
+	Temperature Scaling ($\alpha \approx 4$)
+	High gains on MATH-500 (Pass@1)
+	High computational cost (MCMC steps)
+	Task Vectors
+	$\lambda > 1$ (Extrap.)
+	Weight Extrapolation
+	Degrades Math accuracy ($\lambda=1.5 \to$ drop)
+	Instability in weight space
+	Model Soups
+	$\beta \in $
+	Interpolation
+	Neutral for Logic; High Robustness
+	Over-smoothing (bad for exact match)
+	________________
+9. Conclusion
+The unified view of logit-space interpolation and extrapolation offers a powerful lens for understanding and improving LLM inference. The parameter $\beta$ serves as a continuous dial regulating the sharpness and confidence of the generation.
+1. Extrapolation ($\beta < 0$) is the Regime of Reasoning: The theoretical and empirical evidence strongly supports the use of extrapolation for tasks requiring strict logic (GSM8K, MATH) and factuality. By amplifying the "refinement" signal $\Delta_{L \to N}$ generated by the final transformer layers, methods like DoLa, Contrastive Decoding, and MCMC Sampling overcome the "Softmax Bottleneck," forcing the model to commit to the subtle logical paths it has identified but may be under-confident in.
+2. The Final Layers are Filters: The success of these methods confirms that the deep layers of a transformer function primarily as noise filters. They do not introduce new information as much as they suppress the high-entropy priors of the early layers.
+3. The Risk of Over-Sharpening: While extrapolation maximizes reasoning performance, it introduces instability—manifesting as "safety loops" (refusals) or "repetition loops" (mode collapse). Future research must focus on dynamic $\beta$ scheduling—applying strong extrapolation only at critical decision points (reasoning steps) while reverting to interpolation ($\beta \ge 0$) for fluent text generation, thereby balancing the rigor of logic with the robustness of language.
+引用的著作
+1. Softmax is not Enough (for Sharp Size Generalisation) - GitHub, 访问时间为 二月 15, 2026， https://raw.githubusercontent.com/mlresearch/v267/main/assets/velickovic25a/velickovic25a.pdf
+2. Softmax is not Enough (for Sharp Size Generalisation) - arXiv, 访问时间为 二月 15, 2026， https://arxiv.org/html/2410.01104v3
+3. Temporal Guidance for Large Language Models - arXiv, 访问时间为 二月 15, 2026， https://arxiv.org/html/2601.21744v1
+4. DoLa: Decoding by Contrasting Layers Improves Factuality in Large Language Models, 访问时间为 二月 15, 2026， https://openreview.net/forum?id=Th6NyL07na
+5. DoLa: Decoding by Contrasting Layers Improves Factuality in Large Language Models, 访问时间为 二月 15, 2026， https://arxiv.org/html/2309.03883v2
+6. dola: decoding by contrasting layers improves factuality in large language models - arXiv, 访问时间为 二月 15, 2026， https://arxiv.org/pdf/2309.03883
+7. Trustworthy Reasoning: Evaluating and Enhancing Factual Accuracy in LLM Intermediate Thought Processes - arXiv, 访问时间为 二月 15, 2026， https://arxiv.org/html/2507.22940v2
+8. Multilingual Contrastive Decoding via Language-Agnostic Layers Skipping - ACL Anthology, 访问时间为 二月 15, 2026， https://aclanthology.org/2024.findings-emnlp.512/
+9. The Benefits of Bad Advice: Autocontrastive ... - ACL Anthology, 访问时间为 二月 15, 2026， https://aclanthology.org/2023.acl-long.580.pdf
+10. EE-LLM: Large-Scale Training and Inference of Early-Exit Large Language Models with 3D Parallelism - arXiv, 访问时间为 二月 15, 2026， https://arxiv.org/html/2312.04916v3
+11. Multilingual Contrastive Decoding via Language-Agnostic Layers Skipping - ACL Anthology, 访问时间为 二月 15, 2026， https://aclanthology.org/2024.findings-emnlp.512.pdf
+12. Table 10 from Contrastive Decoding Improves Reasoning in Large Language Models, 访问时间为 二月 15, 2026， https://www.semanticscholar.org/paper/Contrastive-Decoding-Improves-Reasoning-in-Large-O%27Brien-Lewis/e716e6e0b3dd5124268780dc9bed521a07f371b8/figure/13
+13. Literature review on sampling techniques for language models - njkumarr, 访问时间为 二月 15, 2026， https://www.njkumar.com/literature-review-sampling-techniques/
+14. Interpretable Contrastive Monte Carlo Tree Search Reasoning - arXiv.org, 访问时间为 二月 15, 2026， https://arxiv.org/html/2410.01707v3
+15. Daily Papers - Hugging Face, 访问时间为 二月 15, 2026， https://huggingface.co/papers?q=hybrid%20decoding%20strategy
+16. Speculative Contrastive Decoding - OpenReview, 访问时间为 二月 15, 2026， https://openreview.net/pdf/877b0dc7b52397661bec94eca6aa1089ef6f575a.pdf
+17. Speculative Contrastive Decoding - ACL Anthology, 访问时间为 二月 15, 2026， https://aclanthology.org/2024.acl-short.5.pdf
+18. (PDF) Stay on topic with Classifier-Free Guidance - ResearchGate, 访问时间为 二月 15, 2026， https://www.researchgate.net/publication/371989131_Stay_on_topic_with_Classifier-Free_Guidance
+19. [PDF] Stay on topic with Classifier-Free Guidance - Semantic Scholar, 访问时间为 二月 15, 2026， https://www.semanticscholar.org/paper/Stay-on-topic-with-Classifier-Free-Guidance-Sanchez-Fan/5a3a04af4935302f0871bf14a4b573d477ce96be
+20. DIVERSITY-REWARDED CFG DISTILLATION - OpenReview, 访问时间为 二月 15, 2026， https://openreview.net/pdf?id=lJ66m0ibQL
+21. arxiv.org, 访问时间为 二月 15, 2026， https://arxiv.org/html/2510.14901v1
+22. Certified Self-Consistency: Statistical Guarantees and Test-Time Training for Reliable Reasoning in LLMs - arXiv, 访问时间为 二月 15, 2026， https://arxiv.org/pdf/2510.17472
+23. 人工智能2025_10_17 - arXiv每日学术速递, 访问时间为 二月 15, 2026， http://www.arxivdaily.com/thread/72843
+24. Model Merging Scaling Laws in Large Language Models - arXiv, 访问时间为 二月 15, 2026， https://arxiv.org/html/2509.24244v1
+25. AIsquare/model-merging: Model Merging is a cutting-edge technique that integrates multiple large language models (LLMs) into a single, cohesive model. This approach allows for the combination of models with different architectures, such as LLaMA 2, Mistral, and Wizard, to harness the strengths of each. - GitHub, 访问时间为 二月 15, 2026， https://github.com/AIsquare/model-merging
+26. Task Arithmetic in Neural Models - Emergent Mind, 访问时间为 二月 15, 2026， https://www.emergentmind.com/topics/task-arithmetic
+27. Reasoning Vectors: Transferring Chain-of-Thought Capabilities via Task Arithmetic - KAUST Repository, 访问时间为 二月 15, 2026， https://repository.kaust.edu.sa/bitstreams/729b930f-9704-437a-bf13-4c7939977246/download
+28. Task Arithmetic Through The Lens Of One-Shot Federated Learning - OpenReview, 访问时间为 二月 15, 2026， https://openreview.net/pdf?id=Cgyo7S7Oy0
+29. Sensitivity-Guided Parameter Balancing for Merging Large Language Models - arXiv, 访问时间为 二月 15, 2026， https://arxiv.org/html/2502.12420v2
+30. Reasoning Vectors: Transferring Chain-of-Thought Capabilities via Task Arithmetic - arXiv.org, 访问时间为 二月 15, 2026， https://arxiv.org/pdf/2509.01363
+31. Self-Soupervision: Cooking Model Soups without Labels - arXiv, 访问时间为 二月 15, 2026， https://www.arxiv.org/pdf/2602.02890
+32. Continuous Language Model Interpolation for Dynamic and Controllable Text Generation, 访问时间为 二月 15, 2026， https://arxiv.org/html/2404.07117v1
+33. NeurIPS Poster Do Language Models Use Their Depth Efficiently?, 访问时间为 二月 15, 2026， https://neurips.cc/virtual/2025/poster/118586
+34. The Remarkable Robustness of LLMs: Stages of Inference? - arXiv.org, 访问时间为 二月 15, 2026， https://arxiv.org/html/2406.19384v1
+35. The Remarkable Robustness of LLMs: Stages of Inference? - arXiv, 访问时间为 二月 15, 2026， https://arxiv.org/html/2406.19384v3
+36. Entropy-Lens: The Information Signature of Transformer Computations - arXiv, 访问时间为 二月 15, 2026， https://arxiv.org/html/2502.16570v1
+37. Eliciting Latent Predictions from Transformers with the Tuned Lens - arXiv, 访问时间为 二月 15, 2026， https://arxiv.org/html/2303.08112v6
+38. When Fewer Layers Break More Chains: Layer Pruning Harms Test-Time Scaling in LLMs - KAUST Repository, 访问时间为 二月 15, 2026， https://repository.kaust.edu.sa/bitstreams/928b9c7b-38e7-4c94-b367-36b68aa43af2/download
+39. Demystifying the Roles of LLM Layers in Retrieval, Knowledge, and Reasoning - arXiv, 访问时间为 二月 15, 2026， https://arxiv.org/html/2510.02091v4
+40. Reassessing Layer Pruning in LLMs: New Insights and Methods - OpenReview, 访问时间为 二月 15, 2026， https://openreview.net/forum?id=04Tfwy3LLC

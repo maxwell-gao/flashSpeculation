@@ -1,0 +1,301 @@
+﻿Inference-Time Distribution Modification in Large Language Models: A Comprehensive Survey of Layer-Aware, Sampling-Based, and Logit-Arithmetic Methodologies (2023–2026)
+Executive Summary
+The prevailing paradigm in the development of Large Language Models (LLMs) has historically been bifurcated into two distinct phases: pre-training, where models ingest vast corpora to learn probabilistic dependencies, and post-training, where alignment techniques such as Supervised Fine-Tuning (SFT) and Reinforcement Learning from Human Feedback (RLHF) steer these probabilities toward human-preferred behaviors. However, the period between 2023 and 2026 has witnessed the emergence of a third, critical paradigm: Inference-Time Distribution Modification.
+This report presents an exhaustive literature survey of this emerging field, analyzing over 40 distinct research contributions that propose methods to modify the output distribution $P(y_t | x, y_{<t})$ of an LLM at inference time without altering its parameters. The motivation for this shift is threefold. First, the computational cost of re-training or fine-tuning models for every new capability is prohibitive. Second, growing evidence suggests that LLMs often possess latent knowledge and reasoning capabilities that are masked by standard decoding strategies or misaligned final-layer representations. Third, the "alignment tax"—the degradation of general capabilities due to aggressive safety fine-tuning—can be mitigated by deferring alignment to the inference stage.
+Our analysis is structured around three primary domains of innovation:
+1. Leveraging Intermediate Layer Representations: We explore how the hierarchical nature of the transformer architecture can be exploited. Methods like DoLa (Decoding by Contrasting Layers) and SkipLayerCD demonstrate that contrasting "mature" final-layer logits with "premature" intermediate layers can suppress hallucinations and enhance multilingual reasoning. We also examine mechanistic interpretability frameworks like Patchscopes and KAPPA, which reveal that the "truth" is often encoded in a geometric subspace of the residual stream, distinct from the prediction subspace used by the final vocabulary head.
+2. MCMC and Advanced Sampling Strategies: We survey the shift from heuristic sampling (Nucleus, Top-k) to thermodynamically grounded approaches. The application of Markov Chain Monte Carlo (MCMC) algorithms to sample from sharpened "power distributions" allows base models to match the reasoning performance of RL-trained models without any parameter updates. We also detail Min-p sampling, which introduces dynamic, confidence-aware truncation to balance creativity and coherence, and Self-Certainty, which enables scalable Best-of-N selection without external reward models.
+3. Logit Arithmetic and Distribution Steering: We analyze methods that treat the output logits as a vector space for arithmetic operations. Classifier-Free Guidance (CFG), adapted from diffusion models, applies "negative constraints" to enforce prompt adherence. ThinkLogit demonstrates the transferability of reasoning capabilities from small, specialized models to large generalist models via linear combination of logits.
+This report synthesizes these developments into a unified narrative, classifying each methodology by its mechanism, operational space, and empirical impact. The findings suggest a future where "inference" is not merely a readout of static probabilities but a dynamic, iterative process of alignment and reasoning—a "System 2" cognitive layer built atop the "System 1" forward pass of the pre-trained model.
+________________
+1. The Geometry of Truth: Leveraging Intermediate Layer Representations at Inference Time
+The Transformer architecture processes information hierarchically. As a token passes through the network's depth, its representation evolves from surface-level lexical features to complex semantic and syntactic abstractions. A significant body of research from 2023–2026 relies on the Linear Representation Hypothesis: the idea that these intermediate states can be linearly projected onto the vocabulary space to reveal the model's "internal beliefs" at various stages of processing. This section explores methods that exploit this depth-wise evolution to improve factuality, reasoning, and cross-lingual transfer.
+1.1 Decoding by Contrasting Layers (DoLa)
+DoLa (Decoding by Contrasting Layers), introduced by Chuang et al. (2023), represents a seminal contribution to the field of inference-time intervention.1 The method is grounded in the observation that factual knowledge in LLMs is often "localized" to specific upper layers, while lower layers are responsible for linguistic competence and syntax. Standard decoding, which relies solely on the final layer, risks "over-smoothing" this factual signal or conflating it with linguistic priors.
+1.1.1 Theoretical Framework and Mechanism
+DoLa operates by contrasting the output distribution of the final layer (the "mature" layer, $N$) with that of a dynamically selected "premature" layer ($M$). The core hypothesis is that when the model engages in factual recall or complex reasoning, the probability distribution shifts significantly between the premature and mature layers. Conversely, for functional tokens (e.g., "the", "is"), the distributions remain relatively stable across layers.
+The method employs a two-step process at each decoding step $t$:
+1. Dynamic Layer Selection: DoLa defines a candidate set of early layers $\mathcal{J}$ (e.g., layers 0, 2, 4,..., 20 in a 40-layer model). It computes the Jensen-Shannon Divergence (JSD) between the distribution of the final layer $P_N$ and each candidate layer $P_j$:
+$$JSD(P_N | $$
+| P_j) = \frac{1}{2} D_{KL}(P_N | | M) + \frac{1}{2} D_{KL}(P_j | | M) $$ where $M = \frac{1}{2}(P_N + P_j)$ is the average distribution. The layer $M^*$ that maximizes this divergence is selected as the premature layer. A high JSD indicates a "critical cognitive step" where the model's internal representation has fundamentally changed, signaling the injection of high-level semantic or factual information.1
+   2. Contrastive Logit Subtraction: Once $M^*$ is identified, DoLa amplifies the difference between the mature and premature logits. The modified logit vector $\tilde{\mathbf{z}}$ is calculated as:
+$$\tilde{\mathbf{z}} = (1 + \alpha) \mathbf{z}_N - \alpha \mathbf{z}_{M^*}$$
+where $\alpha$ is a hyperparameter controlling the strength of the contrast. This operation penalizes tokens that are high-probability in the premature layer (often generic, "easy" completions or hallucinations driven by surface statistics) but lower probability in the mature layer. The result is a distribution sharpened around the factually robust candidates.
+1.1.2 Quantitative Impact and Area Classification
+DoLa has been extensively evaluated on tasks requiring high factuality and reasoning fidelity.
+      * Factuality: On the TruthfulQA benchmark, DoLa improves the truthfulness of LLaMA-family models (7B, 13B, 33B, 65B) by 12–17 absolute percentage points compared to standard greedy decoding.1 This result highlights DoLa's ability to suppress "imitative falsehoods"—common misconceptions present in the pre-training data that the model learns to mimic but "knows" are false in its higher-level representations.
+      * Reasoning: In Chain-of-Thought (CoT) scenarios like StrategyQA and GSM8K, DoLa enhances the factual correctness of the reasoning trace. By ensuring that each step of the reasoning chain is grounded in the model's "mature" knowledge rather than its "premature" linguistic priors, DoLa reduces the rate of error propagation.4
+      * Latency Profile: A critical advantage of DoLa is its efficiency. While it requires projecting multiple intermediate hidden states to the vocabulary space, the computational cost of the unembedding matrix multiplication is negligible compared to the self-attention mechanism of the transformer backbone. Consequently, DoLa increases inference latency by only 1.01× to 1.08×.1
+1.2 Autocontrastive Decoding (ACD): The "Amateur" Hypothesis
+While DoLa employs a dynamic selection mechanism, Autocontrastive Decoding (ACD) (Gera et al., 2023) explores the utility of a static contrast.5 ACD is built on the "Benefits of Bad Advice" theory, which posits that a less capable "amateur" model (or layer) can serve as a baseline for noise and bias.
+1.2.1 Mechanism
+ACD treats the final layer of the model as the "expert" and a fixed intermediate layer (often from the middle of the network) as the "amateur." The method subtracts the amateur's log-probabilities from the expert's:
+
+
+$$\log P_{ACD}(y|x) \propto \log P_{Expert}(y|x) - \lambda \log P_{Amateur}(y|x)$$
+This subtraction penalizes tokens that are highly probable for the amateur. Since intermediate layers often capture repetitive patterns, common n-grams, and simple syntactic completions, penalizing them forces the model to prioritize tokens that are uniquely supported by the full depth of the network—typically those representing specific factual knowledge or complex narrative arcs.
+1.2.2 Comparative Analysis: DoLa vs. ACD
+The distinction between DoLa and ACD lies in their adaptability.
+      * ACD's Limitation: Research in 2024 and 2025 noted that ACD's static contrast can be overly aggressive. In instruction-following tasks, the "amateur" layer often correctly predicts necessary function words or safe, neutral transitions. Penalizing these can force the "expert" to select low-probability, incoherent, or hallucinated tokens simply because they are different from the amateur.7 This phenomenon explains why ACD sometimes increases hallucination rates in fine-tuned models.7
+      * DoLa's Advantage: By using JSD to select the premature layer dynamically, DoLa effectively "turns off" the contrastive mechanism when the layers agree (i.e., when JSD is low). This ensures that functional tokens are not penalized, preserving coherence while still targeting hallucinations during critical information-retrieval steps.1
+1.3 SkipLayerCD: Addressing the Multilingual Mismatch
+The application of layer-contrastive methods in multilingual settings revealed a critical failure mode known as the Language Mismatch.
+1.3.1 The Phenomenon
+When a multilingual model (e.g., LLaMA 3 or Mistral) is prompted to generate text in a target language (e.g., Thai, Swahili), the lower layers of the model often continue to process information in the dominant pre-training language (English) or in an abstract "concept space." The translation to the target surface form typically occurs only in the final few layers.2 If one attempts to use DoLa or ACD in this setting, the "amateur" layer might output logits corresponding to English tokens, while the "expert" layer outputs Thai tokens. Subtracting English logits from Thai logits is mathematically nonsensical and leads to distribution collapse.
+1.3.2 Methodology: Layer Skipping
+SkipLayerCD (2024) addresses this by redefining the "amateur." Instead of taking an early exit (which results in the language mismatch), SkipLayerCD constructs an amateur representation by "skipping" a block of layers in the lower half of the network (the Context Understanding phase) but continuing computation through the upper layers (the Language Conversion phase).
+      * Process: The input is processed through layers $0 \dots m$. The activations are then passed directly to layer $n$ (where $n > m$), effectively skipping layers $m+1 \dots n-1$. The remaining layers $n \dots N$ are executed normally.
+      * Outcome: The resulting "amateur" logits are in the correct target language (due to passing through the upper layers) but are conceptually weaker (due to missing the context processing layers).
+1.3.3 Results on MGSM
+Evaluating on the MGSM (Multilingual Grade School Math) benchmark across 11 languages, SkipLayerCD demonstrated significant improvements:
+      * LLaMA 3 8B: Accuracy improved from 38.5% (baseline) to 42.7%.2
+      * Mistral 7B: Accuracy increased from 24.5% to 29.2%.2
+      * Relevance: This method is critical for deploying smaller, open-weights models in non-English environments, enabling them to punch above their weight class in reasoning tasks by filtering out cross-lingual noise.
+1.4 Mechanistic Interpretability: KAPPA and Patchscopes
+Recent work has moved beyond treating layers as black boxes, utilizing tools from mechanistic interpretability to intervene on specific geometric subspaces.
+1.4.1 KAPPA: Bridging the Knowledge-Prediction Gap
+A pervasive issue in LLM evaluation is the discrepancy between what a model "knows" (latent knowledge) and what it "says" (prediction). This is often observed in Multiple Choice Questions (MCQs), where a model might generate the correct answer in free text but select the wrong option (A, B, C, D) due to selection bias.9
+KAPPA (Knowledge-Aligned Prediction through Projection-based Adjustment), proposed in 2025, offers a geometric solution.
+      * Subspace Analysis: The authors demonstrate that the residual stream contains two distinct subspaces:
+      1. Knowledge Subspace: Encodes the semantic truth of the answer.
+      2. Prediction Subspace: Encodes the probability of the option token.
+      * Intervention: Misalignment between these subspaces causes errors. KAPPA applies a parameter-free projection that aligns the residual state with the Knowledge Subspace before the final decoding head.
+      * Results: KAPPA consistently reduces the knowledge-prediction gap across diverse benchmarks, providing a theoretical explanation for why methods like Inference-Time Intervention (ITI) 11 work: they essentially force the model's output to align with its latent truth representations.9
+1.4.2 Patchscopes: A Unifying Framework
+Patchscopes (2024) generalizes the concept of the Logit Lens. It provides a framework for "translating" hidden representations into natural language by "patching" them into a target prompt.12
+      * Method: A hidden state $h_l$ from a source prompt (e.g., "The capital of France is") is injected into a target prompt (e.g., "This vector represents") at a specific layer.
+      * Capability: This allows for Zero-Shot Feature Extraction (extracting attributes without training probes) and Self-Correction. In multi-hop reasoning tasks, Patchscopes can identify the layer where the model retrieves the correct intermediate fact and force the subsequent generation to condition on that fact, improving accuracy from ~20% to 50%.12
+1.5 Activation Decoding
+Activation Decoding (Chen et al., 2024) introduces an entropy-based metric to quantify the "sharpness" of context activations.
+      * Hypothesis: Correct generations are associated with sharper (lower entropy) context activations in the hidden states of in-context tokens, compared to hallucinations which exhibit "muddy" or high-entropy activations.14
+      * Application: The method adjusts the decoding probability by weighting it with the sharpness of the activations, effectively upweighting generations that are supported by confident internal states.
+________________
+2. MCMC and Non-Autoregressive Sampling Strategies
+While layer-based methods modify the content of the distribution, sampling strategies modify how the model explores it. The period 2024–2026 has seen a shift from heuristic sampling (Nucleus, Top-k) to methods grounded in statistical physics and confidence calibration.
+2.1 Reasoning with Sampling: MCMC and Power Distributions
+The paper "Reasoning with Sampling: Your Base Model is Smarter Than You Think" (2025) presents a provocative thesis: base LLMs already possess the reasoning capabilities typically induced by Reinforcement Learning (RL), but standard autoregressive sampling fails to uncover them.16
+2.1.1 The Thermodynamics of Reasoning
+Standard sampling draws tokens from $P(y_t | y_{<t})$. However, reasoning is a global property of the sequence, not a local property of the next token. The authors propose sampling from a Power Distribution:
+
+
+$$P^\alpha(Y | X) \propto \exp(\alpha \log P(Y | X))$$
+where $Y$ is the full sequence and $\alpha > 1$. This "sharpening" operation amplifies the probability mass of coherent, high-likelihood reasoning paths while suppressing the "cloud" of incoherent or suboptimal paths. This is analogous to lowering the temperature in a physical system to find the ground state.
+2.1.2 MCMC Algorithm
+Since sampling directly from $P^\alpha$ is intractable for the full sequence, the authors employ a Metropolis-Hastings (MH) algorithm at inference time.
+      1. Initialization: Generate an initial draft sequence $Y^{(0)}$ using standard sampling.
+      2. Proposal: Create a candidate $Y'$ by masking a subsequence of $Y^{(t)}$ and regenerating it using the base model.
+      3. Acceptance: Accept the candidate $Y'$ with probability:
+$$A(Y' | Y) = \min \left( 1, \frac{P(Y')^\alpha Q(Y | Y')}{P(Y)^\alpha Q(Y' | Y)} \right)$$
+where $Q$ is the proposal distribution.
+      4. Iteration: Repeat for $N$ steps to climb the probability landscape.
+2.1.3 Empirical Results: RL-Free Reasoning
+This method was evaluated on MATH500, HumanEval, and GPQA.
+         * Performance: The MCMC sampler achieved results comparable to or exceeding those of models post-trained with Group Relative Policy Optimization (GRPO). On MATH500, it matched the performance of RL baselines without any gradient updates.17
+         * Diversity: A key advantage over RL is the preservation of diversity. RL post-training often leads to mode collapse, where the model outputs the same reasoning path repeatedly. Power Sampling maintains the rich diversity of the base model, which is crucial for ensemble methods.16
+         * Cost: The inference cost is linear in the number of MCMC steps. The authors report an overhead of approximately 8–9× standard inference, which is significantly cheaper than the training cost of RL and comparable to Best-of-N sampling strategies.16
+2.2 Min-p Sampling: Dynamic Truncation
+Top-p (Nucleus) sampling uses a static cumulative probability threshold (e.g., $p=0.9$). This can be suboptimal: when the model is very confident (flat distribution), $p=0.9$ might include irrelevant tails; when uncertain (peaked), it might cut off valid options. Min-p Sampling (2024) introduces a dynamic, relative truncation.18
+2.2.1 The Min-p Rule
+The truncation threshold is defined relative to the most probable token:
+
+
+$$\text{Threshold}(t) = p_{base} \times \max_{w} P(w | y_{<t})$$
+Tokens with probability below this threshold are discarded.
+         * Scenario A (High Confidence): If the top token has $P=0.99$, and $p_{base}=0.1$, the threshold is $0.099$. This aggressively prunes the long tail of hallucinations.
+         * Scenario B (High Uncertainty): If the top token has $P=0.10$, the threshold is $0.01$. This allows for a wide exploration of valid candidates, preserving diversity.
+2.2.2 Impact on High-Temperature Sampling
+Min-p is particularly effective at high temperatures. Standard Top-p breaks down at $\tau > 1.0$ because the distribution flattens, and the nucleus includes nonsense tokens. Min-p, by scaling with the top token, maintains coherence even at $\tau=2.0$ or $\tau=3.0$.
+         * Results: On GPQA, Min-p at $\tau=2.0$ achieved 26.34% accuracy, while Top-p collapsed to 6.47%.19 This allows models to be "creative but coherent," enabling a new regime of high-temperature reasoning.
+2.3 REAL Sampling: Entropy Extrapolation
+REAL Sampling (2025) takes a theoretical approach to the factuality-diversity trade-off. It posits that there is a predictable relationship between a model's size and its entropy on factual tokens.20
+         * Asymptotic Hypothesis: An "infinitely large" model would have near-zero entropy on factual queries.
+         * Method: REAL sampling estimates the local entropy curvature of the model and extrapolates the distribution to approximate this infinite model.
+         * Outcome: On open-ended generation tasks, REAL sampling consistently outperforms 13 baseline methods, pushing the Pareto frontier of factuality vs. diversity.21
+2.4 Self-Certainty and Scalable Best-of-N
+Best-of-N (generating $N$ solutions and selecting the best) is a robust method for scaling test-time compute. However, it typically relies on expensive external Reward Models (RMs) or Verifiers. Self-Certainty (2025) proposes a training-free alternative.22
+2.4.1 Mechanism
+Self-Certainty aggregates the model's own confidence scores (e.g., negative perplexity, or token-level probability variance) across the generated sequence to rank candidates.
+         * Hypothesis: Correct reasoning paths are generally generated with higher confidence (lower entropy) than incorrect, hallucinated paths.
+2.4.2 Results
+         * Scalability: Performance on reasoning tasks scales log-linearly with $N$, mirroring the scaling laws of Reward Models but with zero training cost.
+         * Comparison: On GSM8K and HumanEval, Self-Certainty-based voting outperforms standard Self-Consistency (majority voting). It is particularly superior on open-ended tasks (like code generation) where "majority voting" is hard to define due to the lack of exact string matches.24
+2.5 The Non-Determinism Debate: Greedy vs. Sampling
+A critical study titled "The Good, The Bad, and The Greedy" (2025) re-evaluated the role of sampling in evaluation.27
+         * Findings: On strict reasoning and knowledge benchmarks (MMLU, MixEval, Arena-Hard), Greedy Decoding consistently outperforms the average of stochastic samples. Sampling introduces variance that often degrades performance on tasks with a single correct answer.
+         * Exception: AlpacaEval 2.0 was the only major benchmark where sampling improved win rates. This suggests that for chat-based, stylistic evaluations, the diversity and length bias introduced by sampling are preferred by judges (like GPT-4), whereas for objective reasoning, determinism is superior.28
+________________
+3. Interaction Between Distribution Modification and Sampling Strategy
+The interplay between modifying the logits (Section 1 & 4) and sampling from them (Section 2) creates complex dynamics.
+3.1 DoLa + Nucleus Sampling: The Factuality-Diversity Frontier
+When DoLa modifies the logits to amplify factual signals, it effectively sharpens the distribution. Feeding this sharpened distribution into Nucleus Sampling ($p=0.9$) creates a synergy.
+         * Effect: The "nucleus" becomes tighter, containing only the factually robust tokens. This allows the sampler to maintain the diversity of phrasing (syntax) while being constrained to the correct facts (semantics).
+         * Optimization: Research suggests that when using strong contrastive decoding, one should slightly increase the temperature. Since DoLa artificially lowers entropy, increasing temperature prevents the model from becoming overly deterministic and repetitive.29
+3.2 CFG + Min-p: Robustness at High Temperature
+Classifier-Free Guidance (CFG) typically results in "spiky" distributions where the preferred tokens have very high mass.
+         * Synergy: Combining CFG with Min-p provides a robust safety net. CFG steers the mode of the distribution toward the prompt's constraints. Min-p ensures that even if the temperature is raised to $\tau=3.0$ (to encourage wild creativity), the sampling never drifts into the "unconditional" or "hallucinatory" tail, because the truncation threshold rises in lockstep with the confidence of the guided mode.18
+________________
+4. Logit Arithmetic and Distribution Steering
+This section covers methods that treat the output logits $\mathbf{z}$ as vectors in a high-dimensional space, applying arithmetic operations to steer generation.
+4.1 Classifier-Free Guidance (CFG) for Text
+Originally a technique for diffusion models, CFG was adapted for text generation in 2024.30
+         * Formula: $\mathbf{z}_{final} = \mathbf{z}_{cond} + \gamma (\mathbf{z}_{cond} - \mathbf{z}_{uncond})$.
+         * Implementation: $\mathbf{z}_{cond}$ comes from the standard prompt. $\mathbf{z}_{uncond}$ comes from a "negative prompt" or a null context.
+         * Mechanism: CFG subtracts the "generic language model distribution" from the "conditional distribution." This amplifies the signal of the prompt, forcing the model to adhere strictly to instructions.
+         * Results: CFG achieved State-of-the-Art (SOTA) on the LAMBADA benchmark using LLaMA-7B, outperforming the much larger PaLM-540B. It acts as a "soft constraint," significantly improving instruction following and coherence.32
+4.2 Contrastive Thinking Decoding (CTD)
+For Large Reasoning Models (LRMs), CTD (2026) addresses the disconnect between thinking and answering.
+         * Problem: LRMs sometimes generate a correct thinking trace but a wrong answer.
+         * Solution: CTD contrasts the logits of the answer phase against a "noisy" reference (generated by perturbing the thinking trace). This effectively steers the decoding to prioritize answer tokens that are causally dependent on the correct thinking trace.34
+4.3 ThinkLogit: Transferring Reasoning Capabilities
+ThinkLogit (2025) demonstrates the transferability of reasoning via logit arithmetic.35
+         * Method:
+$$\mathbf{z}_{target} = \mathbf{z}_{base} + \lambda (\mathbf{z}_{guide} - \mathbf{z}_{ref})$$
+where the "guide" is a small, reasoning-tuned model (e.g., Qwen-1.5B-R1) and the "base" is a large generalist (e.g., Qwen-32B).
+         * Result: This operation boosted the large model's reasoning performance by 24.5%. It suggests that "reasoning" acts as a modular vector offset that can be added to a generalist model's distribution at inference time.
+________________
+5. Cross-Cutting Themes and Non-Autoregressive Frontiers
+5.1 Speculative Streaming and Multi-Stream Attention
+A major bottleneck for methods like DoLa and CFG is the need for multiple forward passes (one for each layer or condition). Speculative Streaming (EMNLP 2025) introduces Multi-Stream Attention (MSA).37
+            * Architecture: It adds "speculative streams" to the model that attend to the main residual stream.
+            * Relevance: This architecture can support contrastive decoding natively. One stream can compute the "mature" logits and another the "premature" logits in a single pass, enabling Zero-Overhead DoLa.
+5.2 Residual Stream Analysis
+The success of these methods confirms the Linear Representation Hypothesis at inference time. The residual stream is not a monolithic vector but a superposition of subspaces (Knowledge, Prediction, Syntax). Methods like KAPPA and Patchscopes act as "prisms," separating these components to allow for targeted intervention.
+________________
+6. Area Classification and Relevance Scores
+The following tables summarize the surveyed literature, classifying each paper by its primary mechanism and assigning a relevance score based on its impact and novelty in the 2023–2026 period.
+Table 1: Layer-Aware and Mechanistic Methods
+
+
+Paper / Method
+	Year
+	Primary Mechanism
+	Key Insight
+	Relevance Score (1-10)
+	DoLa 1
+	2023
+	Layer Contrast (Dynamic JSD)
+	Factuality is localized in upper layers; dynamic contrast suppresses hallucinations.
+	10
+	SkipLayerCD 2
+	2024
+	Layer Skipping
+	Standard layer contrast fails in multilingual settings due to language mismatch.
+	9
+	ACD 5
+	2023
+	Static Layer Contrast
+	"Amateur" layers provide a noise baseline. Static contrast is efficient but risky.
+	7
+	KAPPA 9
+	2025
+	Subspace Projection
+	Residual streams have distinct "Knowledge" and "Prediction" subspaces.
+	9
+	Patchscopes 12
+	2024
+	Hidden State Patching
+	Hidden states can be "translated" to natural language to correct reasoning errors.
+	8
+	Table 2: Sampling and Thermodynamic Methods
+
+
+Paper / Method
+	Year
+	Primary Mechanism
+	Key Insight
+	Relevance Score (1-10)
+	Reasoning w/ Sampling 16
+	2025
+	MCMC / Power Distribution
+	Base models match RL performance if sampled thermodynamically (global search).
+	10
+	Min-p 19
+	2024
+	Dynamic Truncation
+	Truncation should scale with confidence. Enables high-temp coherence.
+	9
+	Self-Certainty 26
+	2025
+	Confidence Aggregation
+	Best-of-N scaling is possible without Reward Models using internal confidence.
+	8
+	REAL Sampling 20
+	2025
+	Entropy Extrapolation
+	Extrapolating entropy mimics "infinite" model size to boost factuality.
+	8
+	Table 3: Logit Arithmetic and Steering
+
+
+Paper / Method
+	Year
+	Primary Mechanism
+	Key Insight
+	Relevance Score (1-10)
+	CFG for Text 32
+	2024
+	Conditional - Unconditional
+	Negative constraints improve instruction following (SOTA on LAMBADA).
+	9
+	ThinkLogit 35
+	2025
+	Model Mixing
+	Reasoning capabilities are transferable vectors (Small $\to$ Large).
+	9
+	CTD 34
+	2026
+	Trace Perturbation
+	Aligning "Answer" phase with "Thinking" phase in LRMs.
+	8
+	________________
+7. Conclusion
+The landscape of LLM optimization has fundamentally expanded. The research surveyed in this report demonstrates that Inference-Time Distribution Modification is not merely a collection of heuristics, but a principled discipline grounded in the geometry of high-dimensional representations and the thermodynamics of sampling.
+We are witnessing the decoupling of Capability (learned during pre-training) from Elicitation (performed at inference). Methods like DoLa and KAPPA prove that models "know" more than they say. Methods like MCMC Power Sampling prove that models can "reason" better than they generate. The future of AI likely involves a hybrid compute model, where "System 1" forward passes are modulated by "System 2" inference-time interventions—iteratively refining, contrasting, and steering distributions to achieve super-human alignment and reasoning without the cost of super-human training.
+________________
+Citations:
+1
+引用的著作
+            1. DoLa: Decoding by Contrasting Layers Improves Factuality in Large ..., 访问时间为 二月 15, 2026， https://arxiv.org/abs/2309.03883
+            2. Multilingual Contrastive Decoding via Language ... - ACL Anthology, 访问时间为 二月 15, 2026， https://aclanthology.org/2024.findings-emnlp.512.pdf
+            3. Official implementation for the paper "DoLa: Decoding by Contrasting Layers Improves Factuality in Large Language Models" - GitHub, 访问时间为 二月 15, 2026， https://github.com/voidism/DoLa
+            4. Improving LLMs Reasoning with Contrastive Decoding and Distillation - arXiv, 访问时间为 二月 15, 2026， https://arxiv.org/html/2402.14874v1
+            5. The Benefits of Bad Advice: Autocontrastive ... - ACL Anthology, 访问时间为 二月 15, 2026， https://aclanthology.org/2023.acl-long.580.pdf
+            6. A Survey on LLM Inference-Time Self-Improvement - arXiv.org, 访问时间为 二月 15, 2026， https://arxiv.org/html/2412.14352v1
+            7. An Analysis of Decoding Methods for LLM-based Agents for Faithful Multi-Hop Question Answering - arXiv, 访问时间为 二月 15, 2026， https://arxiv.org/html/2503.23415v1
+            8. The Benefits of Bad Advice: Autocontrastive Decoding across Model Layers - ResearchGate, 访问时间为 二月 15, 2026， https://www.researchgate.net/publication/372917087_The_Benefits_of_Bad_Advice_Autocontrastive_Decoding_across_Model_Layers
+            9. Bridging the Knowledge-Prediction Gap in LLMs on Multiple-Choice Questions - arXiv, 访问时间为 二月 15, 2026， https://arxiv.org/html/2509.23782v3
+            10. Bridging the Knowledge-Prediction Gap in LLMs on Multiple-Choice Questions - arXiv, 访问时间为 二月 15, 2026， https://arxiv.org/abs/2509.23782
+            11. Inference-Time Intervention: Eliciting Truthful Answers from a ..., 访问时间为 二月 15, 2026， https://arxiv.org/abs/2306.03341
+            12. [height=18pt]figures/misc/stethoscope.png Patchscopes: A ... - arXiv, 访问时间为 二月 15, 2026， https://arxiv.org/abs/2401.06102
+            13. Patchscopes: A Unifying Framework for Inspecting Hidden Representations of Language Models - arXiv, 访问时间为 二月 15, 2026， https://arxiv.org/html/2401.06102v3
+            14. Alleviating Hallucinations from Knowledge Misalignment in Large Language Models via Selective Abstention Learning - ACL Anthology, 访问时间为 二月 15, 2026， https://aclanthology.org/2025.acl-long.1199.pdf
+            15. In-Context Sharpness as Alerts: An Inner Representation Perspective for Hallucination Mitigation - GitHub, 访问时间为 二月 15, 2026， https://raw.githubusercontent.com/mlresearch/v235/main/assets/chen24av/chen24av.pdf
+            16. Paper page - Reasoning with Sampling: Your Base Model is ..., 访问时间为 二月 15, 2026， https://huggingface.co/papers/2510.14901
+            17. Reasoning with Sampling: Your Base Model is Smarter Than You Think - arXiv, 访问时间为 二月 15, 2026， https://arxiv.org/html/2510.14901v1
+            18. Turning Up the Heat: Min-p Sampling for Creative and Coherent LLM Outputs | OpenReview, 访问时间为 二月 15, 2026， https://openreview.net/forum?id=FBkpCyujtS
+            19. Turning Up the Heat: Min-p Sampling for Creative and ... - arXiv, 访问时间为 二月 15, 2026， https://arxiv.org/abs/2407.01082
+            20. REAL Sampling: Boosting Factuality and Diversity of Open-ended Generation by Extrapolating the Entropy of an Infinitely Large LM | Transactions of the Association for Computational Linguistics, 访问时间为 二月 15, 2026， https://direct.mit.edu/tacl/article/doi/10.1162/tacl_a_00757/131836/REAL-Sampling-Boosting-Factuality-and-Diversity-of
+            21. REAL Sampling: Boosting Factuality and Diversity of Open-ended Generation by Extrapolating the Entropy of an Infinitely Large LM - MIT Press Direct, 访问时间为 二月 15, 2026， https://direct.mit.edu/tacl/article-pdf/doi/10.1162/tacl_a_00757/2538234/tacl_a_00757.pdf
+            22. Scalable Best-of-N Selection for Large Language Models via Self-Certainty - OpenReview, 访问时间为 二月 15, 2026， https://openreview.net/pdf?id=29FRqmVQK8
+            23. NeurIPS Poster Scalable Best-of-N Selection for Large Language Models via Self-Certainty, 访问时间为 二月 15, 2026， https://neurips.cc/virtual/2025/poster/120166
+            24. Scalable Best-of-N Selection for Large Language Models via Self-Certainty - arXiv, 访问时间为 二月 15, 2026， https://arxiv.org/html/2502.18581v1
+            25. Scalable Best-of-N Selection for Large Language Models via Self-Certainty - arXiv.org, 访问时间为 二月 15, 2026， https://arxiv.org/html/2502.18581v3
+            26. 访问时间为 一月 1, 1970， https://huggingface.co/papers/2502.18581
+            27. The Good, The Bad, and The Greedy: Evaluation of LLMs Should Not Ignore Non-Determinism - ACL Anthology, 访问时间为 二月 15, 2026， https://aclanthology.org/2025.naacl-long.211.pdf
+            28. Yifan-Song793/GoodBadGreedy: The Good, The Bad, and The Greedy: Evaluation of LLMs Should Not Ignore Non-Determinism - GitHub, 访问时间为 二月 15, 2026， https://github.com/Yifan-Song793/GoodBadGreedy
+            29. Explaining and Improving Contrastive Decoding by Extrapolating the Probabilities of a Huge and Hypothetical LM - ACL Anthology, 访问时间为 二月 15, 2026， https://aclanthology.org/2024.emnlp-main.484.pdf
+            30. An overview of classifier-free guidance for diffusion models - AI Summer, 访问时间为 二月 15, 2026， https://theaisummer.com/classifier-free-guidance/
+            31. Stay on topic with Classifier-Free Guidance - GitHub, 访问时间为 二月 15, 2026， https://raw.githubusercontent.com/mlresearch/v235/main/assets/sanchez24a/sanchez24a.pdf
+            32. Stay on Topic with Classifier-Free Guidance | OpenReview, 访问时间为 二月 15, 2026， https://openreview.net/forum?id=RiM3cl9MdK
+            33. Stay on Topic with Classifier-Free Guidance - OpenReview, 访问时间为 二月 15, 2026， https://openreview.net/forum?id=RmRA7Q0lwQ
+            34. Contrastive Thinking Decoding can Improve Answers for Reasoning ..., 访问时间为 二月 15, 2026， https://openreview.net/forum?id=czozyUMx2M
+            35. Logit Arithmetic Elicits Long Reasoning Capabilities Without Training - arXiv, 访问时间为 二月 15, 2026， https://arxiv.org/html/2507.12759v1
+            36. Logit Arithmetic Elicits Long Reasoning Capabilities Without Training - ChatPaper, 访问时间为 二月 15, 2026， https://chatpaper.com/paper/198399
+            37. Speculative Streaming: Efficient and Scalable ... - ACL Anthology, 访问时间为 二月 15, 2026， https://aclanthology.org/2025.emnlp-main.986.pdf
+            38. dola: decoding by contrasting layers improves factuality in large language models - arXiv, 访问时间为 二月 15, 2026， https://arxiv.org/pdf/2309.03883
+            39. LogitLens4LLMs: Extending Logit Lens Analysis to Modern Large Language Models, 访问时间为 二月 15, 2026， https://arxiv.org/html/2503.11667v1
+            40. Large Language Models Are Human-Like Internally | Transactions of the Association for Computational Linguistics, 访问时间为 二月 15, 2026， https://direct.mit.edu/tacl/article/doi/10.1162/TACL.a.58/134311/Large-Language-Models-Are-Human-Like-Internally
+            41. Patchscopes: A unifying framework for inspecting hidden representations of language models - Google Research, 访问时间为 二月 15, 2026， https://research.google/blog/patchscopes-a-unifying-framework-for-inspecting-hidden-representations-of-language-models/
+            42. Bridging the Knowledge-Prediction Gap in LLMs on Multiple-Choice Questions, 访问时间为 二月 15, 2026， https://openreview.net/forum?id=Uvutpgvpmi
+            43. Logit Arithmetic Elicits Long Reasoning Capabilities Without Training, 访问时间为 二月 15, 2026， https://web.eecs.umich.edu/~xlfzhang/assets/pdf/arxiv2025/paper_ThinkLogit.pdf
+            44. Inference-Time Intervention: Eliciting Truthful Answers from a Language Model - OpenReview, 访问时间为 二月 15, 2026， https://openreview.net/pdf?id=aLLuYpn83y
