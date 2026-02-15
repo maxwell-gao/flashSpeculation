@@ -1,6 +1,4 @@
-# Less Confident, More Correct
-
-**Better Reasoning Through Softer Targets and Harder Search**
+# Your Hidden Layers Already Know How to Reason: Just Sample after Blending
 
 ## The Problem
 
