@@ -1,0 +1,26 @@
+% math_commands.tex — Shorthand macros for the SignFlip paper
+
+% Greek shortcuts
+\newcommand{\al}{\alpha}
+\newcommand{\bt}{\beta}
+
+% Model components
+\newcommand{\lmhead}{\texttt{lm\_head}}
+\newcommand{\hN}{h_N}          % final hidden state
+\newcommand{\hL}{h_L}          % intermediate hidden state
+\newcommand{\Ddeep}{\Delta_{\text{deep}}}  % residual h_N - h_L
+
+% Distributions
+\newcommand{\pguided}{p_{\text{guided}}}
+\newcommand{\ptarget}{p_{\text{target}}}
+\newcommand{\pproposal}{q_{\text{proposal}}}
+
+% Operators
+\newcommand{\softmax}{\operatorname{softmax}}
+\newcommand{\logsoftmax}{\operatorname{log\text{-}softmax}}
+
+% Placeholder for results not yet available
+\newcommand{\placeholder}[1]{\textcolor{red}{\textbf{[#1]}}}
+
+% Condition names (monospace in text)
+\newcommand{\cond}[1]{\texttt{#1}}

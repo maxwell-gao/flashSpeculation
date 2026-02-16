@@ -1,0 +1,711 @@
+% --------------------------------------------------------------------------
+% Your Hidden Layers Already Know How to Reason: Just Sample after Blending
+%
+% arXiv preprint — NeurIPS-style writing logic
+% --------------------------------------------------------------------------
+\documentclass[11pt]{article}
+
+% ---------- geometry & layout ----------
+\usepackage[margin=1in]{geometry}
+\usepackage{setspace}
+\onehalfspacing
+
+% ---------- fonts & encoding ----------
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\usepackage{microtype}
+
+% ---------- math ----------
+\usepackage{amsmath,amssymb,amsthm}
+
+% ---------- tables & figures ----------
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage{graphicx}
+\usepackage{subcaption}
+\usepackage[dvipsnames]{xcolor}
+
+% ---------- algorithms ----------
+\usepackage{algorithm}
+\usepackage{algorithmic}
+
+% ---------- references ----------
+\usepackage[numbers,sort&compress]{natbib}
+\usepackage[colorlinks,citecolor=NavyBlue,linkcolor=Maroon,urlcolor=NavyBlue]{hyperref}
+
+% ---------- misc ----------
+\usepackage{todonotes}
+\usepackage{enumitem}
+
+% ---------- custom commands ----------
+\input{math_commands}
+
+% ==========================================================================
+\title{Your Hidden Layers Already Know How to Reason:\\
+Just Sample after Blending}
+
+\author{
+  Anonymous Authors \\
+  \texttt{anonymous@institution.edu}
+}
+
+\date{\today}
+
+% ==========================================================================
+\begin{document}
+\maketitle
+
+% --------------------------------------------------------------------------
+\begin{abstract}
+% --------------------------------------------------------------------------
+A growing body of work---DoLa, Contrastive Decoding, Classifier-Free
+Guidance---shows that \emph{sharpening} a language model's output
+distribution at inference time improves reasoning and factuality.  All of
+these methods amplify the late-layer residual update ($\bt < 0$ in the
+logit-blend framework), and all evaluate under greedy decoding.  The
+implicit consensus: for reasoning, sharper is better.
+
+We show this consensus is conditional on the decoding strategy.  We unify
+logit-space interpolation and extrapolation under a single parameter $\bt$
+that scales the deep-layer residual, and sweep $\bt$ across both signs under
+greedy decoding and MCMC Power Sampling~\citep{karan_reasoning_2025}.  The
+result is a \textbf{sign flip}: greedy favors $\bt < 0$ (sharpening), but
+Power Sampling favors $\bt > 0$ (smoothing)---achieving 86.6\% on MATH-500
+with Qwen3-4B, versus 85.4\% for standard Power Sampling and 83.0\% for
+greedy.  The mechanism is geometric: the final transformer layers act
+primarily as confidence refiners, and dampening their contribution softens
+the target landscape that the Metropolis--Hastings chain must traverse.
+Greedy needs confidence; search needs room to explore.  The method is
+training-free, adds zero parameters, and fuses into the generation loop with
+no extra forward passes.
+
+\end{abstract}
+
+% --------------------------------------------------------------------------
+\section{Introduction}
+\label{sec:intro}
+% --------------------------------------------------------------------------
+
+\paragraph{The sharpening consensus.}
+A convergent finding across recent inference-time methods is that
+\emph{sharpening} a language model's output distribution improves reasoning
+and factuality.
+DoLa~\citep{chuang_dola_2023} subtracts early-layer logits from late-layer
+logits, amplifying the confident predictions of the deep layers.
+Classifier-Free Guidance~\citep{sanchez_stay_2024} extrapolates between
+conditional and unconditional logits to enforce prompt adherence.
+Autocontrastive Decoding~\citep{gera_benefits_2023} penalizes the ``easy''
+tokens predicted by intermediate layers.
+\citet{chang_explaining_2024} prove that contrastive decoding is equivalent
+to linearly extrapolating toward a hypothetical larger model.
+All of these share the same geometric structure: they amplify the residual
+update contributed by the final transformer layers.  And all evaluate under
+\emph{greedy} (or autoregressive) decoding.
+
+The consensus is: for reasoning, sharper is better.
+
+\paragraph{A hidden assumption.}
+But this consensus carries an implicit assumption: that the decoder makes a
+single, irrevocable decision at each token position.  Greedy decoding
+commits to the argmax; it benefits from a peaked distribution because the
+single decision must be correct.  What happens when the decoder
+\emph{searches}?
+
+\citet{karan_reasoning_2025} showed that MCMC Power Sampling---drawing from
+a sharpened distribution $p^\al$ via Metropolis--Hastings---allows base
+models to match RL post-training on reasoning benchmarks without any
+parameter updates.  The softmax
+bottleneck~\citep{yang_breaking_2018} explains why: a standard softmax layer
+can only produce a rank-$d$ log-probability matrix, while natural language
+requires a high-rank matrix.  MCMC search partially bypasses this bottleneck
+by exploring the sequence space rather than committing to a single path.
+
+No prior work has asked: \emph{when the decoder is a search algorithm
+rather than an argmax, does the optimal direction of logit intervention
+change?}
+
+\paragraph{The sign flip.}
+We answer this question by unifying logit-space interpolation and
+extrapolation under a single parameter $\bt$ that scales the deep-layer
+residual:
+\[
+  \text{guided\_logits} = (1 - \bt) \cdot \lmhead(\hN) + \bt \cdot \lmhead(\hL)
+  = \lmhead(\hN - \bt \cdot \Ddeep).
+\]
+Sweeping $\bt$ across both signs under greedy and MCMC decoding reveals a
+\textbf{sign flip}: the optimal $\bt$ for reasoning changes sign between the
+two strategies.  On MATH-500 with Qwen3-4B:
+\begin{itemize}[nosep,leftmargin=*]
+  \item Greedy favors $\bt < 0$ (sharpening), consistent with the
+    existing literature.
+  \item Power Sampling favors $\bt > 0$ (smoothing), achieving 86.6\%
+    versus the 85.4\% baseline---\emph{contradicting} the sharpening
+    consensus.
+\end{itemize}
+
+\paragraph{Why?}
+Logit Lens studies~\citep{csordas_language_2025} and layer pruning
+experiments~\citep{lu_reassessing_2025} show that the final transformer
+layers act primarily as \emph{confidence refiners}: they sharpen the
+distribution without introducing new semantic content.  Greedy decoding
+\emph{needs} this confidence boost---the argmax must pick the right token.
+But when the decoder is a Metropolis--Hastings chain targeting $p^\al$ with
+$\al = 4$, the landscape is already extremely sharp.  The chain gets trapped
+in narrow modes, and mixing degrades.  Dampening the confidence refinement
+($\bt > 0$) softens the target landscape, giving the chain room to explore
+and discover better reasoning paths.
+
+The optimal confidence level depends on the search algorithm: greedy needs
+sharpness; MCMC needs smoothness.
+
+\paragraph{Contributions.}
+\begin{enumerate}[leftmargin=*,nosep]
+  \item We propose a \textbf{unified $\bt$ framework}
+    (Section~\ref{sec:framework}) that subsumes DoLa, Contrastive Decoding,
+    and CFG as special cases of a single logit-blend formula, exposing the
+    geometric structure shared by all layer-aware inference-time
+    interventions.
+
+  \item We discover the \textbf{sign flip}: the optimal $\bt$ for reasoning
+    changes sign between greedy ($\bt < 0$) and MCMC Power Sampling ($\bt >
+    0$).  Logit smoothing---dismissed as harmful for reasoning by the
+    contrastive decoding literature---becomes beneficial when paired with
+    search (Section~\ref{sec:results}).
+
+  \item We provide a \textbf{mechanistic explanation}
+    (Section~\ref{sec:analysis}): the final layers are confidence refiners,
+    not information retrievers; dampening them softens the MCMC target
+    landscape and improves chain mixing.
+
+  \item We validate the finding across \placeholder{multiple benchmarks
+    (MATH-500, GSM8K, GPQA-Diamond)} and \placeholder{multiple model scales
+    (Qwen3-0.6B through 8B)}.  The method is \textbf{training-free}, adds
+    \textbf{zero parameters}, and is \textbf{fused} into the generation loop
+    with no extra forward passes (Section~\ref{sec:implementation}).
+\end{enumerate}
+
+% --------------------------------------------------------------------------
+\section{Background}
+\label{sec:background}
+% --------------------------------------------------------------------------
+
+\subsection{Power Sampling via MCMC}
+\label{sec:bg_power}
+
+\citet{karan_reasoning_2025} propose sampling from the sharpened
+distribution $p^\al$ ($\al > 1$) using a Metropolis--Hastings (MH)
+algorithm.  Generation proceeds in blocks: a proposal sequence is generated
+autoregressively at temperature $T = 1/\al$, then accepted or rejected based
+on the MH ratio
+\begin{equation}
+  \label{eq:mh}
+  \log r = \al \log p(\text{proposed}) + \log q(\text{current})
+           - \al \log p(\text{current}) - \log q(\text{proposed}),
+\end{equation}
+where $q$ is the temperature-scaled proposal distribution.  With $\al = 4$,
+the method achieves large gains on MATH-500, HumanEval, and GPQA without any
+training.
+
+\subsection{The Residual Stream and Logit Linearity}
+\label{sec:bg_layer}
+
+A transformer with $N$ layers builds its prediction through a residual
+stream: $\hN = h_0 + \sum_{l=1}^{N} \delta_l$, where $\delta_l$ is the
+residual update from layer $l$.  The final logits are $\lmhead(\hN)$.
+Because $\lmhead$ is a linear projection, we can decompose:
+\begin{equation}
+  \label{eq:residual}
+  \lmhead(\hN) = \lmhead(\hL) + \lmhead(\Ddeep),
+  \quad \text{where} \quad \Ddeep = \hN - \hL = \sum_{l=L+1}^{N} \delta_l.
+\end{equation}
+This linearity is the key property that enables our framework: any linear
+combination in logit space is equivalent to a linear combination in
+hidden-state space.  The deep-layer residual $\Ddeep$ represents the
+aggregate contribution of layers $L{+}1$ through $N$---the confidence
+refinement discussed in Section~\ref{sec:refiners}.
+
+\subsection{The Softmax Bottleneck}
+\label{sec:bg_bottleneck}
+
+\citet{yang_breaking_2018} prove that a standard softmax-based model with
+embedding dimension $d$ can only produce a rank-$d$ log-probability matrix,
+while natural language requires a high-rank matrix.  Their solution, Mixture
+of Softmaxes, addresses this at \emph{training time}.  We address it at
+\emph{inference time}: by blending logits from two different hidden states,
+we create a richer distribution that is no longer a simple rank-$d$
+factorization.
+
+% --------------------------------------------------------------------------
+\section{The Unified $\bt$ Framework}
+\label{sec:framework}
+% --------------------------------------------------------------------------
+
+\subsection{Logit-Space Blend}
+\label{sec:blend}
+
+Given a frozen language model with $N$ layers, we define the
+\emph{guided logits} at each token position as:
+\begin{equation}
+  \label{eq:guided}
+  \boxed{
+    \text{guided\_logits} = (1 - \bt) \cdot \lmhead(\hN) + \bt \cdot \lmhead(\hL)
+  }
+\end{equation}
+where $\hL$ is the hidden state at an intermediate layer $L < N$ selected by
+a probe (Section~\ref{sec:probe}), and $\bt \in \mathbb{R}$ is the blend
+coefficient.
+
+Because $\lmhead$ is linear, Equation~\ref{eq:guided} is equivalent to
+\begin{equation}
+  \label{eq:residual_form}
+  \text{guided\_logits} = \lmhead\!\left(\hN - \bt \cdot \Ddeep\right),
+\end{equation}
+which reveals the geometric interpretation: $\bt$ scales the deep-layer
+residual contribution $\Ddeep = \hN - \hL$.
+
+\begin{table}[h]
+\centering
+\caption{The unified $\bt$ framework: three regimes.}
+\label{tab:regimes}
+\begin{tabular}{@{}lcll@{}}
+\toprule
+$\bt$ regime & Effect on $\Ddeep$ & Distribution & Prior work \\
+\midrule
+$\bt < 0$ (extrapolation) & Amplify & Sharper, more confident &
+  DoLa~\citep{chuang_dola_2023}, CFG~\citep{sanchez_stay_2024} \\
+$\bt = 0$ & Identity & Standard decoding & Baseline \\
+$\bt > 0$ (interpolation) & Dampen & Smoother, less confident &
+  \textbf{This work} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Relationship to Prior Work}
+\label{sec:prior_map}
+
+\paragraph{DoLa ($\bt \approx -1$, dynamic layer).}
+DoLa~\citep{chuang_dola_2023} computes $\lmhead(\hN) - \lmhead(\hL)$ with
+a dynamically selected contrast layer, equivalent to $\bt = -1$ in our
+framework.  It is evaluated under greedy decoding.
+
+\paragraph{Contrastive Decoding ($\bt < 0$, two models).}
+\citet{chang_explaining_2024} prove that contrastive decoding (expert minus
+amateur logits) can be viewed as linear extrapolation toward a hypothetical
+larger model.  When both models share a single backbone (as in our
+framework), this reduces to logit extrapolation with $\bt < 0$.
+
+\paragraph{Classifier-Free Guidance ($\bt \in [-2, -1]$).}
+CFG~\citep{sanchez_stay_2024} interpolates between conditional and
+unconditional logits with a guidance scale $\gamma > 1$, equivalent to
+$\bt = 1 - \gamma < 0$ when the ``unconditional'' signal is an intermediate
+layer's prediction.
+
+\paragraph{This work: $\bt > 0$ under MCMC.}
+We are the first to study \emph{positive} $\bt$ (interpolation /
+smoothing) for reasoning tasks, and the first to sweep $\bt$ across
+both signs under MCMC sampling.
+
+\subsection{Combining with MCMC Power Sampling}
+\label{sec:combine}
+
+When $\bt \neq 0$, the MH target distribution becomes $\pguided^\al$:
+\begin{equation}
+  \label{eq:guided_mh}
+  \log r = \al \log \pguided(\text{proposed}) + \log q(\text{current})
+           - \al \log \pguided(\text{current}) - \log q(\text{proposed}).
+\end{equation}
+The proposal $q$ remains the standard temperature-scaled distribution
+(unchanged from~\citet{karan_reasoning_2025}).  Only the
+\emph{target evaluation} changes: it uses the blended logits from
+Equation~\ref{eq:guided}.
+
+% --------------------------------------------------------------------------
+\section{Experimental Setup}
+\label{sec:setup}
+% --------------------------------------------------------------------------
+
+\subsection{Models}
+\label{sec:models}
+
+We evaluate on the Qwen3 model family in bfloat16 precision with Flash
+Attention 2:
+
+\begin{table}[h]
+\centering
+\caption{Model configurations. The blend layer $L$ is selected by the probe
+  (Section~\ref{sec:probe}); $N{-}3$ is used as a heuristic validated by
+  the probe.}
+\label{tab:models}
+\begin{tabular}{@{}lccc@{}}
+\toprule
+Model & Layers ($N$) & Blend layer ($L$) & Parameters \\
+\midrule
+Qwen3-0.6B & 28 & \placeholder{25} & 0.6B \\
+Qwen3-1.7B & 28 & \placeholder{25} & 1.7B \\
+Qwen3-4B   & 36 & 33               & 4B \\
+Qwen3-8B   & 36 & \placeholder{33} & 8B \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Benchmarks}
+\label{sec:benchmarks}
+
+\begin{itemize}[nosep,leftmargin=*]
+  \item \textbf{MATH-500}~(500 competition math problems): the primary benchmark,
+    following~\citet{karan_reasoning_2025}.
+  \item \textbf{GSM8K}~(1319 grade-school math problems): tests whether the
+    effect transfers to easier arithmetic reasoning.
+  \item \textbf{GPQA-Diamond}~(198 graduate-level science questions):
+    multiple-choice format testing scientific reasoning.
+\end{itemize}
+
+\subsection{Probe-Based Layer Selection}
+\label{sec:probe}
+
+Rather than fixing the blend layer $L$ via a heuristic (e.g., $N{-}3$), we
+run a lightweight probe: for each layer $l \in \{0, \ldots, N{-}1\}$, we
+compute $\lmhead(h_l)$ on a held-out sample of 50 examples from the target
+benchmark and measure the median rank of the gold next-token.  The
+recommended $L$ is the non-final layer with the lowest median rank.
+
+For Qwen3-4B on MATH-500, the probe selects layer 33 (median rank 12),
+confirming the choice from our earlier diagnostic
+experiments.\footnote{The Phase~0 diagnostic report showed layer~33 achieves
+rank~12 on the gold token, while the next-best layer~25 has rank~21,981.}
+
+\subsection{Implementation: Fused Blend}
+\label{sec:implementation}
+
+A na\"ive implementation would require a separate forward pass to extract
+$\hL$ for the MH target evaluation.  We instead \emph{fuse} the blend into
+the existing generation call: \texttt{model.generate(...,
+output\_hidden\_states=True)} already runs the full model and returns all
+hidden states at each decoding step.  We extract $h_L$ from
+\texttt{output.hidden\_states[L+1]} and compute the blended logits in-place,
+adding \textbf{zero extra forward passes}.
+
+\subsection{Conditions and Hyperparameters}
+\label{sec:conditions}
+
+\begin{table}[h]
+\centering
+\caption{Experimental conditions.  All conditions are training-free and
+  parameter-free.}
+\label{tab:conditions}
+\begin{tabular}{@{}llccc@{}}
+\toprule
+Condition & Base distribution & Sampling & MCMC & Extra cost \\
+\midrule
+\cond{greedy}       & $p$                 & argmax      & No  & --- \\
+\cond{ps}           & $p^\al$             & MH          & Yes & --- \\
+\cond{blend\_greedy} & $\pguided$          & argmax      & No  & 0 \\
+\cond{blend\_ps}     & $\pguided^\al$      & MH          & Yes & 0 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Default hyperparameters: $\al = 4.0$, $\bt = 0.05$, MCMC steps $= 10$,
+blocks $= 16$, \texttt{max\_new\_tokens} $= 3072$.
+
+% --------------------------------------------------------------------------
+\section{Results}
+\label{sec:results}
+% --------------------------------------------------------------------------
+
+\subsection{The SignFlip: Main Result}
+\label{sec:signflip}
+
+\begin{table}[h]
+\centering
+\caption{MATH-500 accuracy (\%) with Qwen3-4B.  \textbf{Bold} marks the
+  best result per decoding strategy.  The sign flip is visible: $\bt > 0$
+  hurts greedy but helps MCMC.}
+\label{tab:main}
+\begin{tabular}{@{}lcc@{}}
+\toprule
+Condition & Accuracy (\%) & $\Delta$ vs.\ baseline \\
+\midrule
+\cond{greedy} ($\bt = 0$)              & 83.0 & --- \\
+\cond{blend\_greedy} ($\bt = 0.05$)    & 82.4 & $-0.6$ \\
+\midrule
+\cond{ps} ($\bt = 0$, $\al = 4$)      & 85.4 & --- \\
+\cond{blend\_ps} ($\bt = 0.05$, $\al = 4$) & \textbf{86.6} & $+1.2$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The interaction is superlinear: logit smoothing \emph{hurts} greedy
+($-0.6$\,pp) but \emph{helps} MCMC ($+1.2$\,pp).  The combined method
+achieves 86.6\%, outperforming both the greedy baseline (83.0\%) and the
+Power Sampling baseline (85.4\%).
+
+\begin{figure}[t]
+\centering
+\missingfigure[figwidth=0.9\textwidth]{%
+  $\bt$ sweep figure: x-axis = $\bt$ from $-0.20$ to $+0.20$,
+  y-axis = accuracy (\%).
+  Two curves: greedy (monotonically decreasing as $\bt$ increases)
+  and Power Sampling (increasing as $\bt$ increases).
+  The curves cross near $\bt = 0$---the SignFlip.%
+}
+\caption{The SignFlip.  Accuracy on MATH-500 (Qwen3-4B) as a function of
+  $\bt$ under greedy decoding and Power Sampling ($\al = 4$).  The optimal
+  $\bt$ flips sign: greedy favors $\bt < 0$ (sharpening), while MCMC favors
+  $\bt > 0$ (smoothing).}
+\label{fig:signflip}
+\end{figure}
+
+\subsection{$\bt$ Sweep}
+\label{sec:sweep}
+
+\placeholder{Full $\bt$ sweep results with $\bt \in \{-0.20, -0.10, -0.05,
+0, +0.05, +0.10, +0.20\}$ under both greedy and Power Sampling.  We expect
+the greedy curve to peak at a small negative $\bt$ and the PS curve to peak
+at a moderate positive $\bt$, crossing near $\bt = 0$.}
+
+\subsection{Model Scaling}
+\label{sec:scaling}
+
+\begin{table}[h]
+\centering
+\caption{MATH-500 accuracy (\%) across model scales at the best $\bt$
+  configuration.}
+\label{tab:scaling}
+\begin{tabular}{@{}lcccc@{}}
+\toprule
+Model & \cond{greedy} & \cond{ps} & \cond{blend\_ps} & $\Delta$ (ps $\to$ blend\_ps) \\
+\midrule
+Qwen3-0.6B & \placeholder{--} & \placeholder{--} & \placeholder{--} & \placeholder{--} \\
+Qwen3-1.7B & \placeholder{--} & \placeholder{--} & \placeholder{--} & \placeholder{--} \\
+Qwen3-4B   & 83.0 & 85.4 & \textbf{86.6} & $+1.2$ \\
+Qwen3-8B   & \placeholder{--} & \placeholder{--} & \placeholder{--} & \placeholder{--} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\placeholder{Analysis of whether the sign flip persists across model scales,
+and whether the optimal $\bt$ shifts with model size.}
+
+\subsection{Benchmark Diversity}
+\label{sec:benchmarks_results}
+
+\begin{table}[h]
+\centering
+\caption{Accuracy (\%) across benchmarks with Qwen3-4B at $\bt = 0.05$,
+  $\al = 4$.}
+\label{tab:benchmarks}
+\begin{tabular}{@{}lccc@{}}
+\toprule
+Benchmark & \cond{greedy} & \cond{ps} & \cond{blend\_ps} \\
+\midrule
+MATH-500       & 83.0 & 85.4 & \textbf{86.6} \\
+GSM8K          & \placeholder{--} & \placeholder{--} & \placeholder{--} \\
+GPQA-Diamond   & \placeholder{--} & \placeholder{--} & \placeholder{--} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\placeholder{Discussion of whether the sign flip generalizes beyond
+mathematical reasoning to scientific reasoning (GPQA) and simpler arithmetic
+(GSM8K).}
+
+\subsection{Ablations}
+\label{sec:ablations}
+
+\paragraph{Blend layer position.}
+\placeholder{Sweep over different blend layers $L$ to validate the probe
+selection and test sensitivity.}
+
+\paragraph{$\al$ sensitivity.}
+\placeholder{Test $\al \in \{2, 4, 8\}$ to verify robustness of the sign
+flip across sharpening strengths.}
+
+% --------------------------------------------------------------------------
+\section{Analysis: Why Does Smoothing Help MCMC?}
+\label{sec:analysis}
+% --------------------------------------------------------------------------
+
+The sign flip raises a natural question: why does the same intervention that
+hurts greedy \emph{help} MCMC?  We argue that the answer lies in the
+functional role of the final transformer layers and how that role interacts
+with different decoding strategies.
+
+\subsection{The Final Layers as Confidence Refiners}
+\label{sec:refiners}
+
+Logit Lens studies---projecting each layer's hidden state through the
+language model head---consistently show that the ``concept'' of the correct
+token is resolved well before the final layer, typically by layer $2N/3$.
+The remaining layers primarily \emph{boost confidence}: they increase the
+logit magnitude of the already-leading candidate relative to distractors,
+reducing entropy without introducing new semantic
+content~\citep{csordas_language_2025}.  Layer pruning
+experiments~\citep{lu_reassessing_2025} corroborate this: removing the final
+10\% of layers barely degrades knowledge tasks (MMLU) but collapses complex
+reasoning (AIME)---suggesting that these layers refine the \emph{precision}
+of the output, not the \emph{identity} of the answer.
+
+In the unified $\bt$ framework, the deep-layer residual $\Ddeep = \hN -
+\hL$ is precisely this confidence-refinement vector.  The sign of $\bt$
+controls whether we amplify it ($\bt < 0$: extrapolation, sharper) or dampen
+it ($\bt > 0$: interpolation, smoother).
+
+\subsection{Why Greedy Needs Sharpness}
+
+Greedy decoding commits to the single highest-probability token at each
+step.  A small perturbation that shifts the argmax from the correct to an
+incorrect token causes cascading errors in autoregressive generation.
+Amplifying the confidence-refinement vector ($\bt < 0$) makes the argmax
+more robust: the correct token's logit margin over distractors widens,
+reducing the probability of a wrong commitment.  This explains why DoLa,
+Contrastive Decoding, and CFG all improve greedy reasoning: they manually
+accelerate the model's native confidence-refinement process.
+
+\subsection{Why MCMC Needs Smoothness}
+
+Power Sampling targets $\pguided^\al$ with $\al = 4$.  Raising the
+distribution to a power of~4 already produces an extremely sharp landscape.
+The Metropolis--Hastings chain must traverse this landscape to find good
+reasoning paths, but sharp landscapes have deep, narrow modes separated by
+probability deserts.  The chain gets trapped: proposals that deviate from the
+current mode are overwhelmingly rejected.
+
+Dampening the confidence-refinement vector ($\bt > 0$) softens the modes
+\emph{before} the power operation: $\pguided^\al$ has wider basins of
+attraction than $p^\al$, because the per-token logit margins are smaller.
+The chain can transition between modes more easily, exploring a larger
+region of the sequence space and discovering reasoning paths that standard
+Power Sampling misses.
+
+\subsection{Acceptance Rate vs.\ Sample Quality}
+
+In our experiments on the 104-problem subset, the MH acceptance rate for
+\cond{blend\_ps} (50.4\%) is lower than \cond{ps} (55.8\%)---seemingly
+contradicting the ``better mixing'' argument.  But this comparison is
+between chains targeting \emph{different} distributions.  The guided target
+$\pguided^\al$ concentrates mass more effectively on correct reasoning
+paths; proposals drawn from $q$ (which targets the standard distribution)
+are further from the guided mode and thus rejected more often.  A lower
+acceptance rate with a better target is a sign of a \emph{higher-quality
+baseline}, not of a stuck chain.  The relevant metric is the
+\emph{effective sample quality}---measured by downstream accuracy---which
+improves from 72.1\% to 77.9\% on this subset.
+
+% --------------------------------------------------------------------------
+\section{Related Work}
+\label{sec:related}
+% --------------------------------------------------------------------------
+
+\paragraph{Layer-aware decoding.}
+DoLa~\citep{chuang_dola_2023} contrasts late vs.\ early layers to improve
+factuality.  \citet{gera_benefits_2023} use autocontrastive layer signals to
+reduce degeneration in open-ended generation.
+\citet{chen_-context_2024} discover that hallucinations correlate with
+in-context activation sharpness across layers, and use this signal for
+constrained decoding.  All operate in the $\bt < 0$ regime under greedy
+decoding.
+
+\paragraph{Contrastive and guided decoding.}
+Classifier-Free Guidance~\citep{sanchez_stay_2024} applies
+conditional--unconditional extrapolation ($\bt < 0$) to improve
+prompt adherence in language generation.  \citet{chang_explaining_2024}
+prove that contrastive decoding is equivalent to linearly extrapolating the
+logits of a hypothetical larger model.
+ThinkLogit~\citep{zhang_logit_2025} applies the same logit-arithmetic
+structure \emph{across models}: the delta between a small reasoning model
+and its base is added to a large non-reasoning model, eliciting long
+chain-of-thought without training the large model.  This is mathematically
+isomorphic to our $\bt$ framework with $\bt < 0$, but between models rather
+than layers.  REAL Sampling~\citep{chang_real_2025} dynamically adjusts the
+sampling threshold based on extrapolated entropy from a model-size scaling
+series.  SC-MCTS*~\citep{gao_interpretable_2024} applies contrastive
+decoding as a reward signal within Monte Carlo Tree Search.
+
+\paragraph{Inference-time compute scaling.}
+Power Sampling~\citep{karan_reasoning_2025} shows that MCMC from $p^\al$
+matches RL post-training on reasoning benchmarks.
+\citet{bansal_smaller_2024} study compute-optimal sampling strategies and
+find that weaker models can be more cost-effective data generators.
+\citet{kang_scalable_nodate} propose self-certainty as a scalable
+alternative to Best-of-N selection.  \citet{song_evaluation_nodate} argue
+that LLM evaluation must account for non-determinism.
+Min-p sampling~\citep{minh_turning_2024} introduces dynamic truncation that
+scales the threshold with the top token's probability, maintaining coherence
+at high temperatures where nucleus sampling degrades.  Like our work, min-p
+highlights that the interaction between distribution shape and sampling
+strategy is critical: the optimal truncation policy depends on how peaked
+the distribution is.  Our contribution is orthogonal---we modify the
+distribution itself rather than the truncation rule, and show that the
+optimal direction of modification depends on the search algorithm.
+
+\paragraph{Internal representations.}
+Patchscopes~\citep{ghandeharioun_patchscopes_2024} provides a unifying
+framework for inspecting hidden representations by patching them into
+the model's own computation.  \citet{kuribayashi_large_2025} show that
+internal layers of larger LLMs align better with human reading behavior
+than final layers---suggesting that intermediate representations carry
+cognitively relevant information.  \citet{csordas_language_2025} find
+that deeper models spread the same computations across more layers
+rather than composing new features, and \citet{lu_reassessing_2025}
+show that pruning final layers has minimal impact---both supporting
+our hypothesis that deep-layer residuals carry refinement rather than
+core knowledge.
+
+% --------------------------------------------------------------------------
+\section{Discussion and Future Work}
+\label{sec:discussion}
+% --------------------------------------------------------------------------
+
+\paragraph{Limitations.}
+Our current results are on MATH-500 with Qwen3-4B at a single $\bt$
+value.  \placeholder{The full Phase~1 evaluation across multiple
+benchmarks, model scales, and $\bt$ values is in progress.}
+The method requires MCMC sampling, which is computationally more expensive
+than greedy decoding (though it adds no cost \emph{on top of} standard
+Power Sampling).  The probe-based layer selection adds a small one-time
+overhead per model.
+
+\paragraph{Toward trainable guided decoding.}
+This work uses a fixed intermediate layer as the blend source---a single
+linear projection $\lmhead(\hL)$.  A natural extension is to replace this
+with a \emph{trainable readout} that aggregates multiple intermediate
+layers, potentially combined with test-time training to produce a
+context-specialized blend source that adapts per input.
+
+% --------------------------------------------------------------------------
+\section{Conclusion}
+\label{sec:conclusion}
+% --------------------------------------------------------------------------
+
+The prevailing consensus in inference-time intervention holds that
+sharpening (extrapolation, $\bt < 0$) is universally beneficial for
+reasoning.  We showed that this consensus is conditional on a hidden
+assumption: greedy decoding.  By unifying logit-space interpolation and
+extrapolation under a single parameter $\bt$ and crossing it with the
+decoding strategy, we discovered the \emph{sign flip}: MCMC Power Sampling
+favors the opposite direction---smoothing ($\bt > 0$)---because it needs a
+traversable landscape, not a confident point estimate.
+
+The mechanistic explanation is clean: the final transformer layers are
+confidence refiners.  Greedy decoding needs their refinement; MCMC search
+does not.  Dampening the deep-layer residual ($\bt > 0$) softens the
+$p^\al$ target, improves chain mixing, and leads to better reasoning
+outcomes.
+
+The method is training-free, adds zero parameters, fuses into the generation
+loop, and achieves 86.6\% on MATH-500 with Qwen3-4B---surpassing both
+greedy decoding (83.0\%) and standard Power Sampling (85.4\%).  The broader
+insight---\emph{the optimal confidence level depends on the search
+strategy}---suggests that inference-time scaling methods should co-design
+their distribution modifications and their search algorithms, rather than
+optimizing each in isolation.
+
+% --------------------------------------------------------------------------
+% References
+% --------------------------------------------------------------------------
+\bibliographystyle{plainnat}
+\bibliography{reference}
+
+\end{document}

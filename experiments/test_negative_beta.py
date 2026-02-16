@@ -37,13 +37,16 @@ def main() -> None:
     print(f"Loading model: {model_name}")
     try:
         import flash_attn  # noqa: F401
+
         attn_impl = "flash_attention_2"
     except ImportError:
         attn_impl = "sdpa"
 
     model = (
         AutoModelForCausalLM.from_pretrained(
-            model_name, attn_implementation=attn_impl, torch_dtype=torch.bfloat16,
+            model_name,
+            attn_implementation=attn_impl,
+            torch_dtype=torch.bfloat16,
         )
         .to(device)
         .eval()
@@ -65,13 +68,16 @@ def main() -> None:
         content = template.format(problem=problem["problem"])
         messages = [{"role": "user", "content": content}]
         prompt = tokenizer.apply_chat_template(
-            messages, tokenize=False, add_generation_prompt=True, enable_thinking=False,
+            messages,
+            tokenize=False,
+            add_generation_prompt=True,
+            enable_thinking=False,
         )
         input_ids = tokenizer.encode(prompt, return_tensors="pt").to(device)
         context = input_ids[0].tolist()
 
         # --- Test blend_greedy with negative beta ---
-        print(f"\n[{i+1}/{n_problems}] Testing blend_greedy (beta={beta})...")
+        print(f"\n[{i + 1}/{n_problems}] Testing blend_greedy (beta={beta})...")
         try:
             output = guided_generate(
                 model=model,
@@ -82,7 +88,7 @@ def main() -> None:
                 temperature=0.0,
                 stop_token_ids=[tokenizer.eos_token_id],
             )
-            gen_ids = output[input_ids.shape[1]:]
+            gen_ids = output[input_ids.shape[1] :]
             completion = tokenizer.decode(gen_ids, skip_special_tokens=True)
             assert len(completion) > 0, "Empty completion"
             assert not any(math.isnan(x) or math.isinf(x) for x in gen_ids.float().tolist()), "NaN/Inf in token ids"
@@ -118,7 +124,7 @@ def main() -> None:
             print(f"  blend_ps FAILED: {e}")
             failed += 1
 
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"Results: {passed} passed, {failed} failed out of {n_problems * 2} tests")
     if failed > 0:
         print("SMOKE TEST FAILED")

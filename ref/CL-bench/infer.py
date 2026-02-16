@@ -11,22 +11,23 @@ Output File:
 Usage:
     # Using default OpenAI API
     python infer.py --model gpt-5.1 --input CL-bench.jsonl --output outputs/gpt5-1.jsonl
-    
+
     # Using other compatible APIs (e.g., DeepSeek, Qwen, etc.)
     python infer.py --model deepseek-chat --base-url https://api.deepseek.com/v1 --api-key your_key
-    
+
     # Concurrent inference
     python infer.py --model gpt-5.1 --workers 5
 """
 
+import argparse
 import json
 import os
-import argparse
 import time
-from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from tqdm import tqdm
+from datetime import datetime
+
 from openai import OpenAI
+from tqdm import tqdm
 
 
 def get_timestamp():
@@ -68,14 +69,14 @@ def append_jsonl(item, file_path):
 def call_openai_api(client, messages, model, max_retries=3, retry_delay=3):
     """
     Call OpenAI-compatible API.
-    
+
     Args:
         client: OpenAI client instance
         messages: List of messages
         model: Model name
         max_retries: Maximum number of retries
         retry_delay: Delay between retries (seconds)
-    
+
     Returns:
         response_text: Model response text
         error: Error message (if any)
@@ -96,26 +97,26 @@ def call_openai_api(client, messages, model, max_retries=3, retry_delay=3):
             else:
                 log(f"   ❌ Final failure: {error_msg[:200]}")
                 return None, error_msg
-    
+
     return None, "Unknown error"
 
 
 def process_single_case(args):
     """Process a single data sample."""
     idx, item, client, model = args
-    
+
     # Get messages
-    messages = item.get("messages") 
-    
+    messages = item.get("messages")
+
     if not messages:
         return idx, None, "No messages found"
-    
+
     # Call API
     response_text, error = call_openai_api(client, messages, model)
-    
+
     if error:
         return idx, None, error
-    
+
     result = {
         "idx": idx,
         "messages": messages,
@@ -123,7 +124,7 @@ def process_single_case(args):
         "rubrics": item.get("rubrics", []),
         "metadata": item.get("metadata", {})
     }
-    
+
     return idx, result, None
 
 
@@ -138,63 +139,63 @@ def main():
     parser.add_argument("--max-samples", type=int, default=None, help="Max samples to process (for testing)")
     parser.add_argument("--retry-delay", type=int, default=3, help="Retry delay in seconds")
     args = parser.parse_args()
-    
+
     # Set output path
     if args.output is None:
         model_name_safe = args.model.replace("/", "_").replace(":", "_")
         args.output = f"outputs/{model_name_safe}.jsonl"
-    
+
     log(f"📂 Input file: {args.input}")
     log(f"📂 Output file: {args.output}")
     log(f"🤖 Model: {args.model}")
     log(f"🔧 Workers: {args.workers}")
-    
+
     # Initialize OpenAI client
     api_key = args.api_key or os.getenv("OPENAI_API_KEY")
     if not api_key:
         log("❌ Error: Please set OPENAI_API_KEY environment variable or use --api-key argument")
         return
-    
+
     client_kwargs = {"api_key": api_key}
     if args.base_url:
         client_kwargs["base_url"] = args.base_url
         log(f"🔗 Using custom API: {args.base_url}")
-    
+
     client = OpenAI(**client_kwargs)
-    
+
     # Load data
     log("📖 Loading data...")
     data = load_jsonl(args.input)
     log(f"   Total {len(data)} samples")
-    
+
     if args.max_samples:
         data = data[:args.max_samples]
         log(f"   Limited to {args.max_samples} samples")
-    
+
     # Check completed samples (resume from checkpoint)
     completed_indices = set()
     if os.path.exists(args.output):
         existing_data = load_jsonl(args.output)
         completed_indices = {item.get("idx") for item in existing_data if item.get("idx") is not None}
         log(f"📌 Found {len(completed_indices)} completed, resuming remaining")
-    
+
     # Use metadata.task_id as stable unique identifier
     def get_task_id(item):
         return item["metadata"]["task_id"]
-    
+
     # Filter pending tasks
     tasks = [(get_task_id(item), item, client, args.model) for item in data if get_task_id(item) not in completed_indices]
-    
+
     if not tasks:
         log("✅ All samples already processed")
         return
-    
+
     log(f"🚀 Starting inference ({len(tasks)} pending)...")
-    
+
     # Statistics
     success_count = 0
     fail_count = 0
-    
+
     if args.workers == 1:
         # Single-threaded sequential execution
         for task in tqdm(tasks, desc="Inference"):
@@ -209,7 +210,7 @@ def main():
         # Multi-threaded concurrent execution
         with ThreadPoolExecutor(max_workers=args.workers) as executor:
             futures = {executor.submit(process_single_case, task): task[0] for task in tasks}
-            
+
             with tqdm(total=len(tasks), desc="Inference") as pbar:
                 for future in as_completed(futures):
                     idx = futures[future]
@@ -225,10 +226,10 @@ def main():
                         log(f"   ❌ Sample {idx} exception: {str(e)}")
                         fail_count += 1
                     pbar.update(1)
-    
+
     # Summary
     log("=" * 50)
-    log(f"✅ Inference completed!")
+    log("✅ Inference completed!")
     log(f"   Success: {success_count}")
     log(f"   Failed: {fail_count}")
     log(f"   Output: {args.output}")

@@ -105,7 +105,10 @@ def _make_math500() -> BenchmarkConfig:
         content = template.format(problem=ex["problem"])
         messages = [{"role": "user", "content": content}]
         return tok.apply_chat_template(
-            messages, tokenize=False, add_generation_prompt=True, enable_thinking=False,
+            messages,
+            tokenize=False,
+            add_generation_prompt=True,
+            enable_thinking=False,
         )
 
     def grade(completion: str, ex: dict) -> bool:
@@ -143,7 +146,10 @@ def _make_gsm8k() -> BenchmarkConfig:
         content = template.format(question=ex["question"])
         messages = [{"role": "user", "content": content}]
         return tok.apply_chat_template(
-            messages, tokenize=False, add_generation_prompt=True, enable_thinking=False,
+            messages,
+            tokenize=False,
+            add_generation_prompt=True,
+            enable_thinking=False,
         )
 
     def grade(completion: str, ex: dict) -> bool:
@@ -203,7 +209,10 @@ def _make_gpqa() -> BenchmarkConfig:
         content = "\n".join(lines)
         messages = [{"role": "user", "content": content}]
         return tok.apply_chat_template(
-            messages, tokenize=False, add_generation_prompt=True, enable_thinking=False,
+            messages,
+            tokenize=False,
+            add_generation_prompt=True,
+            enable_thinking=False,
         )
 
     def grade(completion: str, ex: dict) -> bool:
@@ -280,7 +289,10 @@ def run_temp(
     **_kwargs: Any,
 ) -> dict:
     output = model.generate(
-        input_ids, max_new_tokens=max_new_tokens, do_sample=True, temperature=temp,
+        input_ids,
+        max_new_tokens=max_new_tokens,
+        do_sample=True,
+        temperature=temp,
     )
     gen_ids = output[0, input_ids.shape[1] :]
     completion = tokenizer.decode(gen_ids, skip_special_tokens=True)
@@ -300,9 +312,15 @@ def run_ps(
 ) -> dict:
     context = input_ids[0].tolist()
     gen_ids, acc_ratio = mcmc_power_samp(
-        model=model, tokenizer=tokenizer, context=context, temp=temp,
-        mcmc_steps=mcmc_steps, max_new_tokens=max_new_tokens, block_num=block_num,
-        target_log_prob_fn=None, device=device,
+        model=model,
+        tokenizer=tokenizer,
+        context=context,
+        temp=temp,
+        mcmc_steps=mcmc_steps,
+        max_new_tokens=max_new_tokens,
+        block_num=block_num,
+        target_log_prob_fn=None,
+        device=device,
     )
     completion = tokenizer.decode(gen_ids, skip_special_tokens=True)
     return {"completion": completion, "n_tokens": len(gen_ids), "acceptance_ratio": acc_ratio}
@@ -318,8 +336,12 @@ def run_blend_greedy(
     **_kwargs: Any,
 ) -> dict:
     output = guided_generate(
-        model=model, input_ids=input_ids, max_new_tokens=max_new_tokens,
-        beta=beta, blend_layer=blend_layer, temperature=0.0,
+        model=model,
+        input_ids=input_ids,
+        max_new_tokens=max_new_tokens,
+        beta=beta,
+        blend_layer=blend_layer,
+        temperature=0.0,
         stop_token_ids=[tokenizer.eos_token_id],
     )
     gen_ids = output[input_ids.shape[1] :]
@@ -342,9 +364,16 @@ def run_blend_ps(
 ) -> dict:
     context = input_ids[0].tolist()
     gen_ids, acc_ratio = mcmc_power_samp(
-        model=model, tokenizer=tokenizer, context=context, temp=temp,
-        mcmc_steps=mcmc_steps, max_new_tokens=max_new_tokens, block_num=block_num,
-        blend_layer=blend_layer, beta=beta, device=device,
+        model=model,
+        tokenizer=tokenizer,
+        context=context,
+        temp=temp,
+        mcmc_steps=mcmc_steps,
+        max_new_tokens=max_new_tokens,
+        block_num=block_num,
+        blend_layer=blend_layer,
+        beta=beta,
+        device=device,
     )
     completion = tokenizer.decode(gen_ids, skip_special_tokens=True)
     return {"completion": completion, "n_tokens": len(gen_ids), "acceptance_ratio": acc_ratio}
@@ -367,17 +396,26 @@ def run_draft_blend_ps(
     context = input_ids[0].tolist()
     target_fn = partial(
         compute_draft_blend_sequence_log_probs,
-        target_model=model, draft_model=draft_model,
-        alpha=1.0 / temp, beta=beta, device=device,
+        target_model=model,
+        draft_model=draft_model,
+        alpha=1.0 / temp,
+        beta=beta,
+        device=device,
     )
 
     def draft_guided_target(sequence: list[int], eval_start: int) -> list[float]:
         return target_fn(sequence_ids=sequence, eval_start=eval_start)
 
     gen_ids, acc_ratio = mcmc_power_samp(
-        model=model, tokenizer=tokenizer, context=context, temp=temp,
-        mcmc_steps=mcmc_steps, max_new_tokens=max_new_tokens, block_num=block_num,
-        target_log_prob_fn=draft_guided_target, device=device,
+        model=model,
+        tokenizer=tokenizer,
+        context=context,
+        temp=temp,
+        mcmc_steps=mcmc_steps,
+        max_new_tokens=max_new_tokens,
+        block_num=block_num,
+        target_log_prob_fn=draft_guided_target,
+        device=device,
     )
     completion = tokenizer.decode(gen_ids, skip_special_tokens=True)
     return {"completion": completion, "n_tokens": len(gen_ids), "acceptance_ratio": acc_ratio}
@@ -403,17 +441,22 @@ def main() -> None:
         description="SignFlip: multi-benchmark LogitBlend x PowerSampling experiment",
     )
     parser.add_argument(
-        "--dataset", type=str, default="math500",
+        "--dataset",
+        type=str,
+        default="math500",
         choices=list(BENCHMARKS.keys()),
         help="Benchmark dataset",
     )
     parser.add_argument("--model", type=str, default="Qwen/Qwen3-4B")
     parser.add_argument(
-        "--draft", type=str, default="z-lab/Qwen3-4B-DFlash-b16",
+        "--draft",
+        type=str,
+        default="z-lab/Qwen3-4B-DFlash-b16",
         help="DFlash draft model (required for draft_blend_ps)",
     )
     parser.add_argument(
-        "--conditions", nargs="+",
+        "--conditions",
+        nargs="+",
         default=["greedy", "ps", "blend_greedy", "blend_ps"],
         choices=CONDITION_CHOICES,
     )
@@ -446,6 +489,7 @@ def main() -> None:
     console.print(f"[bold]Loading model:[/bold] {args.model}")
     try:
         import flash_attn  # noqa: F401
+
         attn_impl = "flash_attention_2"
     except ImportError:
         console.print("[yellow]flash_attn not available, using SDPA[/yellow]")
@@ -453,7 +497,9 @@ def main() -> None:
 
     model = (
         AutoModelForCausalLM.from_pretrained(
-            args.model, attn_implementation=attn_impl, torch_dtype=torch.bfloat16,
+            args.model,
+            attn_implementation=attn_impl,
+            torch_dtype=torch.bfloat16,
         )
         .to(device)
         .eval()
@@ -467,14 +513,15 @@ def main() -> None:
         console.print(f"[bold]Loading draft model:[/bold] {args.draft}")
         draft_model = (
             DFlashDraftModel.from_pretrained(
-                args.draft, attn_implementation=attn_impl, dtype=torch.bfloat16,
+                args.draft,
+                attn_implementation=attn_impl,
+                dtype=torch.bfloat16,
             )
             .to(device)
             .eval()
         )
         console.print(
-            f"  Draft block_size={draft_model.block_size}, "
-            f"target_layer_ids={draft_model.target_layer_ids}",
+            f"  Draft block_size={draft_model.block_size}, target_layer_ids={draft_model.target_layer_ids}",
         )
 
     console.print(f"  alpha={args.alpha}, beta={args.beta}, blend_layer={args.blend_layer}")
@@ -485,8 +532,7 @@ def main() -> None:
     dataset = bench.load_data()
     indices = list(range(args.shard, len(dataset), args.n_shards))
     console.print(
-        f"  {bench.name}: {len(dataset)} total, "
-        f"shard {args.shard}/{args.n_shards} -> {len(indices)} problems",
+        f"  {bench.name}: {len(dataset)} total, shard {args.shard}/{args.n_shards} -> {len(indices)} problems",
     )
 
     is_clbench = args.dataset == "clbench"
@@ -495,6 +541,7 @@ def main() -> None:
     clbench_output_path: Path | None = None
     if is_clbench:
         from dg_ttt.grading.clbench_adapter import save_clbench_output
+
         clbench_output_path = Path(args.output).with_suffix(".eval.jsonl")
         console.print(f"  CL-bench eval outputs: {clbench_output_path}")
 
@@ -569,8 +616,7 @@ def main() -> None:
             else:
                 acc_str = f"generated {condition_total[args.conditions[0]]} completions"
             console.print(
-                f"  [{i + 1}/{len(indices)}] {acc_str}  "
-                f"(elapsed {elapsed_total:.0f}s, ETA {eta:.0f}s)",
+                f"  [{i + 1}/{len(indices)}] {acc_str}  (elapsed {elapsed_total:.0f}s, ETA {eta:.0f}s)",
             )
 
     # --- Summary ---

@@ -157,7 +157,9 @@ def main() -> None:
     )
     parser.add_argument("--model", type=str, required=True, help="Model name or path")
     parser.add_argument(
-        "--dataset", type=str, required=True,
+        "--dataset",
+        type=str,
+        required=True,
         choices=list(DATASET_LOADERS.keys()),
         help="Dataset to probe on",
     )
@@ -176,6 +178,7 @@ def main() -> None:
     console.print(f"[bold]Loading model:[/bold] {args.model}")
     try:
         import flash_attn  # noqa: F401
+
         attn_impl = "flash_attention_2"
     except ImportError:
         console.print("[yellow]flash_attn not available, using SDPA[/yellow]")
@@ -183,7 +186,9 @@ def main() -> None:
 
     model = (
         AutoModelForCausalLM.from_pretrained(
-            args.model, attn_implementation=attn_impl, torch_dtype=torch.bfloat16,
+            args.model,
+            attn_implementation=attn_impl,
+            torch_dtype=torch.bfloat16,
         )
         .to(device)
         .eval()
@@ -208,9 +213,12 @@ def main() -> None:
 
     for prompt, gold in tqdm(pairs, desc="Layer probe"):
         result = probe_layers(
-            model=model, tokenizer=tokenizer,
-            prompt=prompt, gold_text=gold,
-            device=device, max_seq_len=args.max_seq_len,
+            model=model,
+            tokenizer=tokenizer,
+            prompt=prompt,
+            gold_text=gold,
+            device=device,
+            max_seq_len=args.max_seq_len,
         )
         if result is None:
             n_skipped += 1
@@ -232,14 +240,16 @@ def main() -> None:
         mean_rank = sum(ranks) / n
         top1_count = sum(1 for r in ranks if r == 0)
         top5_count = sum(1 for r in ranks if r < 5)
-        layer_stats.append({
-            "layer": layer_idx,
-            "n_tokens": n,
-            "median_rank": median_rank,
-            "mean_rank": round(mean_rank, 1),
-            "top1_pct": round(100 * top1_count / n, 2),
-            "top5_pct": round(100 * top5_count / n, 2),
-        })
+        layer_stats.append(
+            {
+                "layer": layer_idx,
+                "n_tokens": n,
+                "median_rank": median_rank,
+                "mean_rank": round(mean_rank, 1),
+                "top1_pct": round(100 * top1_count / n, 2),
+                "top5_pct": round(100 * top5_count / n, 2),
+            }
+        )
 
     # Sort by median rank to find best candidate
     by_median = sorted(layer_stats, key=lambda s: s["median_rank"])
@@ -287,9 +297,9 @@ def main() -> None:
     recommended = best_non_final[0]["layer"] if best_non_final else final_layer - 1
     console.print(f"\n[bold green]Recommended blend_layer: {recommended}[/bold green]")
     console.print(
-        f"  (median_rank={best_non_final[0]['median_rank']}, "
-        f"top1={best_non_final[0]['top1_pct']:.1f}%)"
-        if best_non_final else "",
+        f"  (median_rank={best_non_final[0]['median_rank']}, top1={best_non_final[0]['top1_pct']:.1f}%)"
+        if best_non_final
+        else "",
     )
 
     # Save

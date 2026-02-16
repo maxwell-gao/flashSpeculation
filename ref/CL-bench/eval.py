@@ -12,22 +12,23 @@ Output File:
 Usage:
     # Using default OpenAI API
     python eval.py --input outputs/model_output.jsonl --output outputs/model_graded.jsonl
-    
+
     # Using other compatible APIs
     python eval.py --input outputs/model_output.jsonl --base-url https://api.deepseek.com/v1 --api-key your_key
-    
+
     # Concurrent evaluation
     python eval.py --input outputs/model_output.jsonl --workers 5
 """
 
+import argparse
 import json
 import os
-import argparse
 import time
-from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from tqdm import tqdm
+from datetime import datetime
+
 from openai import OpenAI
+from tqdm import tqdm
 
 
 def get_timestamp():
@@ -62,7 +63,7 @@ def build_rubrics_text(rubrics):
     """Build rubrics checklist from rubrics list."""
     if not rubrics:
         return "No specific rubrics provided."
-    
+
     lines = []
     for i, rubric in enumerate(rubrics, 1):
         if isinstance(rubric, dict):
@@ -71,14 +72,14 @@ def build_rubrics_text(rubrics):
             criteria = str(rubric).strip()
         if criteria:
             lines.append(f"{i}. {criteria}")
-    
+
     return "\n".join(lines) if lines else "No specific rubrics provided."
 
 
 def call_judge_api(client, model, rubrics_text, model_output, max_retries=3, retry_delay=3):
     """
     Call judge model API for grading (only handles API call, returns raw text).
-    
+
     Args:
         client: OpenAI client instance
         model: Judge model name
@@ -86,7 +87,7 @@ def call_judge_api(client, model, rubrics_text, model_output, max_retries=3, ret
         model_output: Model's response to be graded
         max_retries: Maximum number of retries for API call
         retry_delay: Delay between retries (seconds)
-    
+
     Returns:
         result_text: Raw response text from API, or None if failed
     """
@@ -124,9 +125,9 @@ def call_judge_api(client, model, rubrics_text, model_output, max_retries=3, ret
         '  "Overall Score": 0 or 1\n'
         "}\n"
     )
-    
+
     messages = [{"role": "user", "content": grading_prompt}]
-    
+
     for attempt in range(max_retries):
         try:
             response = client.chat.completions.create(
@@ -134,7 +135,7 @@ def call_judge_api(client, model, rubrics_text, model_output, max_retries=3, ret
                 messages=messages,
             )
             result_text = response.choices[0].message.content.strip()
-            
+
             # Remove code block wrapper if present
             if result_text.startswith("```json"):
                 result_text = result_text[7:]
@@ -143,9 +144,9 @@ def call_judge_api(client, model, rubrics_text, model_output, max_retries=3, ret
             if result_text.endswith("```"):
                 result_text = result_text[:-3]
             result_text = result_text.strip()
-            
+
             return result_text
-                
+
         except Exception as e:
             error_msg = str(e)
             if attempt < max_retries - 1:
@@ -154,7 +155,7 @@ def call_judge_api(client, model, rubrics_text, model_output, max_retries=3, ret
             else:
                 log(f"   ❌ API call failed after {max_retries} attempts: {error_msg[:100]}")
                 return None
-    
+
     return None
 
 
@@ -168,10 +169,10 @@ def process_single_item(args):
     """Process a single item for grading."""
     item, client, judge_model, max_retries = args
     idx = get_task_id(item)
-    
+
     model_output = item.get("model_output", "")
     rubrics = item.get("rubrics", [])
-    
+
     # Skip if no model output
     if not model_output or not model_output.strip():
         result = {
@@ -182,21 +183,21 @@ def process_single_item(args):
             "score": 0
         }
         return idx, result, None # None is no error
-    
+
     # Build rubrics text
     rubrics_text = build_rubrics_text(rubrics)
-    
+
     # JSON parsing retry logic (re-call API if JSON parsing fails)
     for parse_attempt in range(max_retries):
         # Call judge API
         grading_result = call_judge_api(
             client, judge_model, rubrics_text, model_output, max_retries
         )
-        
+
         if not grading_result:
             log(f"   ❌ [idx={idx}] API call failed (attempt {parse_attempt + 1}/{max_retries})")
             if parse_attempt < max_retries - 1:
-                log(f"      Waiting 2s before retry...")
+                log("      Waiting 2s before retry...")
                 time.sleep(2)
                 continue
             else:
@@ -209,15 +210,15 @@ def process_single_item(args):
                     "score": 0
                 }
                 return idx, result, "API call failed" # error
-        
+
         # Try to parse JSON
         try:
             result_json = json.loads(grading_result)
-            
+
             # Validate required field
             if "Overall Score" not in result_json:
                 raise ValueError("Missing 'Overall Score' field")
-            
+
             # Parse success
             result = {
                 **item,
@@ -227,13 +228,13 @@ def process_single_item(args):
                 "score": result_json.get("Overall Score", "")
             }
             return idx, result, None # None is no error
-            
+
         except (json.JSONDecodeError, ValueError) as e:
             log(f"   ⚠️ [idx={idx}] JSON parse failed (attempt {parse_attempt + 1}/{max_retries}): {e}")
             log(f"      Raw response: {grading_result[:200]}...")
-            
+
             if parse_attempt < max_retries - 1:
-                log(f"      Waiting 2s before re-grading...")
+                log("      Waiting 2s before re-grading...")
                 time.sleep(2)
             else:
                 log(f"   ❌ [idx={idx}] JSON parse failed after {max_retries} attempts")
@@ -245,7 +246,7 @@ def process_single_item(args):
                     "score": 0
                 }
                 return idx, result, f"JSON parse failed: {e}" # error
-    
+
     # Should not reach here
     result = {
         **item,
@@ -267,12 +268,12 @@ def main():
     parser.add_argument("--workers", type=int, default=1, help="Number of concurrent workers")
     parser.add_argument("--max-retries", type=int, default=3, help="Max retries per item")
     args = parser.parse_args()
-    
+
     # Set output path
     if args.output is None:
         base_name = os.path.splitext(os.path.basename(args.input))[0]
         args.output = f"outputs/{base_name}_graded.jsonl"
-    
+
     log("=" * 60)
     log("🎯 Evaluation Task")
     log("=" * 60)
@@ -281,25 +282,25 @@ def main():
     log(f"🤖 Judge model: {args.judge_model}")
     log(f"⚡ Workers: {args.workers}")
     log("=" * 60)
-    
+
     # Initialize OpenAI client
     api_key = args.api_key or os.getenv("OPENAI_API_KEY")
     if not api_key:
         log("❌ Error: Please set OPENAI_API_KEY or use --api-key argument")
         return
-    
+
     client_kwargs = {"api_key": api_key}
     if args.base_url:
         client_kwargs["base_url"] = args.base_url
         log(f"🔗 Using custom API: {args.base_url}")
-    
+
     client = OpenAI(**client_kwargs)
-    
+
     # Load data
     log("📖 Loading data...")
     data = load_jsonl(args.input)
     log(f"   Total {len(data)} samples")
-    
+
     # Check completed samples (resume from checkpoint)
     completed_indices = set()
     if os.path.exists(args.output):
@@ -310,30 +311,30 @@ def main():
             if get_task_id(item) is not None
         }
         log(f"📌 Found {len(completed_indices)} completed, resuming remaining")
-    
+
     # Filter pending tasks
     pending_items = [item for item in data if get_task_id(item) not in completed_indices]
-    
+
     if not pending_items:
         log("✅ All samples already evaluated")
         # Calculate final statistics
         calculate_statistics(args.output)
         return
-    
+
     log(f"🚀 Starting evaluation ({len(pending_items)} pending)...")
-    
+
     # Prepare tasks
     tasks = [(item, client, args.judge_model, args.max_retries) for item in pending_items]
-    
+
     # Statistics
     success_count = 0
     fail_count = 0
-    
+
     if args.workers == 1:
         # Single-threaded
         for task in tqdm(tasks, desc="Evaluating"):
             idx, result, error = process_single_item(task)
-            
+
             if error:
                 fail_count += 1
             else:
@@ -343,12 +344,12 @@ def main():
         # Multi-threaded
         with ThreadPoolExecutor(max_workers=args.workers) as executor:
             futures = {executor.submit(process_single_item, task): task[0].get("idx") for task in tasks}
-            
+
             with tqdm(total=len(tasks), desc="Evaluating") as pbar:
                 for future in as_completed(futures):
                     try:
                         idx, result, error = future.result()
-                        
+
                         if error:
                             fail_count += 1
                         else:
@@ -358,14 +359,14 @@ def main():
                         log(f"   ❌ Exception: {str(e)}")
                         fail_count += 1
                     pbar.update(1)
-    
+
     # Summary
     log("=" * 60)
-    log(f"✅ Evaluation completed!")
+    log("✅ Evaluation completed!")
     log(f"   Success: {success_count}")
     log(f"   Failed: {fail_count}")
     log(f"   Output: {args.output}")
-    
+
     # Calculate final statistics
     calculate_statistics(args.output)
 
@@ -374,22 +375,22 @@ def calculate_statistics(output_path):
     """Calculate and display final statistics."""
     if not os.path.exists(output_path):
         return
-    
+
     data = load_jsonl(output_path)
-    
+
     total = len(data)
     score_0 = sum(1 for item in data if item.get("score") == 0)
     score_1 = sum(1 for item in data if item.get("score") == 1)
-    
+
     log("\n📊 Final Statistics:")
     log(f"   Total samples: {total}")
     log(f"   Score 0: {score_0}")
     log(f"   Score 1: {score_1}")
-    
+
     if total > 0:
         solving_rate = score_1 / total
         log(f"\n📈 Solving Rate: {solving_rate:.4f} ({score_1}/{total})")
-    
+
     # Category-level scores
     category_stats = {}
     for item in data:
@@ -401,7 +402,7 @@ def calculate_statistics(output_path):
             stats["score_1"] += 1
         else:
             stats["score_0"] += 1
-    
+
     if category_stats:
         log("\n📂 Scores by context_category:")
         for category in sorted(category_stats.keys()):
@@ -412,7 +413,7 @@ def calculate_statistics(output_path):
                 f"score_1={stats['score_1']}, score_0={stats['score_0']}, "
                 f"rate={rate:.4f}"
             )
-    
+
     log("=" * 60)
 
 
