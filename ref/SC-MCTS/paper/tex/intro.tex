@@ -1,0 +1,60 @@
+\section{Introduction}
+
+With the remarkable development of Large Language Models (LLMs), models such as o1~\citep{o1} have now gained a strong ability for multi-step reasoning across complex tasks and can solve problems that are more difficult than previous scientific, code, and mathematical problems. The reasoning task has long been considered challenging for LLMs. These tasks require converting a problem into a series of reasoning steps and then executing those steps to arrive at the correct answer. Recently, LLMs have shown great potential in addressing such problems. A key approach is using Chain of Thought (CoT)~\citep{wei2023chainofthoughtpromptingelicitsreasoning}, where LLMs break down the solution into a series of reasoning steps before arriving at the final answer. Despite the impressive capabilities of CoT-based LLMs, they still face challenges when solving problems with an increasing number of reasoning steps due to the curse of autoregressive decoding~\citep{cot-limitation}. Previous work has explored reasoning through the use of heuristic reasoning algorithms. For example, \citet{yao2023treethoughtsdeliberateproblem} applied heuristic-based search, such as Depth-First Search (DFS) to derive better reasoning paths. Similarly, \citet{hao2023reasoninglanguagemodelplanning} employed MCTS to iteratively enhance reasoning step by step toward the goal.
+
+The tremendous success of AlphaGo~\citep{silver} has demonstrated the effectiveness of the heuristic MCTS algorithm, showcasing its exceptional performance across various domains~\citep{alphafold,alphazero}. Building on this, MCTS has also made notable progress in the field of LLMs through multi-step heuristic reasoning. Previous work has highlighted the potential of heuristic MCTS to significantly enhance LLM reasoning capabilities. Despite these advancements, substantial challenges remain in fully realizing the benefits of heuristic MCTS in LLM reasoning.
+
+%  (we denote by MCTS$^*$ to emphasize the heuristics)
+
+
+
+\vspace{-8mm}
+
+\begin{figure}[H]
+  \centering
+  \vspace{-1mm}
+  \includegraphics[width=0.85\textwidth]{fig/fig1.png}
+  \vspace{-1mm}
+  \caption{An overview of \ours. We employ a novel reward model based on the principle of contrastive decoding to guide MCTS Reasoning on Blocksworld multi-step reasoning dataset.}
+  \label{fig:1}
+\end{figure}
+
+
+\vspace{-3mm}
+
+The first key challenge is that MCTS's general reasoning ability is almost entirely dependent on the reward model's performance (as demonstrated by our ablation experiments in Section~\ref{sec:ablation}), making it highly challenging to design dense, general yet efficient rewards to guide MCTS reasoning. Previous works either require two or more LLMs~\citep{towardself} or training epochs~\citep{ReST-MCTS}, escalating the VRAM and computational demand, or they rely on domain-specific tools~\citep{Xin2024DeepSeekProverAT, deepprover1.5} or datasets~\citep{mutualReasoning}, making it difficult to generalize to other tasks or datasets.
+
+% The first key challenge is that MCTS reasoning performance is almost entirely dependent on the reward model's performance (as demonstrated by our ablation experiments in Section 5.3), and designing dense rewards to guide MCTS reasoning is highly challenging. Previous works have largely relied on external verification tools, such as Deepseek Prover~\citep{Xin2024DeepSeekProverAT, deepprover1.5}, which used Lean4 as an external tool to provide dense rewards. ReST-MCTS$^*$~\citep{ReST-MCTS} employed a self-training method to collect high-quality reasoning trajectories to reward the model, while AlphaLLM used three critic models as the MCTS reward model. Additionally, rStar~\citep{mutualReasoning} utilized self-consistency, employing majority voting among several small models as the reward model for MCTS. However, these approaches either require the addition of one or more LLMs, increasing VRAM usage and computational demand, or they rely on domain-specific tools or specially constructed datasets to train the reward model, making it difficult to generalize to other tasks or datasets.
+
+The second key challenge is that MCTS is significantly slower than Chain of Thoughts (CoT). CoT only requires designing a prompt of multi-turn chats~\citep{wei2023chainofthoughtpromptingelicitsreasoning}. In contrast, MCTS builds a reasoning tree with 2--10 layers depending on the difficulty of the task, where each node in the tree represents a chat round with LLM which may need to be visited one or multiple times. Moreover, to obtain better performance, we typically perform 2--10 MCTS iterations, which greatly increases the number of nodes, leading to much higher computational costs and slower reasoning speed.
+
+% To address the these challenges, we first went beyond previous LLM reasoning works who primarily treated MCTS as an tool rather than analyzing and improving its components, to study each component of MCTS related to the reward model. We redesigned the reward model for MCTS reasoning based on the principle of contrastive decoding: specifically, we first combined multiple highly interpretable reward functions in contrast with a small model, then identified their modes by clustering the prior distributions, and normalized the rewards separately for each mode. We found the Upper Confidence Bound applied on Trees (UCT) strategy that is often set \emph{a priori} in most previous works failed to function in our experiments, and the performance is sensitive to choices of the exploration constant. We also refined the backpropagation of MCTS to prefer more steadily improving paths. These changes boost the performance of our MCTS system. Finally, we incorporated speculative decoding into MCTS to address the speed challenge as a "free lunch". All task settings utilize LLMs based on the Blocksworld multi-step reasoning dataset, which we will introduce in detail in Section \ref{dataset}. 
+
+To address the these challenges, we went beyond prior works that treated MCTS as a tool and focused on analyzing and improving its components especially reward model. Using contrastive decoding, we redesigned reward model by integrating interpretable reward signals, clustering their prior distributions, and normalizing the rewards using our proposed prior statistical method. To prevent distribution shift, we  also incorporated an online incremental update algorithm. We found that the commonly used Upper Confidence Bound on Trees (UCT) strategy often underperformed due to sensitivity to the exploration constant, so we refined it and improved backpropagation to favor steadily improving paths. To address speed issues, we integrated speculative decoding as a "free lunch." All experiments were conducted using the Blocksworld dataset detailed in Section \ref{dataset}.
+
+
+Our goal is to: (i) design novel and high-performance reward models and maximize the performance of reward model combinations, (ii) analyze and optimize the performance of various MCTS components, (iii) enhance the interpretability of MCTS reasoning, (iv) and accelerate MCTS reasoning. Our contributions are summarized as follows:
+
+
+% We also conducted extensive quantitative analysis and ablation studies, and studied interpretability of our method from the perspective of reward value distributions.
+
+% "the performance of MCTS multi-step reasoning is almost entirely determined by reward model" 写到challgenge里了就不要写到contribution里
+
+% To address these challenges, we note that speculative decoding also requires a smaller language model (SLM) like contrastive decoding. By employing speculative decoding and contrastive reward model together, we built a system that consists of one LLM and two SLMs, achieving at the same time higher accuracy, faster speed, and minimal resource usage.
+
+\begin{enumerate}[leftmargin=*]
+    \vspace{-3mm}
+        
+    \item We went beyond previous works who primarily treated MCTS as an tool rather than analyzing and improving its components. Specifically, we found the UCT strategy in most previous works may failed to function from our experiment. We also refined the backpropagation of MCTS to prefer more steadily improving paths, boosting performance.
+    \vspace{-1mm}
+
+     \item To fully study the interpretability of MCTS multi-step reasoning, we conducted extensive quantitative analysis and ablation studies on every component. We carried out numerous experiments from both the numerical and distributional perspectives of the reward models, as well as its own interpretability, providing better interpretability for MCTS multi-step reasoning.
+    \vspace{-1mm}
+
+    \item We designed a novel, general action-level reward model based on the principle of contrastive decoding, which requires no external tools, training, or datasets. Additionally, we found that previous works often failed to effectively harness multiple reward models, thus we proposed a statistical linear combination method. At the same time, we introduced speculative decoding to speed up MCTS reasoning by an average of 52\% as a "free lunch."
+\end{enumerate}
+
+\vspace{-3mm}
+
+
+We demonstrated the effectiveness of our approach by outperforming OpenAI's flagship o1-mini model by an average of 17.4\% using Llama-3.1-70B on the Blocksworld multi-step reasoning dataset.

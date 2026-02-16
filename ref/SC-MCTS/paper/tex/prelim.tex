@@ -1,0 +1,79 @@
+\section{Preliminaries}
+
+\subsection{Multi-Step Reasoning}
+
+A multi-step reasoning problem can be modeled as a Markov Decision Process~\citep{MDP} $\mathcal{M} = (S, A, P, r, \gamma)$. $S$ is the state space containing all possible states, $A$ the action space, $P(s'|s, a)$ the state transition function, $r(s, a)$ the reward function, and $\gamma$ the discount factor. The goal is to learn \emph{and} to use a policy $\pi$ to maximize the discounted cumulative reward $\mathbb{E}_{\tau \sim \pi} \left[ \sum_{t=0}^T \gamma^t r_t \right]$. For reasoning with LLMs, we are more focused on using an existing LLM to achieve the best reasoning.
+
+\subsection{Monte Carlo Tree Search}
+
+Monte Carlo Tree Search (MCTS) is a decision-making algorithm involving a search tree to simulate and evaluate actions. The algorithm operates in the following four phases:
+
+
+\textbf{Node Selection:} The selection process begins at the root, selecting nodes hierarchically using strategies like UCT as the criterion to favor a child node based on its quality and novelty. 
+
+\textbf{Expansion:} New child nodes are added to the selected leaf node by sampling $d$ possible actions, predicting the next state. If the leaf node is fully explored or terminal, expansion is skipped.
+
+\textbf{Simulation:}
+During simulation or ``rollout'', the algorithm plays out the ``game'' randomly from that node to a terminal state using a default policy.
+
+
+\textbf{Backpropagation:} Once a terminal state is reached, the reward is propagated up the tree, and each node visited during the selection phase updates its value based on the simulation result.
+% we obtain a full path from the root node to the terminal node.
+
+
+Through iterative application of its four phases, MCTS efficiently improves reasoning through trials and heuristics, converging on the optimal solution.
+
+% and reaching the optimal even the state space is too large to be directly computed.
+
+
+
+
+\subsection{Contrastive Decoding}
+We discuss vanilla Contrastive Decoding (CD) from \citet{contrastivedecoding}, which improves text generation in LLMs by reducing errors like repetition and self-contradiction. CD uses the differences between an expert model and an amateur model, enhancing the expert's strengths and suppressing the amateur's weaknesses. Consider a  prompt of length \( n \), the CD objective is defined as:
+\[
+\gL_{\text{CD}}(x_{\text{cont}}, x_{\text{pre}}) = \log p_{\text{EXP}}(x_{\text{cont}} | x_{\text{pre}}) - \log p_{\text{AMA}}(x_{\text{cont}} | x_{\text{pre}})
+\]
+where \( x_{\text{pre}} \) is the sequence of tokens \( x_1, \dots, x_n \), the model generates continuations of length \( m \), \( x_{\text{cont}} \) is the sequence of tokens \( x_{n+1}, \dots, x_{n+m} \), and \( p_{\text{EXP}} \) and \( p_{\text{AMA}} \) are the expert and amateur probability distributions. To avoid penalizing correct behavior of the amateur or promoting implausible tokens, CD applies an adaptive plausibility constraint using an \(\alpha\)-mask, which filters tokens by their logits against a threshold, the filtered vocabulary \(V_{\text{valid}}\) is defined as:
+\[
+V_{\text{valid}} = \{ i \mid s^{(i)}_{\text{EXP}} \geq \log \alpha + \max_{k} s^{(k)}_{\text{EXP}} \}
+\]
+where \(s^{(i)}_{\text{EXP}}\) and \(s^{(i)}_{\text{AMA}}\) are unnormalized logits assigned to token i by the expert and amateur models. Final logits are adjusted with a coefficient \( (1 + \beta) \), modifying the contrastive effect on output scores~\citep{DExperts}:
+\[
+s^{(i)}_{\text{CD}} = 
+(1 + \beta)s^{(i)}_{\text{EXP}} - s^{(i)}_{\text{AMA}} 
+\]
+However, our proposed CD is at action level, averaging over the whole action, instead of token level in vanilla CD. Our novel action-level CD reward more robustly captures the differences in confidence between the expert and amateur models in the generated answers compared to vanilla CD. The distinction will be illustrated in Section \ref{reward_design} and explained further in Appendix~\ref{action-level}.
+
+
+
+
+\subsection{Speculative Decoding as "free lunch"}
+\label{free-lunch}
+Based on Speculative Decoding~\citep{google_sd}, the process can be summarized as follows: Let \(M_p\) be the target model with the conditional distribution \(p(x_t | x_{<t})\), and \(M_q\) be a smaller approximation model with \(q(x_t | x_{<t})\). The key idea is to generate \(\gamma\) tokens using \(M_q\) and filter them against \(M_p\)'s distribution, accepting tokens consistent with \(M_p\). Speculative decoding samples \(\gamma\) tokens autoregressively from \(M_q\), keeping those where \(q(x) \leq p(x)\). If \(q(x) > p(x)\), the sample is rejected with probability \(1 - \frac{p(x)}{q(x)}\), and a new sample is drawn from the adjusted distribution:
+\[
+p'(x) = \text{norm}(\max(0, p(x) - q(x))).
+\]
+Since both contrastive and speculative decoding rely on the same smaller models, we can achieve the acceleration effect of speculative decoding as a "free lunch"~\citep{yuan-etal-2024-speculative}.
+
+
+
+
+
+% Based on vanilla Speculative Decoding \citep{google_sd}, the process can be summarized as follows: Let $M_p$ be the target model we aim to accelerate, with $p(x_t | x_{<t})$ representing its distribution for a given prefix $x_{<t}$. Let $M_q$ be a smaller, more efficient approximation model, with $q(x_t | x_{<t})$ representing its distribution. The key idea is to generate $\gamma$ new tokens using $M_q$ and evaluate them against $M_p$, accepting those that align with $M_p$'s distribution. 
+% Each evaluation of $M_p$ on the new tokens which is parallel can produce at least one new token according to $p(x)$ in the end, with potentially many more tokens if they get accepted. % up to $\gamma + 1$ tokens in the best case , depending on how well $M_q$ approximates $M_p$. 
+
+% Specifically, speculative decoding first samples $x \sim q(x)$ autoregressively $\gamma$ times and keep them as long as $q(x) \leq p(x)$. If $q(x) > p(x)$ at some point, that sample is rejected with probability $1 - \frac{p(x)}{q(x)}$, and a new sample is drawn from an adjusted distribution:
+% \[
+% p'(x) = \text{norm}(\max(0, p(x) - q(x)))
+% \]
+% This ensures that the final sample distribution always follows $p(x)$. Since contrastive decoding and speculative decoding both require smaller language model, after employing our proposed action level contrastive decoding, we can achieve the acceleration effect of speculative decoding without additional cost~\citep{yuan-etal-2024-speculative}.
+
+% Once we obtain $q(x)$ from $M_q$, we sample $x_1 \sim q(x)$ and compute $p(x)$ by running $M_p$ on the prefix, while simultaneously calculating the next token $x_2$ using $M_p$ on the prefix plus $x_1$. If $x_1$ is rejected, $x_2$ is discarded, and $x_1$ is resampled. If $x_1$ is accepted, both tokens are retained.
+
+
+
+
+
+
+
+

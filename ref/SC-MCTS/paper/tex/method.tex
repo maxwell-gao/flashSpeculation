@@ -1,0 +1,151 @@
+\section{Method}
+% The \ours reasoning methodology is outlined as follows: In Section~\ref{reward_design} details the multi-reward design; Section~\ref{uct} discusses the UCT strategy for node selection; and Section~\ref{backprop} proposes the refinement of backpropagation.
+
+
+\subsection{Multi-Reward Design}\label{reward_design}
+Our primary goal is to design novel and and high-performance reward models for MCTS reasoning and to maximize the performance of reward model combinations, as our ablation experiments in Section \ref{sec:ablation} demonstrate that MCTS performance is almost entirely determined by the reward model.
+
+
+\ours is guided by three highly interpretable reward models: contrastive JS divergence, loglikelihood and self evaluation. 
+Previous work such as \citep{hao2023reasoninglanguagemodelplanning} often directly adds reward functions with mismatched numerical magnitudes without any prior statistical analysis or linear combination. As a result, their combined reward models may fail to demonstrate full performance. Moreover, combining multiple rewards online presents numerous challenges such as distributional shifts in the values. Thus, we propose a statistically-informed reward combination method: \textbf{Multi-RM method}. Each reward model is normalized contextually by the fine-grained prior statistics of its empirical distribution. % (see Figure~\ref{fig:dist}).
+The pseudocode for reward model construction is shown in Algorithm~\ref{alg:reward-construct}. Please refer to Appendix \ref{details_of_sc_mcts} for a complete version of \ours that includes other improvements such as dealing with distribution shift when combining reward functions online.
+
+\begin{algorithm}
+\caption{SC-MCTS$^*$, reward model construction}
+\label{alg:reward-construct}
+\begin{algorithmic}[1]
+\Require Expert LLM $\pi_e$, Amateur SLM $\pi_a$, Problem set $D$; 
+         $M$ selected problems for prior statistics, $N$ pre-generated solutions per problem, 
+         $K$ clusters
+
+\State $\tilde{A} \gets \text{Sample-solutions}(\pi_e, D, M, N)$ \Comment{Pre-generate $M \times N$ solutions}
+\State $p_e, p_a \gets \text{Evaluate}(\pi_e, \pi_a, \tilde{A})$ \Comment{Get policy distributions}
+
+\For{$r \in \{\text{JSD}, \text{LL}, \text{SE}\}$}
+    \State $\boldsymbol{\mu}_r, \boldsymbol{\sigma}_r, \boldsymbol{b}_r \gets \text{Cluster-stats}(r(\tilde{A}), K)$ \Comment{Prior statistics (Equation~\ref{eq:prior-stats})}
+    \State $R_r \gets x \mapsto (r(x) - \mu_r^{k^*}) / \sigma_r^{k^*}$ \Comment{Reward normalization (Equation~\ref{eq:norm-reward})}
+\EndFor
+
+\State $R \gets \sum_{r \in \{\text{JSD}, \text{LL}, \text{SE}\}} w_r R_r$ \Comment{Composite reward}
+
+
+\State $A_D \gets \text{MCTS-Reasoning}(\pi_e, R, D, \pi_a)$ \Comment{Search solutions guided by $R$}
+
+\Ensure $A_D$
+\end{algorithmic}
+\end{algorithm}
+
+
+
+
+
+% The first reward factor is based on contrastive decoding~\citep{contrastivedecoding}:
+% \begin{equation*}\label{eq:CD-score}
+% \log p_{\text{CD}}(x) = \sum_{i=1}^{n}(\log p_{\text{e}}(x_i|x_{<i}) - \log p_{\text{a}}(x_i|x_{<i}) - \log Z_i),
+% \end{equation*}
+% where $Z_i$s are the normalization constants for the contrastive distribution $p_{\text{e}} / p_{\text{a}}$ at each position.
+
+
+\paragraph{Jensen-Shannon Divergence}
+The Jensen-Shannon divergence (JSD) is a symmetric and bounded measure of similarity between two probability distributions \(P\) and \(Q\). It is defined as:
+\begin{equation*}\label{eq:JSD-definition}
+\mathrm{JSD}(P \,\|\, Q) = \frac{1}{2} \mathrm{KL}(P \,\|\, M) + \frac{1}{2} \mathrm{KL}(Q \,\|\, M), \quad M = \frac{1}{2}(P + Q),
+\end{equation*}
+where \(\mathrm{KL}(P \,\|\, Q)\) is the Kullback-Leibler Divergence (KLD), and \(M\) represents the midpoint distribution. The JSD is bounded between 0 and 1 for discrete distributions, making it better than KLD for online normalization of reward modeling.
+
+Inspired by contrastive decoding, we propose our novel reward model: JSD between the expert model’s logits and the amateur model’s logits.
+% focusing specifically on the answer portion of the sequence.
+Unlike vanilla token-level contrastive decoding~\citep{contrastivedecoding}, our reward is computed at action-level, treating a sequence of action tokens as a whole:
+\begin{equation*}\label{eq:JS-divergence}
+% R_{\text{JSD}} = \frac{1}{2n} \sum_{i=1}^{n} \left[\mathrm{KL}(p_{\text{e}}(x_i|x_{<i})\,\|\, p_{\text{m}}(x_i|x_{<i})) + \mathrm{KL}(p_{\text{a}}(x_i|x_{<i})\,\|\, p_{\text{m}}(x_i|x_{<i}))\right]
+R_{\text{JSD}} = \frac{1}{n} \sum_{i=T_{\text{prefix}}+1}^{n} \left[\mathrm{JSD}(p_{\text{e}}(x_i|x_{<i})\,\|\, p_{\text{a}}(x_i|x_{<i})\right]
+\end{equation*}
+where \(n\) is the length of tokens, \(T_\text{prefix}\) is the index of the last prefix token, $p_{\text{e}}$ and $p_{\text{a}}$ represent the softmax probabilities of the expert and amateur models, respectively. This approach ensures that the reward captures model behavior at the action level as the entire sequence of tokens is taken into account at once. This contrasts with vanilla token-level methods where each token is treated serially.
+
+
+
+\paragraph{Loglikelihood}
+\label{logll}
+Inspired by \citet{hao2023reasoninglanguagemodelplanning}, we use a loglikelihood reward model to evaluate the quality of generated answers based on a given question prefix. The model computes logits for the full sequence (prefix + answer) and accumulates the log-probabilities over the answer part tokens.
+
+Let the full sequence $x = (x_1, x_2, \dots, x_{T_{\text{total}}})$ consist of a prefix and a generated answer. The loglikelihood reward $R_{\text{LL}}$ is calculated over the answer portion:
+\begin{equation*}\label{eq:loglikelihood}
+R_{\text{LL}} = \sum_{i=T_{\text{prefix}}+1}^{T_{\text{total}}} \log \left( \frac{\exp(z_{\theta}(x_i))}{\sum_{x' \in V} \exp(z_{\theta}(x'))} \right)
+\end{equation*}
+where $z_{\theta}(x_i)$ represents the unnormalized logit for token $x_i$. After calculating logits for the entire sequence, we discard the prefix and focus on the answer tokens to form the loglikelihood reward.
+
+
+
+\paragraph{Self Evaluation}
+
+Large language models' token-level self evaluation can effectively quantify the model's uncertainty, thereby improving the quality of selective generation~\citep{pmlr-v239-ren23a}. We instruct the LLM to perform self evaluation on its answers, using a action level evaluation method, including a self evaluation prompt to explicitly indicate the model's uncertainty. 
+
+After generating the answer, we prompt the model to self-evaluate its response by asking "Is this answer correct/good?" This serves to capture the model’s confidence in its own output leading to more informed decision-making. The self evaluation prompt's logits are then used to calculate a reward function. Similar to the loglikelihood reward model, we calculate the self evaluation reward $R_{\text{SE}}$ by summing the log-probabilities over the self-evaluation tokens. 
+
+% Let $y = (y_1, y_2, \dots, y_{T_{\text{eval}}})$ represent the self evaluation sequence generated after the answer. The self evaluation reward is computed as:
+
+% \begin{equation*}
+% R_{\text{SE}} = \sum_{i=T_{\text{prefix+answer}}+1}^{T_{\text{total}}} \log \left( \frac{\exp(z_{\theta}(y_i))}{\sum_{y' \in V} \exp(z_{\theta}(y'))} \right)
+% \end{equation*}
+
+% where $z_{\theta}(y_i)$ is the unnormalized logit for the token $y_i$. Similar to the loglikelihood calculation for the answer tokens, we apply this to the self evaluation tokens to obtain the self evaluation reward $R_{\text{SE}}$, which measures the model's confidence in its self evaluation.
+
+
+
+\paragraph{Harnessing Multiple Reward Models}
+
+We collected prior distributions for the reward models and found some of them span multiple regions. Therefore, we compute the fine-grained prior statistics as mean and standard deviation of modes of the prior distribution $\gR\in \{\gR_{\text{JSD}}, \gR_{\text{LL}}, \gR_{\text{SE}}\}$:
+
+\begin{equation}\label{eq:prior-stats}
+\mu^{(k)} = \frac{1}{c_k}\sum_{R_i \in \rinterval{b_1}{b_{k+1}}} R_i\quad\text{and}\quad\sigma^{(k)} = \sqrt{\frac{1}{c_k}\sum_{R_i \in \rinterval{b_1}{b_{k+1}}} (R_i - \mu^{(k)})^2}
+\end{equation}
+
+where $b_1 < b_2 < \dots < b_{K+1}$ are the region boundaries in $\gR$, $R_i \in \gR$, and $c_k$ is the number of $R_i$ in $\rinterval{b_1}{b_{k+1}}$. The region boundaries were defined during the prior statistical data collection phase~\ref{alg:reward-construct}.
+
+
+
+After we computed the fine-grained prior statistics, the reward factors are normalized separately for each region (which degenerates to standard normalization if only a single region is found):
+\begin{equation}\label{eq:norm-reward}
+R_{\text{norm}}(x) = (R(x) - \mu^{(k^*)}) / \sigma^{(k^*)}, ~\text{where}~ k^* = \argmax \{k: b_{k} \leq R(x)\}
+\end{equation}
+
+% This reward design, which we call \textbf{Multi-RM} method, has some caveats: first, to avoid distribution shift during reasoning causing the reward factors to deviate from their priors, we use their runtime values to incrementally update the mean and standard deviation under each mode, please refer to Appendix \ref{details_of_sc_mcts} for the pseudocode of this phase; second, we purposefully restrict our focus on cases where the reward factor shows clear distinct modes, and leave the general cases for future work. For correlation heatmap please refer to Appendix \ref{heatmap}.
+
+This reward design, which we call \textbf{Multi-RM method}, has some caveats: first, to prevent distribution shift during reasoning, we update the mean and standard deviation of the reward functions online for each mode (see Appendix \ref{details_of_sc_mcts} for pseudocode); second, we focus only on cases with clearly distinct reward modes, leaving general cases for future work. For the correlation heatmap, see Appendix \ref{heatmap}.
+
+
+
+% The overall procedure is summarized in Algorithm~\ref{alg:overview}. 
+
+
+
+\subsection{Node Selection Strategy} \label{uct}
+
+Upper Confidence Bound applied on Trees Algorithm (UCT)~\citep{UCT} is crucial for the selection phase, balancing exploration and exploitation by choosing actions that maximize:
+\[UCT_j = \bar{X}_j + C \sqrt{\frac{\ln N}{N_j}}\]
+where $\bar{X}_j$ is the average reward of taking action $j$, $N$ is the number of times the parent has been visited, and $N_j$ is the number of times node $j$ has been visited for simulation, $C$ is a constant to balance exploitation and exploration. 
+
+However, \( C \) is a crucial part of UCT. Previous work~\citep{hao2023reasoninglanguagemodelplanning,zhang2024accessinggpt4levelmathematical} had limited thoroughly investigating its components, leading to potential failures of the UCT strategy. This is because they often used the default value of 1 from the original proposed UCT~\citep{UCT} without conducting sufficient quantitative experiments to find the optimal \( C \). This will be discussed in detail in Section~\ref{params}.
+
+
+
+
+\subsection{Backpropagation}\label{backprop}
+
+After each MCTS iteration, multiple paths from the root to terminal nodes are generated. By backpropagating along these paths, we update the value of each state-action pair. Previous MCTS approaches often use simple averaging during backpropagation, but this can overlook paths where the \textit{goal achieved} metric \( G(p) \) progresses smoothly (e.g., \( G(p_1) = 0 \rightarrow 0.25 \rightarrow 0.5 \rightarrow 0.75 \)). These paths just few step away from the final goal \( G(p) = 1 \), are often more valuable than less stable ones.
+
+To improve value propagation, we propose an algorithm that better captures value progression along a path. Given a path $\mathbf{P} = \{p_1, p_2, \dots, p_n\}$ with $n$ nodes, where each $p_i$ represents the value at node $i$, the total value is calculated by summing the increments between consecutive nodes with a length penalty. The increment between nodes $p_i$ and $p_{i-1}$ is $\Delta_i = p_i - p_{i-1}$. Negative increments are clipped at \(-0.1\) and downweighted by 0.5. The final path value \( V_{\text{final}} \) is:
+
+\begin{equation} \label{eq:backprop}
+V_{\text{final}} = \sum_{i=2}^{n} \left\{
+\begin{array}{ll}
+\Delta_i, & \text{if } \Delta_i \geq 0 \\
+0.5 \times \max(\Delta_i, -0.1), & \text{if } \Delta_i < 0
+\end{array}
+\right\} - \lambda \times n
+\end{equation}
+
+
+where \( n \) is the number of nodes in the path and \( \lambda = 0.1 \) is the penalty factor to discourage long paths.
+
+

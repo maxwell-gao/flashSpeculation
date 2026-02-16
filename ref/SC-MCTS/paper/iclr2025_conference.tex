@@ -1,0 +1,90 @@
+\documentclass{article} % For LaTeX2e
+\usepackage{iclr2025_conference,times}
+% Optional math commands from https://github.com/goodfeli/dlbook_notation.
+\input{math_commands.tex}
+
+\usepackage{hyperref}
+\usepackage{url}
+\usepackage{float}
+\usepackage{microtype}
+\usepackage{graphicx} % Required for inserting images
+\usepackage{amsmath}
+\usepackage[utf8]{inputenc} % allow utf-8 input
+\usepackage[T1]{fontenc}    % use 8-bit T1 fonts
+\usepackage{hyperref}       % hyperlinks
+\usepackage{url}            % simple URL typesetting
+\usepackage{booktabs}       % professional-quality tables
+\usepackage{amsfonts}       % blackboard math symbols
+\usepackage{nicefrac}       % compact symbols for 1/2, etc.
+\usepackage{microtype}      % microtypography
+\usepackage{xcolor}         % colors
+\usepackage{xspace}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{booktabs}
+\usepackage{makecell}
+\usepackage{colortbl}
+\usepackage{graphicx}    
+\usepackage{multirow}
+\usepackage{interval}
+\intervalconfig{soft open fences}
+\usepackage{algorithm, algpseudocode}
+\renewcommand{\algorithmicrequire}{\textbf{Input:}}
+\renewcommand{\algorithmicensure}{\textbf{Output:}}
+\usepackage{subfigure}
+% \usepackage{subcaption}
+\usepackage{float}
+\usepackage{enumitem}
+\usepackage{tabularx}
+\usepackage{placeins}
+\usepackage{color}
+\usepackage{tcolorbox}
+% \usepackage{ulem}
+\usepackage{colortbl} 
+\usepackage{listings}
+\usepackage{makecell}
+\usepackage{siunitx}
+\newcommand{\ours}{SC-MCTS$^*$\xspace}
+
+\title{Interpretable Contrastive Monte Carlo Tree Search Reasoning}
+
+% Authors must not appear in the submitted version. They should be hidden
+% as long as the \iclrfinalcopy macro remains commented out below.
+% Non-anonymous submissions will be rejected without review.
+
+% The \author macro works with any number of authors. There are two commands
+% used to separate the names and addresses of multiple authors: \And and \AND.
+%
+% Using \And between authors leaves it to \LaTeX{} to determine where to break
+% the lines. Using \AND forces a linebreak at that point. So, if \LaTeX{}
+% puts 3 of 4 authors names on the first line, and the last on the second
+% line, try using \AND instead of \And before the third author name.
+
+\newcommand{\fix}{\marginpar{FIX}}
+\newcommand{\new}{\marginpar{NEW}}
+\iclrfinalfalse
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+We propose \textbf{(S)}peculative \textbf{(C)}ontrastive \textbf{MCTS}$^\mathbf{*}$: a novel Monte Carlo Tree Search (MCTS) reasoning algorithm for Large Language Models (LLMs) which significantly improves both reasoning accuracy and speed. Our motivation comes from: 1. Previous MCTS LLM reasoning works often overlooked its biggest drawback—slower speed compared to CoT; 2. Previous research mainly used MCTS as a tool for LLM reasoning on various tasks with limited quantitative analysis or ablation studies of its components from reasoning interpretability perspective. 3. The reward model is the most crucial component in MCTS, however previous work has rarely conducted in-depth study or improvement of MCTS's reward models. Thus, we conducted extensive ablation studies and quantitative analysis on components of MCTS, revealing the impact of each component on the MCTS reasoning performance of LLMs. Building on this, (i) we designed a highly interpretable reward model based on the principle of contrastive decoding and (ii) achieved an average speed improvement of 51.9\% per node using speculative decoding. Additionally, (iii) we improved UCT node selection strategy and backpropagation used in previous works, resulting in significant performance improvement. We outperformed o1-mini by an average of 17.4\% on the Blocksworld multi-step reasoning dataset using Llama-3.1-70B with \ours. Our code is available at \url{https://github.com/zitian-gao/SC-MCTS}.
+\end{abstract}
+
+
+\input{tex/intro}
+\input{tex/related_work}
+\input{tex/prelim}
+\input{tex/method}
+\input{tex/experiment}
+\input{tex/conclusion}
+\newpage
+
+
+\bibliography{iclr2025_conference}
+\bibliographystyle{iclr2025_conference}
+
+\appendix
+\input{tex/appendix}
+
+\end{document}

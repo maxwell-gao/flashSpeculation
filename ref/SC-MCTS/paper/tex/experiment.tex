@@ -1,0 +1,353 @@
+\newpage
+\section{Experiments}
+
+\subsection{Dataset}\label{dataset}
+
+Blocksworld~\citep{b1,valmeekam2023on} is a classic domain in AI research for reasoning and planning, where the goal is to rearrange blocks into a specified configuration using actions like 'pick-up,' 'put-down,' 'stack,' and 'unstack. Blocks can be moved only if no block on top, and only one block at a time. The reasoning process in Blocksworld is a MDP. At time step \(t\), the LLM agent selects an action \(a_t \sim p(a \mid s_t, c)\), where \(s_t\) is the current block configuration, \(c\) is the prompt template. The state transition \(s_{t+1} = P(s_t, a_t)\) is deterministic and is computed by rules. This forms a trajectory of interleaved states and actions \( (s_0, a_0, s_1, a_1, \dots, s_T) \) towards the goal state.
+
+One key feature of Blocksworld is its built-in verifier, which tracks progress toward the goal at each step. This makes Blocksworld ideal for studying heuristic LLM multi-step reasoning. However, we deliberately avoid using the verifier as part of the reward model as it is task-specific. More details of Blocksworld can be found in Appendix~\ref{sec:blocksworld_dataset}.
+
+
+\subsection{Main Results}
+
+To evaluate the \ours algorithm in LLM multi-step reasoning, we implemented CoT, RAP-MCTS, and \ours using Llama-3-70B and Llama-3.1-70B. For comparison, we used Llama-3.1-405B and GPT-4o for CoT, and applied 0 and 4 shot single turn for o1-mini, as \citet{o1-2} suggests avoiding CoT prompting. The experiment was conducted on Blocksworld dataset across all steps and difficulties. For LLM settings, GPU and OpenAI API usage data, see Appendix \ref{llm_details} and \ref{openai_api}. 
+
+\vspace{-1mm}
+\begin{table}[H]
+\setlength{\tabcolsep}{6pt} 
+\centering
+\resizebox{1.00\textwidth}{!}{
+\begin{tabular}{lllccccccc}
+\toprule
+\multicolumn{1}{c}{\multirow{2}{*}[-0.5ex]{Mode}} & \multicolumn{1}{c}{\multirow{2}{*}[-0.5ex]{Models}} & \multicolumn{1}{c}{\multirow{2}{*}[-0.5ex]{Method}} &\multicolumn{7}{c}{\textbf{Steps}} \\
+\cmidrule(r){4-9}
+ & & & \multicolumn{1}{c}{Step 2} & \multicolumn{1}{c}{Step 4} & \multicolumn{1}{c}{Step 6} & \multicolumn{1}{c}{Step 8} & \multicolumn{1}{c}{Step 10} & \multicolumn{1}{c}{Step 12} & \multicolumn{1}{c}{\multirow{2}{*}[+2.5ex]{Avg.}} \\
+\midrule
+
+
+\multirow{12}{*}{\vspace{-10mm} Easy} & \multirow{3}{*}{\makecell[l]{Llama-3-70B \\\textasciitilde Llama-3.2-1B}} 
+ & 4-shot CoT & 0.2973 & 0.4405 & 0.3882 & 0.2517 & 0.1696 & 0.1087 & 0.2929 \\ 
+ & & RAP-MCTS & 0.9459 & 0.9474 & 0.8138 & 0.4196 & 0.2136 & 0.1389 & 0.5778 \\
+ & & \cellcolor{gray!20} \hspace{-1.8mm} SC-MCTS* (Ours) & \cellcolor{gray!20} \hspace{-1.8mm} 0.9730 & \cellcolor{gray!20} \hspace{-1.8mm} 0.9737 & \cellcolor{gray!20} \hspace{-1.8mm} 0.8224 & \cellcolor{gray!20} \hspace{-1.8mm} 0.4336 & \cellcolor{gray!20} \hspace{-1.8mm} 0.2136 & \cellcolor{gray!20} \hspace{-1.8mm} 0.2222 & \cellcolor{gray!20} \hspace{-1.8mm} 0.5949 \\
+\cmidrule{2-10}
+
+& \multirow{3}{*}{\makecell[l]{Llama-3.1-70B \\\textasciitilde Llama-3.2-1B}} 
+ & 4-shot CoT & 0.5405 & 0.4868 & 0.4069 & 0.2238 & 0.2913 & 0.2174 & 0.3441 \\ 
+ & & RAP-MCTS & 1.0000 & 0.9605 & 0.8000 & 0.4336 & 0.2039 & 0.1111 & 0.5796 \\
+ & & \cellcolor{gray!20} \hspace{-1.8mm} SC-MCTS* (Ours) & \cellcolor{gray!20} \hspace{-1.8mm} 1.0000 & \cellcolor{gray!20} \hspace{-1.8mm} 0.9737 & \cellcolor{gray!20} \hspace{-1.8mm} 0.7724 & \cellcolor{gray!20} \hspace{-1.8mm} 0.4503 & \cellcolor{gray!20} \hspace{-1.8mm} 0.3010 & \cellcolor{gray!20} \hspace{-1.8mm} 0.1944 & \cellcolor{gray!20} \hspace{-1.8mm} 0.6026 \\
+\cmidrule{2-10}
+
+
+
+& \multirow{2}{*}{\makecell[l]{Llama-3.1-405B}}
+ & 0-shot CoT & 0.8108 & 0.6579 & 0.5931 & 0.5105 & 0.4272 & 0.3611 & 0.5482 \\ 
+ & & 4-shot CoT & 0.7838 & 0.8553 & 0.6483 & 0.4266 & 0.5049 & 0.4167 & 0.5852 \\ 
+\cmidrule{2-10}
+
+
+
+& \multirow{2}{*}{\makecell[l]{o1-mini}}
+ & 0-shot & 0.9730 & 0.7368 & 0.5103 & 0.3846 & 0.3883 & 0.1944 & 0.4463 \\ 
+ & & 4-shot & 0.9459 & 0.8026 & 0.6276 & 0.3497 & 0.3301 & 0.2222 & 0.5167 \\
+\cmidrule{2-10}
+
+
+
+& \multirow{2}{*}{\makecell[l]{GPT-4o}}
+ & 0-shot CoT & 0.5405 & 0.4868 & 0.3241 & 0.1818 & 0.1165 & 0.0556 & 0.2666 \\ 
+ & & 4-shot CoT & 0.5135 & 0.6579 & 0.6000 & 0.2797 & 0.3010 & 0.3611 & 0.4444 \\
+\cmidrule{2-10}
+
+\midrule
+
+%%%%%%%%%%%%%%%%%%%%% HARD %%%%%%%%%%%%%%%%%%%%
+\multirow{12}{*}{\vspace{-10mm} Hard} & \multirow{3}{*}{\makecell[l]{Llama-3-70B \\\textasciitilde Llama-3.2-1B}} 
+ & 4-shot CoT & 0.5556 & 0.4405 & 0.3882 & 0.2517 & 0.1696 & 0.1087 & 0.3102 \\ 
+ & & RAP-MCTS & 1.0000 & 0.8929 & 0.7368 & 0.4503 & 0.1696 & 0.1087 & 0.5491 \\
+ & & \cellcolor{gray!20} \hspace{-1.8mm} SC-MCTS* (Ours) & \cellcolor{gray!20} \hspace{-1.8mm} 0.9778 & \cellcolor{gray!20} \hspace{-1.8mm} 0.8929 & \cellcolor{gray!20} \hspace{-1.8mm} 0.7566 & \cellcolor{gray!20} \hspace{-1.8mm} 0.5298 & \cellcolor{gray!20} \hspace{-1.8mm} 0.2232 & \cellcolor{gray!20} \hspace{-1.8mm} 0.1304 & \cellcolor{gray!20} \hspace{-1.8mm} 0.5848 \\
+\cmidrule{2-10}
+
+
+
+
+
+ & \multirow{3}{*}{\makecell[l]{Llama-3.1-70B \\\textasciitilde Llama-3.2-1B}} 
+ & 4-shot CoT & 0.6222 & 0.2857 & 0.3421 & 0.1722 & 0.1875 & 0.2174 & 0.2729 \\ 
+ & & RAP-MCTS & 0.9778 & 0.9048 & 0.7829 & 0.4702 & 0.1875 & 0.1087 & 0.5695 \\
+ & & \cellcolor{gray!20} \hspace{-1.8mm} SC-MCTS* (Ours) & \cellcolor{gray!20} \hspace{-1.8mm} 0.9778 & \cellcolor{gray!20} \hspace{-1.8mm} 0.9405 & \cellcolor{gray!20} \hspace{-1.8mm} 0.8092 & \cellcolor{gray!20} \hspace{-1.8mm} 0.4702 & \cellcolor{gray!20} \hspace{-1.8mm} 0.1696 & \cellcolor{gray!20} \hspace{-1.8mm} 0.2174 & \cellcolor{gray!20} \hspace{-1.8mm} 0.5864 \\
+\cmidrule{2-10}
+
+
+
+
+
+
+& \multirow{2}{*}{\makecell[l]{Llama-3.1-405B}}
+ & 0-shot CoT & 0.7838 & 0.6667 & 0.6053 & 0.3684 & 0.2679 & 0.2609 & 0.4761 \\ 
+ & & 4-shot CoT & 0.8889 & 0.6667 & 0.6579 & 0.4238 & 0.5804 & 0.5217 & 0.5915 \\ 
+\cmidrule{2-10}
+
+
+
+
+
+& \multirow{2}{*}{\makecell[l]{o1-mini}}
+ & 0-shot & 0.6889 & 0.4286 & 0.1776 & 0.0993 & 0.0982 & 0.0000 & 0.2034 \\ 
+ & & 4-shot & 0.9556 & 0.8452 & 0.5263 & 0.3907 & 0.2857 & 0.1739 & 0.4966 \\
+\cmidrule{2-10}
+
+
+
+
+
+& \multirow{2}{*}{\makecell[l]{GPT-4o}}
+ & 0-shot CoT & 0.6222 & 0.3929 & 0.3026 & 0.1523 & 0.0714 & 0.0000 & 0.2339 \\ 
+ & & 4-shot CoT & 0.6222 & 0.4167 & 0.5197 & 0.3642 & 0.3304 & 0.1739 & 0.4102 \\
+\cmidrule{2-10}
+
+\midrule[1pt]
+\addlinespace[3pt]
+\end{tabular}
+}
+
+
+\vspace{-1mm}
+\caption{Accuracy of various reasoning methods and models across steps and difficulty modes on the Blocksworld multi-step reasoning dataset.}
+\label{table:1}
+
+\end{table}
+
+\vspace{-5mm}
+From Table \ref{table:1}, it can be observed that \ours significantly outperforms RAP-MCTS and 4-shot CoT across both easy and hard modes, and in easy mode, Llama-3.1-70B model using \ours outperforms the 4-shot CoT Llama-3.1-405B model. 
+
+
+
+
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=1.0\textwidth]{fig/acc.png}
+  \vspace{-1mm}
+  \caption{Accuracy comparison of various models and reasoning methods on the Blocksworld multi-step reasoning dataset across increasing reasoning steps.}
+  \label{fig:acc}
+\end{figure}
+
+\vspace{-2mm}
+From Figure~\ref{fig:acc}, we observe that as the reasoning path lengthens, the performance advantage of two MCTS reasoning algorithms over themselves, GPT-4o, and Llama-3.1-405B's CoT explicit multi-turn chats and o1-mini implicit multi-turn chats~\citep{o1-2} in terms of accuracy diminishes, becoming particularly evident after Step 6. The accuracy decline for CoT is more gradual as the reasoning path extends, whereas models employing MCTS reasoning exhibits a steeper decline. This trend could be due to the fixed iteration limit of 10 across different reasoning path lengths, which might be unfair to longer paths. Future work could explore dynamically adjusting the iteration limit based on reasoning path length. It may also be attributed to our use of a custom EOS token to ensure output format stability in the MCTS reasoning process, which operates in completion mode. As the number of steps and prompt prefix lengths increases, the limitations of completion mode may become more pronounced compared to the chat mode used in multi-turn chats. Additionally, we observe that Llama-3.1-405B benefits significantly from its huge parameter size, although underperforming at fewer steps, experiences the slowest accuracy decline as the reasoning path grows longer.
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsection{Reasoning Speed}
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=1.00\textwidth]{fig/speed.png}
+  \vspace{-3mm}
+  \caption{Speedup comparison of different model combinations. For speculative decoding, we use Llama-3.2-1B and Llama-3.1.8B as amateur models with Llama-3.1-70B and Llama-3.1-405B as expert models, based on average node-level reasoning speed in MCTS for Blocksworld multi-step reasoning dataset.}
+  \label{fig:speed}
+\end{figure}
+
+\vspace{-1em}
+
+As shown in Figure~\ref{fig:speed}, we can observe that the combination of Llama-3.1-405B with Llama-3.1-8B achieves the highest speedup, improving inference speed by approximately 100\% compared to vanilla decoding. Similarly, pairing Llama-3.1-70B with Llama-3.2-1B results in a 51.9\% increase in reasoning speed. These two combinations provide the most significant gains, demonstrating that speculative decoding with SLMs can substantially enhance node level reasoning speed. However, we can also observe from the combination of Llama-3.1-405B with Llama-3.2-1B that the parameters of SLMs in speculative decoding should not be too small, since the threshold for accepting draft tokens during the decoding process remains fixed
+to prevent speculative decoding from affecting performance~\citep{google_sd}, as overly small parameters may have a negative impact on decoding speed, which is consistent with the findings in \citet{zhao2024ouroborosgeneratinglongerdrafts, dm_sd}.
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsection{Parameters}
+\label{params}
+
+\begin{figure}[H]
+  \centering
+  \begin{minipage}[t]{0.415\textwidth}
+    \centering
+    \vspace{2mm}
+    \includegraphics[width=\textwidth]{fig/uct.png}
+    \vspace{-5mm}
+    \caption{Accuracy comparison of different constant $C$ of UCT on Blocksworld multi-step reasoning dataset.}
+    \label{fig:uct}
+  \end{minipage}
+  \hspace{0.1\textwidth}
+  \begin{minipage}[t]{0.43\textwidth}
+    \centering
+    \vspace*{1.5mm}
+    \includegraphics[width=\textwidth]{fig/iter.png}
+    \vspace{-5.5mm}
+    \caption{Accuracy comparison of different numbers of iteration on Blocksworld multi-step reasoning dataset.}
+    \label{fig:iter}
+  \end{minipage}
+  \vspace{-2mm}
+\end{figure}
+
+
+As discussed in Section~\ref{uct}, the constant $C$ is a crucial part of UCT strategy, which completely determines whether the exploration term takes effect. Therefore, we conducted quantitative experiments on the constant $C$, to eliminate interference from other factors, we only use MCTS base with the common reward model $R_{\text{LL}}$ for both RAP-MCTS and \ours. From Figure~\ref{fig:uct} we can observe that the constant $C$ of RAP-MCTS is too small to function effectively, while the constant $C$ of \ours is the value most suited to the values of reward model derived from extensive experimental data. After introducing new datasets, this hyperparameter may need to be re-tuned.
+
+From Figure~\ref{fig:iter}, it can be observed that the accuracy of \ours on multi-step reasoning increases steadily with the number of iterations. During the first 1-7 iterations, the accuracy rises consistently. After the 7th iteration, the improvement in accuracy becomes relatively smaller, indicating that under the experimental setting with depth limitations, the exponentially growing exploration nodes in later iterations bring diminishing returns in accuracy.
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
+
+
+
+
+
+
+
+
+
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsection{Ablation Study}
+\label{sec:ablation}
+
+\begin{table}[H]
+\label{table:ablation}
+    \centering
+    \small
+    \setlength{\tabcolsep}{7pt}
+    \begin{tabular}{p{0.28\linewidth} c c}
+        \toprule
+        \textbf{Parts of \ours} & \textbf{Accuracy (\%)} & \textbf{Improvement (\%)} \\
+        \midrule
+        MCTS base  & 55.92 & --- \\
+        \midrule
+        + $R_{\text{JSD}}$ & 62.50 & +6.58 \\
+        + $R_{\text{LL}}$ & 67.76 & +5.26 \\
+        + $R_{\text{SE}}$ & 70.39 & +2.63 \\
+        \midrule
+        + Multi-RM Method & 73.68 & +3.29 \\
+        \midrule
+        + Improved $C$ of UCT & 78.95 & +5.27 \\
+        \midrule
+        + BP Refinement & 80.92 & +1.97 \\
+        \midrule
+        \textbf{\ours} & 80.92 & Overall +25.00 \\
+        \bottomrule
+    \end{tabular}
+    
+    \caption{Ablation Study on the Blocksworld dataset at Step 6 under difficult mode. For a more thorough ablation study, the reward model for the MCTS base was set to pseudo-random numbers.}
+    \label{table:2}
+    
+\end{table}
+
+\vspace{-1mm}
+
+As shown in Table \ref{table:2}, the results of the ablation study demonstrate that each component of \ours contributes significantly to performance improvements. Starting from a base MCTS accuracy of 55.92\%, adding $R_{\text{JSD}}$, $R_{\text{LL}}$, and $R_{\text{SE}}$ yields a combined improvement of 14.47\%. Multi-RM method further boosts performance by 3.29\%, while optimizing the $C$ parameter in UCT adds 5.27\%, and the backpropagation refinement increases accuracy by 1.97\%. Overall, \ours achieves an accuracy of 80.92\%, a 25\% improvement over the base, demonstrating the effectiveness of these enhancements for complex reasoning tasks.
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
+
+
+
+
+
+
+
+
+
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsection{Interpretability Study}
+
+In the Blocksworld multi-step reasoning dataset, we utilize a built-in ground truth verifier to measure the percentage of progress toward achieving the goal at a given step, denoted as \(P\). The value of \(P\) ranges between \([0, 1]\). For any arbitrary non-root node \(N_i\), the progress is defined as:
+\[
+P(N_i) = \text{Verifier}(N_i).
+\]
+For instance, in a 10-step Blocksworld reasoning task, the initial node \(A\) has \(P(A) = 0\). After executing one correct action and transitioning to the next node \(B\), the progress becomes \(P(B) = 0.1\).
+
+Given a non-root node \(N_i\), transitioning to its parent node \(\text{Parent}(N_i)\) through a specific action \(a\), the contribution of \(a\) toward the final goal state is defined as:
+\[
+\Delta_a = P(\text{Parent}(N_i)) - P(N_i).
+\]
+Next, by analyzing the relationship between \( \Delta_a \) and the reward value \( R_a \) assigned by the reward model for action \( a \), we aim to reveal how our designed reward model provides highly interpretable reward signals for the selection of each node in MCTS. We also compare the performance of our reward model against a baseline reward model. Specifically, the alignment between \( \Delta_a \) and \( R_a \) demonstrates the interpretability of the reward model in guiding the reasoning process toward the goal state. Since Section~\ref{sec:ablation} has already demonstrated that the reasoning performance of MCTS 
+reasoning is almost entirely determined by the reward model, using interpretable reward models greatly enhances the interpretability of our algorithm \ours.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=1\linewidth]{fig/reward.png}
+    \vspace{-6mm}
+    \caption{Reward distribution and interpretability analysis. 
+    The left histogram shows the baseline reward model (RAP-MCTS), while the right represents \ours. Bin colors indicate the proportion of positive $\Delta_a$ (lighter colors means higher proportions). Spearman and Pearson correlations along with p-values are shown in the top right of each histogram.}
+    \label{fig:reward}
+\end{figure}
+
+\vspace{-2mm}
+
+From Figure~\ref{fig:reward}, shows that SC-MCTS* reward values correlate significantly with $\Delta_a$, as indicated by the high Spearman and Pearson coefficients. Additionally, the mapping between the reward value bins and the proportion of positive $\Delta_a$ (indicated by the color gradient from light to dark) is highly consistent and intuitive. This strong alignment suggests that our reward model effectively captures the progress toward the goal state, providing interpretable signals for action selection during reasoning.
+
+These results highlight the exceptional interpretability of our designed reward model, which ensures that SC-MCTS* not only achieves superior reasoning performance but is also highly interpretable. This interpretability is crucial for understanding and improving the decision-making process in multi-step reasoning tasks, further validating transparency of our proposed algorithm.
+
+
+% \vspace{-1mm}
+% \begin{figure}[H]
+%   \label{fig:dist}
+%   \centering
+%   \includegraphics[width=1.00\textwidth]{fig/dist.png}
+%   \vspace{-3mm}
+%   \caption{Distribution of reward functions of \ours on the Blocksworld multi-step reasoning dataset using Llama-3.1-70B as expert model and Llama-3.2-1B as amateur model.}
+  
+% \end{figure}
+
+% \vspace{-2mm}
+
+% % \paragraph{Interpretability Observations} 
+
+% % We observe two distinct types of reward value distributions from Figure \ref{fig:dist}: normal distribution such as $R_{\text{LL}}$, and truncated normal distribution (half-normal distribution) such as $R_{\text{SE}}$ and $R_{\text{JSD}}$.
+
+% % The log-likelihood reward function shows a normal distribution because it accumulates the log probabilities of token indices from the logits of truncated answer segments. In contrast, the self-evaluation reward function, which uses the log probability of a single token ("good"), results in a half-normal distribution. Lastly, the JS divergence function introduces symmetry due to averaging the logits, defined as $M = \frac{1}{2}(\text{KL}_{\text{Expert \textasciitilde Amateur}} + \text{KL}_{\text{Amateur \textasciitilde Expert}})$, which differs from KL divergence. This symmetry combined with the non-negative nature of JS divergence also leads to a half-normal distribution.
+
+
+% We observe two distinct types of reward value distributions: normal distribution and half-normal distribution (truncated normal distribution).
+
+% \textbf{Normal distribution} is represented by $R_{\text{LL}}$ which is computed by accumulating the log probabilities over the token indices of the answer portion from the logits. This accumulation captures the probability trends of the entire answer generation, with a symmetric and concentrated distribution, resulting in a normal distribution. This distribution reflects the balance in the reasoning process and provides a stable and interpretable guide to MCTS multi-step reasoning.
+
+% \textbf{Half-normal distribution} includes $R_{\text{JSD}}$ and $R_{\text{SE}}$. $R_{\text{JSD}}$ quantifies the difference in confidence between the expert model and the amateur model over the logits of the answer part. The motivation for designing this reward function stems from the principle of contrastive decoding where constraining the expert model with the amateur model significantly reduces the low-quality outputs of the expert~\citep{contrastivedecoding}. $R_{\text{JSD}}$ introduces symmetry by averaging distributions defined as $M = \frac{1}{2}(\text{Logits}_\text{Expert} + \text{Logits}_\text{Amateur})$, which differs from KL divergence. This symmetry combined with the non-negative nature of JS divergence also leads to a half-normal distribution. $R_{\text{JSD}}$ guide MCTS reasoning by measuring the discrepancy between the models' logits. Our ablation experiments in Section~\ref{sec:ablation} demonstrate that $R_{\text{JSD}}$ is highly effective as a reward function, significantly improving the performance of multi-step reasoning.
+
+% The self-evaluation reward function computes the log probability of a single self evaluation token such as "good" to measure the model's confidence in generated answer \citep{pmlr-v239-ren23a}. Since it only focuses on the log probability of single specific token and relies on the model’s confidence in particular outputs, its distribution also takes the form of a half-normal distribution. This distribution reflects the uncertainty in the reasoning process especially at decision points with lower confidence.
+
+
+% By combining the observations from ablation experiments in Table~\ref{table:2} and Figure~\ref{fig:dist}, we also find that reward functions whose distributions more closely resemble a normal or half-normal distribution tend to perform better. For example, $R_{\text{JSD}}$, whose shape is more aligned with a half-normal distribution compared to $R_{\text{SE}}$, also demonstrates better performance than $R_{\text{SE}}$. 
+
+
+% From the ablation study results in Table \ref{sec:ablation}, it can be seen that the reward model is the most critical factor for MCTS reasoning performance. Having well-interpretable reward models implies better interpretability of MCTS reasoning. By studying these highly interpretable rewards, we can gain a clearer and more explainable understanding of MCTS reasoning.
+
+
+
+
+
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%

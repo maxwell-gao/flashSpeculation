@@ -1,0 +1,812 @@
+% \section{Appendix}
+
+
+\section{Action-Level Contrastive Reward}\label{action-level}
+
+We made the distinction between action-level variables and token-level variables: action-level (or step-level) variables are those that aggregate over all tokens in a reasoning step, and is typically utilized by the reasoning algorithm directly; token-level variables, by contrast, operates in a more microscopic and low-level environment, such as speculative decoding.
+
+We found that the traditional contrastive decoding using the difference in logits, when aggregated over the sequence gives a unstable reward signal compared to JS divergence. We suspected this is due to the unbounded nature of logit difference, and the potential failure modes associated with it that needs extra care and more hyperparameter tuning.
+
+
+
+\section{More Related Work}
+\label{related_of_decoding}
+\paragraph{Large Language Models Multi-Step Reasoning}
+Deepseek Prover~\citep{Xin2024DeepSeekProverAT, deepprover1.5} relied on Lean4 as an external verification tool to provide dense reward signals in the RL stage. ReST-MCTS$^*$~\citep{ReST-MCTS} employed self-training to collect high-quality reasoning trajectories for iteratively improving the value model. AlphaLLM~\citep{towardself} used critic models initialized from the policy model as the MCTS reward model. rStar~\citep{mutualReasoning} utilized mutual consistency of SLMs and an additional math-specific action space. \cite{xu2023traingainunleashmathematical} proposed reconstructing fine-tuned LLMs into residual-based energy models to guide MCTS.
+
+\paragraph{Speculative Decoding}
+
+Speculative decoding was first introduced in \citet{google_sd}, as a method to accelerate sampling from large autoregressive models by computing multiple tokens in parallel without retraining or changing the model structure. It enhances computational efficiency, especially in large-scale generation tasks, by recognizing that hard language-modeling tasks often include easier subtasks that can be approximated well by more efficient models. Similarly, DeepMind introduced speculative sampling~\citep{dm_sd}, which expands on this idea by generating a short draft sequence using a faster draft model and then scoring this draft with a larger target model.
+
+\paragraph{Contrastive Decoding}
+
+Contrastive decoding, as proposed by \citet{contrastivedecoding}, is a simple, computationally light, and training-free method for text generation that can enhancethe quality and quantity by identifying strings that highlight potential differences between strong models and weak models. In this context, the weak models typically employ conventional greedy decoding techniques such as basic sampling methods, while the strong models are often well-trained large language models. This approach has demonstrated notable performance improvements in various inference tasks, including arithmetic reasoning and multiple-choice ranking tasks, thereby increasing the accuracy of language models. According to experiments conducted by \cite{contrastiveandreasoning}, applying contrastive decoding across various tasks has proven effective in enhancing the reasoning capabilities of LLMs.
+
+
+\section{Reward Functions Correlation}
+\label{heatmap}
+
+\begin{figure}[H]
+    \centering
+    \vspace{-2mm}
+    \includegraphics[width=0.45\textwidth]{fig/heatmap.png}
+    \vspace{-3mm}
+    \caption{Reward Functions Correlation Heatmap.}
+    \label{fig:heatmap}
+\end{figure}
+
+It can be seen from Figure \ref{fig:heatmap} that the correlations between the three reward functions are relatively low, absolute values all below 0.15. These low correlations of reward functions make them ideal for Multi-RM method.
+
+
+
+
+
+\section{Algorithm Details of \texorpdfstring{\ours}{SC-MCTS*}}
+\label{details_of_sc_mcts}
+The pseudocode inside MCTS reasoning of SC-MCTS$^*$ is shown in Algorithm~\ref{alg:reason}, based on \citet{ReST-MCTS}. The complete version of \ours is: first sample a subset of problems to obtain the prior data for reward values (Algorithm~\ref{alg:reward-construct}), then use it and two SLMs, one for providing contrastive reward signals, another for speculative decoding speedup, to perform MCTS reasoning. The changes of SC-MCTS$^*$ compared to previous works are highlighted in {\color{teal} teal}. 
+
+\newpage
+
+\begin{algorithm*}[htbp]
+\centering
+\caption{SC-MCTS$^*$, reasoning}
+\label{alg:reason}
+\begin{algorithmic}[1]
+\Require expert LLM $\pi_{\text{e}}$, amatuer SLM $\pi_{\text{a}}$, speculative SLM $\pi_{\text{s}}$, problem $q$, reward model $R$, reward factor statistics $\gS$, max iterations $T$, threshold $l$, branch $b$, rollout steps $m$, roll branch $d$, weight parameter $\alpha$, exploration constant $C$
+\State $T_q \gets$ Initialize-tree$(q)$
+\For {$i = 1 \ldots T$}
+	\State $n \gets$ Root$(T_q)$
+	\While {$n$ is not leaf node} \Comment{Node selection}
+		\State {\color{teal} $n \gets$ $\argmax_{n'\in \text{children}(n)}(v_{n'}+C\sqrt{\frac{\ln{N_n}}{N_{n'}}})$ \Comment{Select child node based on UCT}}
+	\EndWhile
+	\If {$v_n \geq l$}
+		\textbf{break} \Comment{Output solution}
+	\EndIf
+	\If {$n$ is not End of Inference}
+		\For {$j = 1 \ldots b$} \Comment{Thought expansion}
+			\State $n_j \gets$ Get-new-child$(A_n, q, \pi_{\text{e}})$ \Comment{Expand based on previous steps}
+			\State {\color{teal} $v_{n_j}, \gS \gets$ $R(A_{n_j}, q, \pi_{\text{e}}, \pi_{\text{a}}, \gS)$ \Comment{Evaluate contrastive reward and update reward factor statistics}}
+		\EndFor
+		\State $n' \gets$ $\argmax_{n'\in \text{children}(n)}(v_{n'})$
+		\State $v_{\max} \gets$ 0
+		\For {$k = 1 \ldots m$} \Comment{Greedy MC rollout}
+			\State {\color{teal} $A, v_{\max} \gets$ Get-next-step-with-best-value$(A, q, \pi_{\text{e}}, \pi_{\text{s}}, d)$ \Comment{Sample new children using speculative decoding and record the best observed value}}
+		\EndFor
+		\State $v_{n'} \gets$ $\alpha v_{n'}+(1-\alpha)v_{\max}$
+		\State $N_{n'} \gets$ $N_{n'}+1$ \Comment{Update value and visit count of the rollout node}
+	\EndIf
+	\State {\color{teal} Back-propagate$(n)$ \Comment{Update value of parent nodes (Equation~\ref{eq:backprop})}}
+\EndFor
+\State $n \gets$ Get-best-node$(T_q)$ \Comment{Fetch the node with the highest value in the search tree}
+\Ensure $A_n$
+\end{algorithmic}
+\end{algorithm*}
+
+
+
+Although we sampled a small portion of the dataset as prior data for reward values, distribution shift may still occur when normalizing reward values during reasoning. Therefore, we use the following algorithm to incrementally update the mean and standard deviation of the online reward distribution:
+
+\begin{algorithm}[H]
+\caption{Online incremental update of reward factor statistics}
+\label{alg:3}
+\begin{algorithmic}[1]
+\Require reward factors $\mathcal{R} (= \{\text{JSD}, \text{LL}, \text{SE}\})$, 
+         statistics $\{\mu_r^{(k)}, \sigma_r^{(k)}, n_r^{(k)}\}_{r \in \mathcal{R}, k \in \{1,\ldots,K\}}$,
+         cluster assignment function $f$
+
+    \For{$r \in \mathcal{R}$}
+        \State $k^* \gets f(x)$ \Comment{Assign sample to cluster}
+        \State $v_r \gets r(x)$ \Comment{Compute reward factor value}
+        \State $n_r^{(k^*)} \gets n_r^{(k^*)} + 1$ \Comment{Update sample count}
+        \State $\delta \gets v_r - \mu_r^{(k^*)}$ \Comment{Compute difference from mean}
+        \State $\mu_r^{(k^*)} \gets \mu_r^{(k^*)} + \delta / n_r^{(k^*)}$ \Comment{Update mean}
+        \State $M_2 \gets (n_r^{(k^*)}-1)(\sigma_r^{(k^*)})^2 + \delta(v_r - \mu_r^{(k^*)})$
+        \State $\sigma_r^{(k^*)} \gets \sqrt{M_2 / n_r^{(k^*)}}$ \Comment{Update standard deviation}
+    \EndFor
+\Ensure updated statistics $\{\mu_r^{(k)}, \sigma_r^{(k)}, n_r^{(k)}\}_{r \in \mathcal{R}, k \in \{1,\ldots,K\}}$
+
+\end{algorithmic}
+\end{algorithm}
+
+
+
+\newpage
+\section{Experimental Settings}
+
+\label{llm_details}
+
+For reproducibility, you can download the checkpoints from the Huggingface repository below and use the hyperparameters below. We utilized 4-bit quantized checkpoints in all experiments, as they only result in around 2\% performance loss while providing several-fold reductions in memory usage and significantly improving inference speed~\citep{frantar2022gptq}. For better output formatting to capture a single step and convert it into an MCTS node, we used the LLM's completion mode so we set LLM to greedy sampling, and we don't have to set an additional system prompt, simply apply prompts in Appendix~\ref{sec:blocksworld_dataset}. Our experiments were all conducted on exllamav2 inference framework.
+
+\vspace{6mm}
+\subsection{Checkpoints}
+\vspace{2mm}
+\begin{table}[H]
+\small
+\label{tab:tab6}
+\small
+
+\centering
+\renewcommand{\arraystretch}{1}
+
+\setlength{\tabcolsep}{14pt}
+
+\begin{tabular}%
+{p{1cm}%
+r% Right-align the Models column
+p{8cm}%
+}
+\toprule
+
+\multicolumn{1}{c}{\multirow{1}{*}{\textbf{Usage}}}
+& \multicolumn{1}{c}{\multirow{1}{*}{\textbf{Models}}}
+& \multicolumn{1}{c}{\multirow{1}{*}{\textbf{Links}}} \\
+\midrule
+
+\multirow{4}{*}{\textbf{ Expert}} 
+& \textbf{Llama-3.1-405B} 
+      & \tiny{\url{https://huggingface.co/hugging-quants/Meta-Llama-3.1-405B-Instruct-GPTQ-INT4}}      \\ 
+& \textbf{Llama-3.1-70B} 
+      & \tiny{\url{https://huggingface.co/hugging-quants/Meta-Llama-3.1-70B-Instruct-GPTQ-INT4}}      \\ 
+& \textbf{Llama-3-70B} 
+      & \tiny{\url{https://huggingface.co/TechxGenus/Meta-Llama-3-70B-Instruct-GPTQ}} \\
+\midrule
+
+\multirow{4}{*}{\textbf{Amateur}} 
+& \textbf{Llama-3.1-8B} 
+      & \tiny{\url{https://huggingface.co/hugging-quants/Meta-Llama-3.1-8B-Instruct-GPTQ-INT4}}      \\ 
+& \textbf{Llama-3-8B} 
+      & \tiny{\url{https://huggingface.co/astronomer/Llama-3-8B-Instruct-GPTQ-4-Bit}}      \\ 
+& \textbf{Llama-3.2-1B} 
+      & \tiny{\url{https://huggingface.co/meta-llama/Llama-3.2-1B}}      \\ 
+\midrule
+
+
+\multirow{2}{*}{\textbf{ OpenAI}} 
+& \textbf{GPT-4o} 
+      & \tiny{\url{https://platform.openai.com/docs/models/gpt-4o}}       \\
+& \textbf{o1-mini} 
+      & \tiny{\url{https://platform.openai.com/docs/models/o1}}      \\ 
+
+\bottomrule
+\end{tabular}
+\vspace{2mm}
+\caption{Checkpoints used in experiments and their links.} 
+\end{table}
+
+\vspace{6mm}
+\subsection{Hyperparameters}
+\vspace{4mm}
+\begin{table}[htbp]
+\centering
+\begin{tabular}{|l|l|}
+\hline
+\textbf{Hyperparameter}                & \textbf{Value} \\ \hline
+temperature                            & 1.0            \\ \hline
+top-k                                  & 1.0            \\ \hline
+top-p                                  & 1.0            \\ \hline
+repetition\_penalty                    & 1.0            \\ \hline
+max\_new\_tokens                       & 200            \\ \hline
+max\_seq\_len                          & 32768          \\ \hline
+MCTS EOS: \texttt{Llama-3 family}      & \texttt{"\textbackslash n[}" \\ \hline
+CoT EOS: \texttt{Llama-3 family}       & \texttt{"\textbackslash n"}, \texttt{"\textless |eot\_id|\textgreater"} \\ \hline
+\end{tabular}
+\vspace{3mm}
+\caption{LLM Hyperparameters and EOS tokens used in experiments.}
+\label{tab:hyperparameters}
+\end{table}
+
+
+
+
+
+
+% \section{Experiment on SLMs}
+
+% \begin{table}[H]
+% \caption{We also conducted experiment on SLMs, due to...}
+% \setlength{\tabcolsep}{10pt} 
+% \vspace{10pt}
+% \centering
+% \resizebox{1.00\textwidth}{!}{
+% \begin{tabular}{llcccccc}
+% \toprule
+%  & &\multicolumn{6}{c}{\textbf{Steps}} \\
+% \cmidrule(r){3-8}
+% Models & Method \\
+% & & Step 2 & Step 4 & Step 6 & Step 8 & Step 10 & Step 12 \\
+% \midrule
+% \multirow{3}{*}{Llama-3.1-8B \ } 
+%  & CoT & 0.3333 & 0.1071 & 0.0461 & 0.0066 & 0.0179 & 0.0000 \\ 
+%  & RAP-MCTS & 0.6667 & 0.7381 & 0.6842 & 0.4702 & 0.1339 & 0.0652 \\
+%  & \rowcolor{gray!20}\ours (Ours) & \rowcolor{gray!20}0.0 & \rowcolor{gray!20}0.0 & \rowcolor{gray!20}0.0 & \rowcolor{gray!20}0.0 & \rowcolor{gray!20}0.0 & \rowcolor{gray!20}0.0 \\
+% \midrule
+% \multirow{3}{*}{Llama-3-8B} 
+%  & CoT & 0.2000 & 0.0595 & 0.0592 & 0.0000 & 0.0089 & 0.0000 \\ 
+%  & RAP-MCTS & 0.6222 & 0.6667 & 0.6053 & 0.4040 & 0.1250 & 0.0000 \\
+%  & \rowcolor{gray!20}\ours (Ours) & \rowcolor{gray!20}0.0 & \rowcolor{gray!20}0.0 & \rowcolor{gray!20}0.0 & \rowcolor{gray!20}0.0 & \rowcolor{gray!20}0.0 & \rowcolor{gray!20}0.0 \\
+% \midrule
+% \multirow{3}{*}{Llama-2-7B \ } 
+%  & CoT & 0.3111 & 0.0595 & 0.0132 & 0.0000 & 0.0089 & 0.0000 \\ 
+%  & RAP-MCTS & 0.5556 & 0.5952 & 0.4145 & 0.1987 & 0.0446 & 0.0222 \\
+%  & \rowcolor{gray!20}\ours (Ours) & \rowcolor{gray!20}0.0 & \rowcolor{gray!20}0.0 & \rowcolor{gray!20}0.0 & \rowcolor{gray!20}0.0 & \rowcolor{gray!20}0.0 & \rowcolor{gray!20}0.0 \\
+% \midrule[1pt]
+% \addlinespace[3pt]
+% \midrule[0.5pt]
+
+% \end{tabular}
+% }
+% \label{table:1}
+% \end{table}
+
+
+
+
+\newpage
+\section{Blocksworld Dataset}
+\label{sec:blocksworld_dataset}
+
+The Blocksworld dataset comprises 600 instances with varying block numbers and plan lengths. Simpler instances have 3-5 blocks, while more complex cases involve up to 25 blocks, introducing additional goals and obstacles. This setup covers a range of problem difficulties for evaluating planning algorithms. 
+
+\subsection{Difficulty Settings}
+
+According to settings of LLM Reasoners~\citep{llmreaonser}, we divide the original 600 instances of Blocksworld~\citep{b1} into two parts, Easy and Hard settings.
+
+In the Easy Blocksworld setting, we use more friendly demonstration cases. If a problem requires a specific minimum number of steps to solve, we select other problems that require the same number of steps as demonstration cases in the context. For example, if a problem requires at least 4 steps to solve, we use other 4-step problems as demonstration examples. For each group of problems, we randomly select 10 cases to create a pool of demonstration cases, while the remaining cases form the test set (a total of 540 cases). During inference, we randomly sample 4-shot demonstration cases from this pool to construct the prompts.
+
+
+In the Hard Blocksworld setting, we randomly select 10 cases from the entire dataset to create the demonstration pool. These selected cases are then excluded from the test set, leaving a total of 590 cases for testing. During inference, we randomly sample 4-shot demonstration cases from this global pool, without considering the minimum number of actions required for the test case. For example, if a problem requires at least 4 steps to solve, we may still use demonstration cases that require a different number of steps, such as 2 or 12, as there is no restriction based on the number of actions.
+
+
+\begin{table}[h]\centering
+\begin{minipage}{1.0\textwidth}
+\centering
+\begin{tcolorbox} 
+\centering
+\small
+\begin{tabular}{p{0.8\textwidth}}\\
+   
+\textbf{domain\_intro:} \\   
+   
+\textbf{I am playing with a set of objects. Here are the actions I can do:} \\
+pick up a block \\
+unstack a block from on top of another block \\
+put down a block \\
+stack a block on top of another block \\ \\
+
+\textbf{I have the following restrictions on my actions:}
+
+To perform the Pick Up action, the block must be clear, on the table, and my hand must be empty. Once the Pick Up action is performed, I am holding the block, and my hand is no longer empty. \\ \\
+
+To perform the Unstack action, the block must be clear, on top of another block, and my hand must be empty. Once the Unstack action is performed, I am holding the block, and my hand is no longer empty. \\ \\
+
+To perform the Put Down action, I must be holding a block. Once the Put Down action is performed, the block is on the table, my hand is empty, and the block becomes clear. \\ \\
+
+To perform the Stack action, I must be holding a block, and the block I want to stack it on must be clear. Once the Stack action is performed, the block is on top of another block, my hand is empty, and the block on top is no longer clear.
+
+\end{tabular}
+\end{tcolorbox}
+%\vspace{-2mm}
+\caption{Normal Blocksworld Task Setting}
+\label{tab: Normal Blocksworld Setting}
+\end{minipage}
+\end{table}
+
+
+
+
+
+% \begin{table}[h!]\centering
+% \begin{minipage}{0.95\textwidth}
+    
+% \centering
+% \begin{tcolorbox} 
+%     \centering
+   
+%       \small
+%     \begin{tabular}{p{0.95\textwidth}} \hline \\
+%    \textbf{Mystery Blocksworld Setting} \\    
+   
+%    % AI that scores image description accuracy and detailedness.
+
+%    \\ \midrule
+
+%    % \textbf{domain_intro:} \\   
+   
+% \textbf{I am playing with a set of objects. Here are the actions I can do:}
+% \begin{itemize}
+%     \item Attack object
+%     \item Feast object from another object
+%     \item Succumb object
+%     \item Overcome object from another object
+% \end{itemize}
+
+% \textbf{I have the following restrictions on my actions:}
+% \begin{itemize}
+%     \item \textbf{To perform Attack action, the following facts need to be true:} Province object, Planet object, Harmony.
+%     \item \textbf{Once Attack action is performed the following facts will be true:} Pain object.
+%     \item \textbf{Once Attack action is performed the following facts will be false:} Province object, Planet object, Harmony.
+    
+%     \item \textbf{To perform Succumb action, the following facts need to be true:} Pain object.
+%     \item \textbf{Once Succumb action is performed the following facts will be true:} Province object, Planet object, Harmony.
+%     \item \textbf{Once Succumb action is performed the following facts will be false:} Pain object.
+    
+%     \item \textbf{To perform Overcome action, the following needs to be true:} Province other object, Pain object.
+%     \item \textbf{Once Overcome action is performed the following will be true:} Harmony, Province object, Object Craves other object.
+%     \item \textbf{Once Overcome action is performed the following will be false:} Province other object, Pain object.
+    
+%     \item \textbf{To perform Feast action, the following needs to be true:} Object Craves other object, Province object, Harmony.
+%     \item \textbf{Once Feast action is performed the following will be true:} Pain object, Province other object.
+%     \item \textbf{Once Feast action is performed the following will be false:} Object Craves other object, Province object, Harmony.
+% \end{itemize}
+
+
+
+% \bottomrule
+%     \end{tabular}
+% \end{tcolorbox}
+% %\vspace{-2mm}
+% \caption{Mystery Blocksworld Setting}
+%     \label{tab: Mystery Blocksworld Setting}
+% \end{minipage}
+% \end{table}
+
+% \begin{table}[h!]\centering
+% \begin{minipage}{0.95\textwidth}
+    
+% \centering
+% \begin{tcolorbox} 
+%     \centering
+   
+%       \small
+%     \begin{tabular}{p{0.95\textwidth}} \hline \\
+%    \textbf{Randomized Blocksworld Setting} \\    
+   
+%    % AI that scores image description accuracy and detailedness.
+
+%    \\ \midrule
+
+%    % \textbf{domain_intro:} \\   
+   
+% I am playing with a set of objects. Here are the actions I can do:
+
+% \begin{itemize}
+%     \item \textbf{1jpkithdyjmlikck} (on an object)
+%     \item \textbf{xptxjrdkbi3pqsqr} (an object from another object)
+%     \item \textbf{9big8ruzarkkquyu} (on an object)
+%     \item \textbf{2ijg9q8swj2shjel} (an object from another object)
+% \end{itemize}
+
+% I have the following restrictions on my actions:
+% \begin{itemize}
+%     \item To perform \textbf{1jpkithdyjmlikck} action, the following facts need to be true: \textbf{aqcjuuehivl8auwt} object, \textbf{51nbwlachmfartjn} object, and \textbf{3covmuy4yrjthijd}.
+%     \item Once \textbf{1jpkithdyjmlikck} action is performed, the following facts will be true: \textbf{gk5asm3f7u1fekpj} object.
+%     \item Once \textbf{1jpkithdyjmlikck} action is performed, the following facts will be false: \textbf{aqcjuuehivl8auwt} object, \textbf{51nbwlachmfartjn} object, and \textbf{3covmuy4yrjthijd}.
+    
+%     \item To perform \textbf{9big8ruzarkkquyu} action, the following facts need to be true: \textbf{gk5asm3f7u1fekpj} object.
+%     \item Once \textbf{9big8ruzarkkquyu} action is performed, the following facts will be true: \textbf{aqcjuuehivl8auwt} object, \textbf{51nbwlachmfartjn} object, and \textbf{3covmuy4yrjthijd}.
+%     \item Once \textbf{9big8ruzarkkquyu} action is performed, the following facts will be false: \textbf{gk5asm3f7u1fekpj} object.
+    
+%     \item To perform \textbf{2ijg9q8swj2shjel} action, the following needs to be true: \textbf{aqcjuuehivl8auwt} other object and \textbf{gk5asm3f7u1fekpj} object.
+%     \item Once \textbf{2ijg9q8swj2shjel} action is performed, the following will be true: \textbf{3covmuy4yrjthijd}, \textbf{aqcjuuehivl8auwt} object, and \textbf{Object 4DMF1cMTYXGSP94G} other object.
+%     \item Once \textbf{2ijg9q8swj2shjel} action is performed, the following will be false: \textbf{aqcjuuehivl8auwt} other object and \textbf{gk5asm3f7u1fekpj} object.
+    
+%     \item To perform \textbf{xptxjrdkbi3pqsqr} action, the following needs to be true: \textbf{Object 4DMF1cMTYXGSP94G} other object, \textbf{aqcjuuehivl8auwt} object, and \textbf{3covmuy4yrjthijd}.
+%     \item Once \textbf{xptxjrdkbi3pqsqr} action is performed, the following will be true: \textbf{gk5asm3f7u1fekpj} object and \textbf{aqcjuuehivl8auwt} other object.
+%     \item Once \textbf{xptxjrdkbi3pqsqr} action is performed, the following will be false: \textbf{Object 4DMF1cMTYXGSP94G} other object, \textbf{aqcjuuehivl8auwt} object, and \textbf{3covmuy4yrjthijd}.
+% \end{itemize}
+
+
+
+% \bottomrule
+%     \end{tabular}
+% \end{tcolorbox}
+% %\vspace{-2mm}
+% \caption{Randomized Blocksworld Setting}
+%     \label{tab: Randomized Blocksworld Setting}
+% \end{minipage}
+% \end{table}
+
+
+
+\subsection{Prompts Settings of Easy Blocksworld}
+
+
+
+
+\begin{table}[H]\centering
+\begin{minipage}{0.95\textwidth}
+%\vspace{0mm}    
+\centering
+\begin{tcolorbox} 
+    \centering
+   
+     %\hspace{-4mm}
+      \small
+    \begin{tabular}{p{0.95\textwidth}} \hline \\
+   % \textbf{Description:} \\    
+   
+   % AI that scores image description accuracy and detailedness.
+
+   % \\ \midrule
+\textbf{Input Instructions:} \\
+
+I am playing with a set of blocks where I need to arrange the blocks into stacks. Here are the actions I can do:
+\begin{enumerate}
+    \item Pick up a block
+    \item Unstack a block from on top of another block
+    \item Put down a block
+    \item Stack a block on top of another block
+\end{enumerate}
+
+I have the following restrictions on my actions:
+\begin{enumerate}
+    \item I can only pick up or unstack one block at a time.
+    \item I can only pick up or unstack a block if my hand is empty.
+    \item I can only pick up a block if the block is on the table and the block is clear. A block is clear if the block has no other blocks on top of it and if the block is not picked up.
+    \item I can only unstack a block from on top of another block if the block I am unstacking was really on top of the other block.
+    \item I can only unstack a block from on top of another block if the block I am unstacking is clear.
+\end{enumerate}
+
+Once I pick up or unstack a block, I am holding the block.
+
+\begin{enumerate}
+    \item I can only put down a block that I am holding.
+    \item I can only stack a block on top of another block if I am holding the block being stacked.
+    \item I can only stack a block on top of another block if the block onto which I am stacking the block is clear.
+\end{enumerate}
+
+Once I put down or stack a block, my hand becomes empty.
+
+
+
+\\
+% \\ \\
+% \textbf{CoT Format:} \\ \\
+\lbrack{}STATEMENT\rbrack{}\\
+ As initial conditions I have that, the red block is clear, the hand is empty, the blue block is on top of the orange block, the red block is on the table, the orange block is on the table and the yellow block is on the table.\\
+My goal is to have that the orange block is on top of the blue block. 
+My plan is as follows:\\
+\lbrack{}End Of STATEMENT\rbrack{} \\
+\\
+\lbrack{}PLAN\rbrack{} \\
+unstack the blue block from on top of the orange block \\
+put down the blue block \\
+pick up the orange block \\
+stack the orange block on top of the blue block \\
+\lbrack{}PLAN END\rbrack{} \\
+\\
+\lbrack{}STATEMENT\rbrack{}\\
+As initial conditions I have that, the red block is clear, the yellow block is clear, the hand is empty, the red block is on top of the blue block, the yellow block is on top of the orange block, the blue block is on the table and the orange block is on the table.\\
+My goal is to have that the orange block is on top of the red block.
+My plan is as follows:\\
+\lbrack{}End Of STATEMENT\rbrack{} \\
+
+\\
+\textbf{Output format:}\\
+\lbrack{}PLAN\rbrack{} \\
+\textbf{[LLM Completion]}
+\\ \lbrack{}PLAN\_END\rbrack{} \\
+
+\bottomrule
+    \end{tabular}
+\end{tcolorbox}
+%\vspace{-2mm}
+\caption{The Prompt Settings for Easy Blocksworld}
+    \label{tab:easy_Pormpt}
+\end{minipage}
+\end{table}
+
+
+
+
+
+
+
+
+\subsection{Prompts Settings of Hard Blocksworld}
+
+
+\begin{table}[H]\centering
+\begin{minipage}{0.95\textwidth}
+%\vspace{0mm}    
+\centering
+\begin{tcolorbox} 
+    \centering
+   
+     %\hspace{-4mm}
+      \small
+    \begin{tabular}{p{0.95\textwidth}} \hline \\
+   % \textbf{Description:} \\    
+   
+   % AI that scores image description accuracy and detailedness.
+
+   % \\ \midrule
+
+\textbf{Input Instructions:} \\   
+   
+I am playing with a set of blocks where I need to arrange the blocks into stacks. Here are the actions I can do:
+\begin{enumerate}
+    \item Pick up a block
+    \item Unstack a block from on top of another block
+    \item Put down a block
+    \item Stack a block on top of another block
+\end{enumerate}
+
+I have the following restrictions on my actions:
+\begin{enumerate}
+    \item I can only pick up or unstack one block at a time.
+    \item I can only pick up or unstack a block if my hand is empty.
+    \item I can only pick up a block if the block is on the table and the block is clear. A block is clear if the block has no other blocks on top of it and if the block is not picked up.
+    \item I can only unstack a block from on top of another block if the block I am unstacking was really on top of the other block.
+    \item I can only unstack a block from on top of another block if the block I am unstacking is clear.
+\end{enumerate}
+
+Once I pick up or unstack a block, I am holding the block.
+
+\begin{enumerate}
+    \item I can only put down a block that I am holding.
+    \item I can only stack a block on top of another block if I am holding the block being stacked.
+    \item I can only stack a block on top of another block if the block onto which I am stacking the block is clear.
+\end{enumerate}
+
+Once I put down or stack a block, my hand becomes empty.
+
+\\
+% \\ \\
+% \textbf{CoT Format:} \\ \\
+\lbrack{}STATEMENT\rbrack{}\\
+ As initial conditions I have that, the blue block is clear, the hand is empty, the blue block is on top of the red block, the red block is on the table, the orange block is on the table and the yellow block is on the table.\\
+My goal is to have that the blue block is on top of the orange block. 
+My plan is as follows:\\
+\lbrack{}End Of STATEMENT\rbrack{} \\
+\\
+\lbrack{}PLAN\rbrack{} \\
+unstack the blue block from on top of the red block \\
+stack the blue block on top of the orange block \\
+\lbrack{}PLAN END\rbrack{} \\
+\\
+\lbrack{}STATEMENT\rbrack{}\\
+As initial conditions I have that, the red block is clear, the yellow block is clear, the hand is empty, the red block is on top of the blue block, the yellow block is on top of the orange block, the blue block is on the table and the orange block is on the table.\\
+My goal is to have that the orange block is on top of the red block.
+My plan is as follows:\\
+\lbrack{}End Of STATEMENT\rbrack{} \\
+
+\\
+\textbf{Output format:}\\
+\lbrack{}PLAN\rbrack{} \\
+\textbf{[LLM Completion]}
+\\ \lbrack{}PLAN\_END\rbrack{} \\
+
+\bottomrule
+    \end{tabular}
+\end{tcolorbox}
+%\vspace{-2mm}
+\caption{The Prompt Settings for Hard Blocksworld}
+    \label{tab:prompt_evaluation}
+\end{minipage}
+\end{table}
+
+
+
+
+
+% \section{OpenAI API Data}
+% \label{openai_api}
+% \begin{table}[H]
+
+% \centering
+% % \small
+% \setlength{\tabcolsep}{15pt}
+% \begin{tabular}{@{}cS[table-format=1.2]S[table-format=1.2]S[table-format=1.2]@{}}
+% \toprule
+% \textbf{Difficulty} & \textbf{Model} & \textbf{USD per instance} & \textbf{Total Experiment Cost (USD)} \\ 
+% \midrule
+% \multirow{2}{*}{\textbf{\ \ Easy (0-shot)}} & GPT-4o & \$0.0032 & \$1.73 \\
+%                                         & o1-mini & \$0.0136 & \$7.34 \\ 
+% \midrule
+% \multirow{2}{*}{\textbf{\ \ Easy (4-shot)}} & GPT-4o & \$0.0062 & \$3.35 \\
+%                                         & o1-mini & \$0.0171 & \$9.23 \\ 
+% \midrule
+% \multirow{2}{*}{\textbf{\ \ Hard (0-shot)}} & GPT-4o & \$0.0032 & \$1.89 \\
+%                                         & o1-mini & \$0.0177 & \$10.44 \\ 
+% \midrule
+% \multirow{2}{*}{\textbf{\ \ Hard (4-shot)}} & GPT-4o & \$0.0063 & \$3.70 \\
+%                                         & o1-mini & \$0.0172 & \$10.15 \\ 
+% \midrule
+% \end{tabular}
+% \vspace{1mm}
+% \caption{OpenAI API cost of experiments on the Blocksworld dataset.}
+% \label{tab:costs_updated}
+% \end{table}
+
+\section{Example Trees of Different \(c\) of UCT}
+\begin{figure}[H]
+    \centering
+    \vspace{-20mm}
+    \includegraphics[width=1\linewidth]{fig/uct_2.png}
+    \vspace{-15mm}
+    \caption{Monte Carlo Tree with origin parameter \(c\) of UCT}
+    \label{fig:rap-uct}
+\end{figure}
+
+\vspace{-20mm}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=1.0\linewidth]{fig/uct_1.png}
+    \vspace{-5mm}
+    \caption{Monte Carlo Tree with our optimized parameter \(c\) of UCT}
+    \label{fig:sc-uct}
+\end{figure}
+
+\vspace{-10mm}
+
+From Figure \ref{fig:rap-uct} and \ref{fig:sc-uct} we can observed that with our optimized parameter \(c\) of UCT, MCTS algorithm in node selection decisions tends to prioritize exploring new nodes rather than repeatedly following old paths, which may often lead to dead ends.
+
+
+\section{OpenAI API Data}
+\label{openai_api}
+\begin{table}[H]
+\centering
+\setlength{\tabcolsep}{15pt}
+\begin{tabular}{@{}c c c c@{}}
+\toprule
+\textbf{Difficulty} & \textbf{Model} & \textbf{USD per instance} & \textbf{Total Experiment Cost (USD)} \\ 
+\midrule
+\multirow{2}{*}{\textbf{Easy (0-shot)}} & GPT-4o & \$0.0032 & \$1.73 \\
+                                        & o1-mini & \$0.0136 & \$7.34 \\ 
+\midrule
+\multirow{2}{*}{\textbf{Easy (4-shot)}} & GPT-4o & \$0.0062 & \$3.35 \\
+                                        & o1-mini & \$0.0171 & \$9.23 \\ 
+\midrule
+\multirow{2}{*}{\textbf{Hard (0-shot)}} & GPT-4o & \$0.0032 & \$1.89 \\
+                                        & o1-mini & \$0.0177 & \$10.44 \\ 
+\midrule
+\multirow{2}{*}{\textbf{Hard (4-shot)}} & GPT-4o & \$0.0063 & \$3.70 \\
+                                        & o1-mini & \$0.0172 & \$10.15 \\ 
+\bottomrule
+\end{tabular}
+\vspace{1mm}
+\caption{OpenAI API cost of experiments on the Blocksworld dataset.}
+\label{tab:costs_updated}
+\end{table}
+
+
+%4o easy: 0.32 0.62 
+%4o hard: 0.32 0.63
+%mini easy: 1.36 1.71 zero
+%mini hard: 1.77 1.72 
+
+\vspace{-5mm}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.8\textwidth]{fig/Step_Length_vs_Reasoning_Tokens_for_Zero_Shot_Easy_Blocksworld.png} 
+    \caption{o1-mini Step Length vs Reasoning Tokens for Zero Shot in Easy Blocksworld}
+\end{figure}
+
+
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=0.8\textwidth]{fig/Step_Length_vs_Reasoning_Tokens_for_Four_Shot_Easy_Blocksworld.png}
+    \caption{o1-mini Step Length vs Reasoning Tokens for Four Shot in Easy Blocksworld}
+\end{figure}
+
+\clearpage
+
+\vspace{20mm}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.9\textwidth]{fig/Step_Length_vs_Reasoning_Tokens_for_Zero_Shot_Hard_Blocksworld.png} 
+    \caption{o1-mini Step Length vs Reasoning Tokens for Zero Shot in Hard Blocksworld}
+\end{figure}
+
+\vspace{20mm}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.9\textwidth]{fig/Step_Length_vs_Reasoning_Tokens_for_Four_Shot_Hard_Blocksworld.png}
+    \caption{o1-mini Step Length vs Reasoning Tokens for Four Shot in Hard Blocksworld}
+\end{figure}
+
+
+
+
+\newpage
+\vspace{5mm}
+
+
+\section{GPU Usage}
+
+
+% \begin{table}[h]
+% \centering
+% \begin{tabular}{|l|c|c|c|}
+% \hline
+% \textbf{Step} & \textbf{Llama-3 70B} & \textbf{Llama 3.1 70B} & \textbf{Llama 405B} \\
+% \hline
+% Step 2  & 0.31 & 0.375 & 3.65 \\
+% Step 4  & 2.74 & 3.033 & 30.3 \\
+% Step 6  & 10.27 & 10.767 & 107.58 \\
+% Step 8  & 17.95 & 18.972 & 189.46 \\
+% Step 10 & 16.88 & 18.356 & 183.00 \\
+% Step 12 & 6.6 & 8.433 & 84.33 \\
+% \hline
+% \end{tabular}
+% \caption{GPU Usage of NVIDIA H800 SXM5 80G (GPU Hours)}
+% \end{table}
+
+
+In the main experiments, the total GPU usage (measured in GPU hours) for different models on NVIDIA H800 SXM5 80GB GPUs shows a clear progression with model size. For RAP-MCTS, Llama-3 70B requires approximately 420 GPU hours across all steps and difficulty modes, Llama-3.1 70B model requires approximately 450 GPU hours. For \ours, Llama-3 70B requires approximately 280 GPU hours across all steps and difficulty modes and difficulty modes, Llama-3.1 70B model requires approximately 300 GPU hours. For CoT, Llama-3-70B and Llama-3.1-70B both takes approximately 7 GPU hours across all steps and difficulty modes, while Llama-3.1 405B model exhibits significantly higher GPU usage, amounting to approximately 75 GPU hours. In the parameter research and algorithm development phase before main experiments, we consumed a total of around 800 GPU hours on NVIDIA A100 SXM4 80GB GPUs.
+
+
+
+
+
+
+\section{Future Work}
+\label{future}
+In future work, we can explore utilizing more metrics-based reward models (such as the three reward models discussed in this paper) with LM-based reward models (such as Critic LLM \citep{critic} and Eurus \citep{eurus}). Additionally, there is potential to design more general methods for splitting steps in other tasks and datasets. Since step-splitting is the most challenging part of MCTS multi-step reasoning generalization, although we conducted extensive experiments on the Blocksworld multi-step reasoning dataset, which is the most suitable dataset for studying MCTS multi-step reasoning as far as we know. Some previous works have attempted to use datasets like GSM8K and MATH through extensive adaptation efforts on the datasets themselves, however, we aim to design a more general method from the perspective of step-splitting. We hope that MCTS multi-step reasoning will achieve the same level of generalization as CoT, which remains a fundamental area for future research. Future work can also attempt to combine this approach with the fine-grained compositional reasoning framework \citep{unlocking} to further explore the boundaries of MCTS multi-step reasoning capabilities.
+
+
+
+
+% \begin{table}[H]
+% \centering
+% \resizebox{0.8\textwidth}{!}{%
+% \begin{tabular}{c|c|c|c|c|c|c}
+% \toprule
+% \textbf{Model} & \textbf{Step2} & \textbf{Step4} & \textbf{Step6} & \textbf{Step8} & \textbf{Step10} & \textbf{Step12}\\
+% \midrule
+% Llama-3 70B  & 0.31 & 2.74  & 10.27 & 17.95  & 16.88  & 6.60\\
+% Llama-3.1 70B  & 0.38  & 3.03 & 10.77 & 18.97 & 18.36 & 8.43\\
+% Llama-3.1 405B  & 3.65 & 30.32 & 107.58  & 187.46 & 183.00 & 84.33 \\
+% \bottomrule
+% \end{tabular}
+% }
+% \caption{GPU Usage of NVIDIA H800 SXM5 80G (GPU Hours)}
+% \end{table}
+
+
+% \textbf{Citation note:}
+
+% cot: \citep{wei2023chainofthoughtpromptingelicitsreasoning} 
+
+% tot \citep{yao2023treethoughtsdeliberateproblem}
+
+% ReST-MCTS: \citep{Rest-MCTS}
+
+% mctsr: \citep{zhang2024accessinggpt4levelmathematical}
+
+% rap: \citep{hao2023reasoninglanguagemodelplanning}
+
+
+
+% Contrastive decoding: \citep{contrastivedecoding}
+
+% contrastive reasoning: \citep{contrastiveandreasoning}
+
+% mutualreasoning: \citep{mutualReasoning}
+
+% deepseek:
+
+% V1 \citep{Xin2024DeepSeekProverAT}
+
+% V1.5 \citep{deepprover1.5}
+
+% blocksword:
+
+% \citep{b1}
+% \citep{valmeekam2023on}
+
+% blocks word:
+% \citep{b1, valmeekam2023on}
+
+% llmreasoner \citep{llmreaonser}
+
+% haven't use
+
+% towardself: \citep{towardself}
+
+% CWD: \citep{dainese2024generatingcodeworldmodels}

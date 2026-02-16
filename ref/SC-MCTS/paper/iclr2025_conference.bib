@@ -1,0 +1,478 @@
+
+@inproceedings{wei2023chainofthoughtpromptingelicitsreasoning,
+author = {Wei, Jason and Wang, Xuezhi and Schuurmans, Dale and Bosma, Maarten and Ichter, Brian and Xia, Fei and Chi, Ed H. and Le, Quoc V. and Zhou, Denny},
+title = {Chain-of-thought prompting elicits reasoning in large language models},
+year = {2024},
+isbn = {9781713871088},
+publisher = {Curran Associates Inc.},
+address = {Red Hook, NY, USA},
+abstract = {We explore how generating a chain of thought—a series of intermediate reasoning steps—significantly improves the ability of large language models to perform complex reasoning. In particular, we show how such reasoning abilities emerge naturally in sufficiently large language models via a simple method called chain-of-thought prompting, where a few chain of thought demonstrations are provided as exemplars in prompting.Experiments on three large language models show that chain-of-thought prompting improves performance on a range of arithmetic, commonsense, and symbolic reasoning tasks. The empirical gains can be striking. For instance, prompting a PaLM 540B with just eight chain-of-thought exemplars achieves state-of-the-art accuracy on the GSM8K benchmark of math word problems, surpassing even finetuned GPT-3 with a verifier.},
+booktitle = {Proceedings of the 36th International Conference on Neural Information Processing Systems},
+articleno = {1800},
+numpages = {14},
+location = {New Orleans, LA, USA},
+series = {NIPS '22}
+}
+
+
+
+@inproceedings{yao2023treethoughtsdeliberateproblem,
+author = {Yao, Shunyu and Yu, Dian and Zhao, Jeffrey and Shafran, Izhak and Griffiths, Thomas L. and Cao, Yuan and Narasimhan, Karthik},
+title = {Tree of thoughts: deliberate problem solving with large language models},
+year = {2024},
+publisher = {Curran Associates Inc.},
+address = {Red Hook, NY, USA},
+abstract = {Language models are increasingly being deployed for general problem solving across a wide range of tasks, but are still confined to token-level, left-to-right decision-making processes during inference. This means they can fall short in tasks that require exploration, strategic lookahead, or where initial decisions play a pivotal role. To surmount these challenges, we introduce a new framework for language model inference, "Tree of Thoughts" (ToT), which generalizes over the popular "Chain of Thought" approach to prompting language models, and enables exploration over coherent units of text ("thoughts") that serve as intermediate steps toward problem solving. ToT allows LMs to perform deliberate decision making by considering multiple different reasoning paths and self-evaluating choices to decide the next course of action, as well as looking ahead or backtracking when necessary to make global choices. Our experiments show that ToT significantly enhances language models' problem-solving abilities on three novel tasks requiring non-trivial planning or search: Game of 24, Creative Writing, and Mini Crosswords. For instance, in Game of 24, while GPT-4 with chain-of-thought prompting only solved 4\% of tasks, our method achieved a success rate of 74\%. Code repo with all prompts: https://github.com/princeton-nlp/tree-of-thought-llm.},
+booktitle = {Proceedings of the 37th International Conference on Neural Information Processing Systems},
+articleno = {517},
+numpages = {14},
+location = {New Orleans, LA, USA},
+series = {NIPS '23}
+}
+
+@misc{ReST-MCTS,
+      title={ReST-MCTS*: LLM Self-Training via Process Reward Guided Tree Search}, 
+      author={Dan Zhang and Sining Zhoubian and Ziniu Hu and Yisong Yue and Yuxiao Dong and Jie Tang},
+      year={2024},
+      eprint={2406.03816},
+      archivePrefix={arXiv},
+      primaryClass={cs.CL},
+      url={https://arxiv.org/abs/2406.03816}, 
+}
+
+@misc{zhang2024accessinggpt4levelmathematical,
+      title={Accessing GPT-4 level Mathematical Olympiad Solutions via Monte Carlo Tree Self-refine with LLaMa-3 8B}, 
+      author={Di Zhang and Xiaoshui Huang and Dongzhan Zhou and Yuqiang Li and Wanli Ouyang},
+      year={2024},
+      eprint={2406.07394},
+      archivePrefix={arXiv},
+      primaryClass={cs.AI},
+      url={https://arxiv.org/abs/2406.07394}, 
+}
+
+@misc{dainese2024generatingcodeworldmodels,
+      title={Generating Code World Models with Large Language Models Guided by Monte Carlo Tree Search}, 
+      author={Nicola Dainese and Matteo Merler and Minttu Alakuijala and Pekka Marttinen},
+      year={2024},
+      eprint={2405.15383},
+      archivePrefix={arXiv},
+      primaryClass={cs.AI},
+      url={https://arxiv.org/abs/2405.15383}, 
+}
+
+@inproceedings{hao2023reasoninglanguagemodelplanning,
+    title = "Reasoning with Language Model is Planning with World Model",
+    author = "Hao, Shibo  and
+      Gu, Yi  and
+      Ma, Haodi  and
+      Hong, Joshua  and
+      Wang, Zhen  and
+      Wang, Daisy  and
+      Hu, Zhiting",
+    editor = "Bouamor, Houda  and
+      Pino, Juan  and
+      Bali, Kalika",
+    booktitle = "Proceedings of the 2023 Conference on Empirical Methods in Natural Language Processing",
+    month = dec,
+    year = "2023",
+    address = "Singapore",
+    publisher = "Association for Computational Linguistics",
+    url = "https://aclanthology.org/2023.emnlp-main.507",
+    doi = "10.18653/v1/2023.emnlp-main.507",
+    pages = "8154--8173",
+    abstract = "Large language models (LLMs) have shown remarkable reasoning capabilities, particularly with Chain-of-Thought-style prompts. However, LLMs can still struggle with problems that are easy for humans, such as generating action plans for executing tasks or performing complex math or logical reasoning. This is due to LLMs{'} absence of an internal world model for predicting world states (e.g., environment status, variable values) and simulating long-term action outcomes of actions. This prevents LLMs from performing deliberate planning akin to human brains, which involves exploring alternative reasoning paths, anticipating future states and rewards, and iteratively refining existing reasoning steps. To overcome the limitations, we propose a new LLM reasoning framework, Reasoning via Planning (RAP). RAP repurposes the LLM as both a world model and a reasoning agent, and incorporates a principled planning algorithm (based on Monte Carlo Tree Search) for strategic exploration in the vast reasoning space. During reasoning, the LLM (as agent) incrementally builds a reasoning tree under the guidance of the LLM (as world model) and task-specific rewards, properly balancing exploration v.s. exploitation to achieve a high-reward reasoning path efficiently. We apply RAP to a variety of challenging reasoning problems, such as plan generation, math reasoning, and logical inference. Empirical results demonstrate the superiority of RAP over various strong baselines, including CoT and least-to-most prompting with self-consistency, e.g., RAP on LLaMA-33B surpasses CoT on GPT-4 with 33{\%} relative improvement in plan generation.",
+}
+
+ @article{silver, title={Mastering the game of Go with deep neural networks and tree search}, volume={529}, DOI={https://doi.org/10.1038/nature16961}, number={7587}, journal={Nature}, author={Silver, David and Huang, Aja and Maddison, Chris J. and Guez, Arthur and Sifre, Laurent and van den Driessche, George and Schrittwieser, Julian and Antonoglou, Ioannis and Panneershelvam, Veda and Lanctot, Marc and Dieleman, Sander and Grewe, Dominik and Nham, John and Kalchbrenner, Nal and Sutskever, Ilya and Lillicrap, Timothy and Leach, Madeleine and Kavukcuoglu, Koray and Graepel, Thore and Hassabis, Demis}, year={2016}, month={Jan}, pages={484–489} }
+
+
+@inproceedings{google_sd,
+author = {Leviathan, Yaniv and Kalman, Matan and Matias, Yossi},
+title = {Fast inference from transformers via speculative decoding},
+year = {2023},
+publisher = {JMLR.org},
+abstract = {Inference from large autoregressive models like Transformers is slow - decoding K tokens takes K serial runs of the model. In this work we introduce speculative decoding - an algorithm to sample from autoregressive models faster without any changes to the outputs, by computing several tokens in parallel. At the heart of our approach lie the observations that (1) hard language-modeling tasks often include easier subtasks that can be approximated well by more efficient models, and (2) using speculative execution and a novel sampling method, we can make exact decoding from the large models faster, by running them in parallel on the outputs of the approximation models, potentially generating several tokens concurrently, and without changing the distribution. Our method can accelerate existing off-the-shelf models without retraining or architecture changes. We demonstrate it on T5-XXL and show a 2X-3X acceleration compared to the standard T5X implementation, with identical outputs.},
+booktitle = {Proceedings of the 40th International Conference on Machine Learning},
+articleno = {795},
+numpages = {13},
+location = {Honolulu, Hawaii, USA},
+series = {ICML'23}
+}
+
+@misc{dm_sd,
+      title={Accelerating Large Language Model Decoding with Speculative Sampling}, 
+      author={Charlie Chen and Sebastian Borgeaud and Geoffrey Irving and Jean-Baptiste Lespiau and Laurent Sifre and John Jumper},
+      year={2023},
+      eprint={2302.01318},
+      archivePrefix={arXiv},
+      primaryClass={cs.CL},
+      url={https://arxiv.org/abs/2302.01318}, 
+}
+
+
+
+@misc{o1,
+  author = {OpenAI},
+  year = {2024},
+  title = {Introducing OpenAI o1},
+  howpublished = {\url{https://openai.com/o1/}},
+  note = {Accessed: 2024-10-02}
+}
+
+
+
+
+
+@misc{o1-2,
+  author = {OpenAI},
+  year = {2024},
+  title = {How reasoning works},
+  howpublished = {\url{https://platform.openai.com/docs/guides/reasoning/how-reasoning-works}},
+  note = {Accessed: 2024-10-02}
+}
+
+
+
+
+
+
+@inproceedings{contrastivedecoding,
+    title = "Contrastive Decoding: Open-ended Text Generation as Optimization",
+    author = "Li, Xiang Lisa  and
+      Holtzman, Ari  and
+      Fried, Daniel  and
+      Liang, Percy  and
+      Eisner, Jason  and
+      Hashimoto, Tatsunori  and
+      Zettlemoyer, Luke  and
+      Lewis, Mike",
+    editor = "Rogers, Anna  and
+      Boyd-Graber, Jordan  and
+      Okazaki, Naoaki",
+    booktitle = "Proceedings of the 61st Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers)",
+    month = jul,
+    year = "2023",
+    address = "Toronto, Canada",
+    publisher = "Association for Computational Linguistics",
+    url = "https://aclanthology.org/2023.acl-long.687",
+    doi = "10.18653/v1/2023.acl-long.687",
+    pages = "12286--12312",
+    abstract = "Given a language model (LM), maximum probability is a poor decoding objective for open-ended generation, because it produces short and repetitive text. On the other hand, sampling can often produce incoherent text that drifts from the original topics. We propose contrastive decoding (CD), a reliable decoding approach that optimizes a contrastive objective subject to a plausibility constraint. The contrastive objective returns the difference between the likelihood under a large LM (called the expert, e.g. OPT-13B) and a small LM (called the amateur, e.g. OPT-125M), and the constraint ensures that the outputs are plausible. CD is inspired by the fact that the failures of larger LMs (e.g., repetition, inco- herence) are even more prevalent in smaller LMs, and that this difference signals which texts should be preferred. CD requires zero additional training, and produces higher quality text than decoding from the larger LM alone. It also works across model scales (OPT-13B and GPT2-1.5B) and significantly outperforms four strong decoding algorithms (e.g., nucleus, top-k) in automatic and human evaluations across wikipedia, news and story domains.",
+}
+
+
+@misc{contrastiveandreasoning,
+      title={Contrastive Decoding Improves Reasoning in Large Language Models}, 
+      author={Sean O'Brien and Mike Lewis},
+      year={2023},
+      eprint={2309.09117},
+      archivePrefix={arXiv},
+      primaryClass={cs.CL},
+      url={https://arxiv.org/abs/2309.09117}, 
+}
+
+
+@article{towardself,
+  title={Toward Self-Improvement of LLMs via Imagination, Searching, and Criticizing},
+  author={Ye Tian and Baolin Peng and Linfeng Song and Lifeng Jin and Dian Yu and Haitao Mi and Dong Yu},
+  journal={ArXiv},
+  year={2024},
+  volume={abs/2404.12253},
+  url={https://api.semanticscholar.org/CorpusID:269214525}
+}
+
+@misc{mutualReasoning,
+      title={Mutual Reasoning Makes Smaller LLMs Stronger Problem-Solvers}, 
+      author={Zhenting Qi and Mingyuan Ma and Jiahang Xu and Li Lyna Zhang and Fan Yang and Mao Yang},
+      year={2024},
+      eprint={2408.06195},
+      archivePrefix={arXiv},
+      primaryClass={cs.CL},
+      url={https://arxiv.org/abs/2408.06195}, 
+}
+
+@misc{Boostreasoing,
+      title={Monte Carlo Tree Search Boosts Reasoning via Iterative Preference Learning}, 
+      author={Yuxi Xie and Anirudh Goyal and Wenyue Zheng and Min-Yen Kan and Timothy P. Lillicrap and Kenji Kawaguchi and Michael Shieh},
+      year={2024},
+      eprint={2405.00451},
+      archivePrefix={arXiv},
+      primaryClass={cs.AI},
+      url={https://arxiv.org/abs/2405.00451}, 
+}
+
+@inproceedings{yuan-etal-2024-speculative,
+    title = "Speculative Contrastive Decoding",
+    author = "Yuan, Hongyi  and
+      Lu, Keming  and
+      Huang, Fei  and
+      Yuan, Zheng  and
+      Zhou, Chang",
+    editor = "Ku, Lun-Wei  and
+      Martins, Andre  and
+      Srikumar, Vivek",
+    booktitle = "Proceedings of the 62nd Annual Meeting of the Association for Computational Linguistics (Volume 2: Short Papers)",
+    month = aug,
+    year = "2024",
+    address = "Bangkok, Thailand",
+    publisher = "Association for Computational Linguistics",
+    url = "https://aclanthology.org/2024.acl-short.5",
+    pages = "56--64",
+    abstract = "Large language models (LLMs) exhibit exceptional performance in language tasks, yet their auto-regressive inference is limited due to high computational requirements and is sub-optimal due to the exposure bias. Inspired by speculative decoding and contrastive decoding, we introduce Speculative Contrastive Decoding (SCD), a straightforward yet powerful decoding approach that leverages predictions from smaller language models (LMs) to achieve both decoding acceleration and quality improvement. Extensive evaluations and analyses on four diverse language tasks demonstrate the effectiveness of SCD, showing that decoding efficiency and quality can compatibly benefit from one smaller LM.",
+}
+
+
+@article{Xin2024DeepSeekProverAT,
+  title={DeepSeek-Prover: Advancing Theorem Proving in LLMs through Large-Scale Synthetic Data},
+  author={Huajian Xin and Daya Guo and Zhihong Shao and Zhizhou Ren and Qihao Zhu and Bo Liu (Benjamin Liu) and Chong Ruan and Wenda Li and Xiaodan Liang},
+  journal={ArXiv},
+  year={2024},
+  volume={abs/2405.14333},
+  url={https://api.semanticscholar.org/CorpusID:269983755}
+}
+
+
+@misc{deepprover1.5,
+      title={DeepSeek-Prover-V1.5: Harnessing Proof Assistant Feedback for Reinforcement Learning and Monte-Carlo Tree Search}, 
+      author={Huajian Xin and Z. Z. Ren and Junxiao Song and Zhihong Shao and Wanjia Zhao and Haocheng Wang and Bo Liu and Liyue Zhang and Xuan Lu and Qiushi Du and Wenjun Gao and Qihao Zhu and Dejian Yang and Zhibin Gou and Z. F. Wu and Fuli Luo and Chong Ruan},
+      year={2024},
+      eprint={2408.08152},
+      archivePrefix={arXiv},
+      primaryClass={cs.CL},
+      url={https://arxiv.org/abs/2408.08152}, 
+}
+
+
+@inproceedings{
+valmeekam2023on,
+title={On the Planning Abilities of Large Language Models - A Critical Investigation},
+author={Karthik Valmeekam and Matthew Marquez and Sarath Sreedharan and Subbarao Kambhampati},
+booktitle={Thirty-seventh Conference on Neural Information Processing Systems},
+year={2023},
+url={https://openreview.net/forum?id=X6dEqXIsEW}
+}
+
+@inproceedings{b1, 
+author = {Valmeekam, Karthik and Marquez, Matthew and Olmo, Alberto and Sreedharan, Sarath and Kambhampati, Subbarao}, title = {PlanBench: an extensible benchmark for evaluating large language models on planning and reasoning about change}, year = {2024}, publisher = {Curran Associates Inc.}, address = {Red Hook, NY, USA}, abstract = {Generating plans of action, and reasoning about change have long been considered a core competence of intelligent agents. It is thus no surprise that evaluating the planning and reasoning capabilities of large language models (LLMs) has become a hot topic of research. Most claims about LLM planning capabilities are however based on common sense tasks-where it becomes hard to tell whether LLMs are planning or merely retrieving from their vast world knowledge. There is a strong need for systematic and extensible planning benchmarks with sufficient diversity to evaluate whether LLMs have innate planning capabilities. Motivated by this, we propose PlanBench, an extensible benchmark suite based on the kinds of domains used in the automated planning community, especially in the International Planning Competition, to test the capabilities of LLMs in planning or reasoning about actions and change. PlanBench provides sufficient diversity in both the task domains and the specific planning capabilities. Our studies also show that on many critical capabilities-including plan generation-LLM performance falls quite short, even with the SOTA models. PlanBench can thus function as a useful marker of progress of LLMs in planning and reasoning.}, booktitle = {Proceedings of the 37th International Conference on Neural Information Processing Systems}, articleno = {1693}, numpages = {13}, location = {New Orleans, LA, USA}, series = {NIPS '23} }
+
+
+@inproceedings{
+llmreaonser,
+title={{LLM} Reasoners: New Evaluation, Library, and Analysis of Step-by-Step Reasoning with Large Language Models},
+author={Shibo Hao and Yi Gu and Haotian Luo and Tianyang Liu and Xiyan Shao and Xinyuan Wang and Shuhua Xie and Haodi Ma and Adithya Samavedhi and Qiyue Gao and Zhen Wang and Zhiting Hu},
+booktitle={ICLR 2024 Workshop on Large Language Model (LLM) Agents},
+year={2024},
+url={https://openreview.net/forum?id=h1mvwbQiXR}
+}
+
+@article{alphafold, title={Highly accurate protein structure prediction with alphafold}, volume={596}, url={https://www.nature.com/articles/s41586-021-03819-2}, DOI={https://doi.org/10.1038/s41586-021-03819-2}, number={7873}, journal={Nature}, author={Jumper, John and Evans, Richard and Pritzel, Alexander and Green, Tim and Figurnov, Michael and Ronneberger, Olaf and Tunyasuvunakool, Kathryn and Bates, Russ and Žídek, Augustin and Potapenko, Anna and Bridgland, Alex and Meyer, Clemens and Kohl, Simon A. A. and Ballard, Andrew J. and Cowie, Andrew and Romera-Paredes, Bernardino and Nikolov, Stanislav and Jain, Rishub and Adler, Jonas and Back, Trevor}, year={2021}, month={Jul}, pages={583–589} }
+
+@misc{alphazero,
+      title={Mastering Chess and Shogi by Self-Play with a General Reinforcement Learning Algorithm}, 
+      author={David Silver and Thomas Hubert and Julian Schrittwieser and Ioannis Antonoglou and Matthew Lai and Arthur Guez and Marc Lanctot and Laurent Sifre and Dharshan Kumaran and Thore Graepel and Timothy Lillicrap and Karen Simonyan and Demis Hassabis},
+      year={2017},
+      eprint={1712.01815},
+      archivePrefix={arXiv},
+      primaryClass={cs.AI},
+      url={https://arxiv.org/abs/1712.01815}, 
+}
+
+
+@ARTICLE{mcts_old,
+  author={Browne, Cameron B. and Powley, Edward and Whitehouse, Daniel and Lucas, Simon M. and Cowling, Peter I. and Rohlfshagen, Philipp and Tavener, Stephen and Perez, Diego and Samothrakis, Spyridon and Colton, Simon},
+  journal={IEEE Transactions on Computational Intelligence and AI in Games}, 
+  title={A Survey of Monte Carlo Tree Search Methods}, 
+  year={2012},
+  volume={4},
+  number={1},
+  pages={1-43},
+  keywords={Games;Monte Carlo methods;Artificial intelligence;Game theory;Computers;Markov processes;Decision theory;Artificial intelligence (AI);bandit-based methods;computer Go;game search;Monte Carlo tree search (MCTS);upper confidence bounds (UCB);upper confidence bounds for trees (UCT)},
+  doi={10.1109/TCIAIG.2012.2186810}}
+
+
+@article{MDP,
+ ISSN = {00959057, 19435274},
+ URL = {http://www.jstor.org/stable/24900506},
+ author = {Richard Bellman},
+ journal = {Journal of Mathematics and Mechanics},
+ number = {5},
+ pages = {679--684},
+ publisher = {Indiana University Mathematics Department},
+ title = {A Markovian Decision Process},
+ urldate = {2024-09-22},
+ volume = {6},
+ year = {1957}
+}
+
+@inproceedings{UCT,
+author = {Coquelin, Pierre-Arnaud and Munos, R\'{e}mi},
+title = {Bandit algorithms for tree search},
+year = {2007},
+isbn = {0974903930},
+publisher = {AUAI Press},
+address = {Arlington, Virginia, USA},
+abstract = {Bandit based methods for tree search have recently gained popularity when applied to huge trees, e.g. in the game of go [6]. Their efficient exploration of the tree enables to return rapidly a good value, and improve precision if more time is provided. The UCT algorithm [8], a tree search method based on Upper Confidence Bounds (UCB) [2], is believed to adapt locally to the effective smoothness of the tree. However, we show that UCT is "over-optimistic" in some sense, leading to a worst-case regret that may be very poor. We propose alternative bandit algorithms for tree search. First, a modification of UCT using a confidence sequence that scales exponentially in the horizon depth is analyzed. We then consider Flat-UCB performed on the leaves and provide a finite regret bound with high probability. Then, we introduce and analyze a Bandit Algorithm for Smooth Trees (BAST) which takes into account actual smoothness of the rewards for performing efficient "cuts" of sub-optimal branches with high confidence. Finally, we present an incremental tree expansion which applies when the full tree is too big (possibly infinite) to be entirely represented and show that with high probability, only the optimal branches are indefinitely developed. We illustrate these methods on a global optimization problem of a continuous function, given noisy values.},
+booktitle = {Proceedings of the Twenty-Third Conference on Uncertainty in Artificial Intelligence},
+pages = {67–74},
+numpages = {8},
+location = {Vancouver, BC, Canada},
+series = {UAI'07}
+}
+
+
+
+@misc{xu2023traingainunleashmathematical,
+      title={No Train Still Gain. Unleash Mathematical Reasoning of Large Language Models with Monte Carlo Tree Search Guided by Energy Function}, 
+      author={Haotian Xu},
+      year={2023},
+      eprint={2309.03224},
+      archivePrefix={arXiv},
+      primaryClass={cs.AI},
+      url={https://arxiv.org/abs/2309.03224}, 
+}
+
+
+
+@misc{unlocking,
+      title={Unlocking the Boundaries of Thought: A Reasoning Granularity Framework to Quantify and Optimize Chain-of-Thought}, 
+      author={Qiguang Chen and Libo Qin and Jiaqi Wang and Jinxuan Zhou and Wanxiang Che},
+      year={2024},
+      eprint={2410.05695},
+      archivePrefix={arXiv},
+      primaryClass={cs.CL},
+      url={https://arxiv.org/abs/2410.05695}, 
+}
+
+
+
+@inproceedings{dpo,
+ author = {Rafailov, Rafael and Sharma, Archit and Mitchell, Eric and Manning, Christopher D and Ermon, Stefano and Finn, Chelsea},
+ booktitle = {Advances in Neural Information Processing Systems},
+ editor = {A. Oh and T. Naumann and A. Globerson and K. Saenko and M. Hardt and S. Levine},
+ pages = {53728--53741},
+ publisher = {Curran Associates, Inc.},
+ title = {Direct Preference Optimization: Your Language Model is Secretly a Reward Model},
+ url = {https://proceedings.neurips.cc/paper_files/paper/2023/file/a85b405ed65c6477a4fe8302b5e06ce7-Paper-Conference.pdf},
+ volume = {36},
+ year = {2023}
+}
+
+@inproceedings{DExperts,
+    title = "{DE}xperts: Decoding-Time Controlled Text Generation with Experts and Anti-Experts",
+    author = "Liu, Alisa  and
+      Sap, Maarten  and
+      Lu, Ximing  and
+      Swayamdipta, Swabha  and
+      Bhagavatula, Chandra  and
+      Smith, Noah A.  and
+      Choi, Yejin",
+    booktitle = "Proceedings of the 59th Annual Meeting of the Association for Computational Linguistics and the 11th International Joint Conference on Natural Language Processing (Volume 1: Long Papers)",
+    month = aug,
+    year = "2021",
+    address = "Online",
+    publisher = "Association for Computational Linguistics",
+    url = "https://aclanthology.org/2021.acl-long.522",
+    doi = "10.18653/v1/2021.acl-long.522",
+    pages = "6691--6706",
+}
+
+@article{dola,
+  title={DoLa: Decoding by Contrasting Layers Improves Factuality in Large Language Models},
+  author={Chuang, Yung-Sung and Xie, Yujia and Luo, Hongyin and Kim, Yoon and Glass, James and He, Pengcheng},
+  journal={arXiv preprint arXiv:2309.03883},
+  year={2023},
+}
+
+@inproceedings{
+cannot-self-correct,
+title={Large Language Models Cannot Self-Correct Reasoning Yet},
+author={Jie Huang and Xinyun Chen and Swaroop Mishra and Huaixiu Steven Zheng and Adams Wei Yu and Xinying Song and Denny Zhou},
+booktitle={The Twelfth International Conference on Learning Representations},
+year={2024},
+url={https://openreview.net/forum?id=IkmD3fKBPQ}
+}
+
+@misc{cot-limitation,
+      title={To CoT or not to CoT? Chain-of-thought helps mainly on math and symbolic reasoning}, 
+      author={Zayne Sprague and Fangcong Yin and Juan Diego Rodriguez and Dongwei Jiang and Manya Wadhwa and Prasann Singhal and Xinyu Zhao and Xi Ye and Kyle Mahowald and Greg Durrett},
+      year={2024},
+      eprint={2409.12183},
+      archivePrefix={arXiv},
+      primaryClass={cs.CL},
+      url={https://arxiv.org/abs/2409.12183}, 
+}
+
+@InProceedings{pmlr-v239-ren23a,
+  title = 	 {Self-Evaluation Improves Selective Generation in Large Language Models},
+  author =       {Ren, Jie and Zhao, Yao and Vu, Tu and Liu, Peter J. and Lakshminarayanan, Balaji},
+  booktitle = 	 {Proceedings on "I Can't Believe It's Not Better: Failure  Modes in the Age of Foundation Models" at NeurIPS 2023 Workshops},
+  pages = 	 {49--64},
+  year = 	 {2023},
+  editor = 	 {Antorán, Javier and Blaas, Arno and Buchanan, Kelly and Feng, Fan and Fortuin, Vincent and Ghalebikesabi, Sahra and Kriegler, Andreas and Mason, Ian and Rohde, David and Ruiz, Francisco J. R. and Uelwer, Tobias and Xie, Yubin and Yang, Rui},
+  volume = 	 {239},
+  series = 	 {Proceedings of Machine Learning Research},
+  month = 	 {16 Dec},
+  publisher =    {PMLR},
+  pdf = 	 {https://proceedings.mlr.press/v239/ren23a/ren23a.pdf},
+  url = 	 {https://proceedings.mlr.press/v239/ren23a.html},
+  abstract = 	 {Safe deployment of large language models (LLMs) may benefit from a reliable method for assessing their generated content to determine when to abstain or to selectively generate. While likelihood-based metrics such as perplexity are widely employed, recent research has demonstrated the limitations of using sequence-level probability estimates given by LLMs as reliable indicators of generation quality. Conversely, LLMs have demonstrated strong calibration at the token level, particularly when it comes to choosing correct answers in multiple-choice questions or evaluating true/false statements. In this work, we reformulate open-ended generation tasks into token-level prediction tasks, and leverage LLMs’ superior calibration at the token level. We instruct an LLM to self-evaluate its answers, employing either a multi-way comparison or a point-wise evaluation approach, with the option to include an “None of the above” option to express the model’s uncertainty explicitly. We benchmark a range of scoring methods based on self-evaluation and evaluate their performance in selective generation using TruthfulQA and TL;DR. Through extensive experiments with PaLM-2 and GPT-3, we demonstrate that self-evaluation based scores not only improve accuracy, but also correlate better with the overall quality of generated content.}
+}
+@misc{zhao2024ouroborosgeneratinglongerdrafts,
+      title={Ouroboros: Generating Longer Drafts Phrase by Phrase for Faster Speculative Decoding}, 
+      author={Weilin Zhao and Yuxiang Huang and Xu Han and Wang Xu and Chaojun Xiao and Xinrong Zhang and Yewei Fang and Kaihuo Zhang and Zhiyuan Liu and Maosong Sun},
+      year={2024},
+      eprint={2402.13720},
+      archivePrefix={arXiv},
+      primaryClass={cs.CL},
+      url={https://arxiv.org/abs/2402.13720}, 
+}
+
+
+@misc{frantar2022gptq,
+    title={GPTQ: Accurate Post-Training Quantization for Generative Pre-trained Transformers},
+    author={Elias Frantar and Saleh Ashkboos and Torsten Hoefler and Dan Alistarh},
+    year={2022},
+    eprint={2210.17323},
+    archivePrefix={arXiv},
+    primaryClass={cs.LG}
+}
+
+
+@misc{eurus,
+    title={Advancing LLM Reasoning Generalists with Preference Trees},
+    author={Lifan Yuan and Ganqu Cui and Hanbin Wang and Ning Ding and Xingyao Wang and Jia Deng and Boji Shan and Huimin Chen and Ruobing Xie and Yankai Lin and Zhenghao Liu and Bowen Zhou and Hao Peng and Zhiyuan Liu and Maosong Sun},
+    year={2024},
+    eprint={2404.02078},
+    archivePrefix={arXiv},
+    primaryClass={cs.AI}
+}
+
+@misc{critic,
+    title={LLM Critics Help Catch LLM Bugs},
+    author={Nat McAleese and Rai Michael Pokorny and Juan Felipe Ceron Uribe and Evgenia Nitishinskaya and Maja Trebacz and Jan Leike},
+    year={2024},
+    eprint={2407.00215},
+    archivePrefix={arXiv},
+    primaryClass={cs.SE}
+}
+
+
+@inproceedings{zhang-etal-2024-working,
+    title = "Working Memory Identifies Reasoning Limits in Language Models",
+    author = "Zhang, Chunhui  and
+      Jian, Yiren  and
+      Ouyang, Zhongyu  and
+      Vosoughi, Soroush",
+    editor = "Al-Onaizan, Yaser  and
+      Bansal, Mohit  and
+      Chen, Yun-Nung",
+    booktitle = "Proceedings of the 2024 Conference on Empirical Methods in Natural Language Processing",
+    month = nov,
+    year = "2024",
+    address = "Miami, Florida, USA",
+    publisher = "Association for Computational Linguistics",
+    url = "https://aclanthology.org/2024.emnlp-main.938",
+    doi = "10.18653/v1/2024.emnlp-main.938",
+    pages = "16896--16922",
+    abstract = "This study explores the inherent limitations of large language models (LLMs) from a scaling perspective, focusing on the upper bounds of their cognitive capabilities. We integrate insights from cognitive science to quantitatively examine how LLMs perform on n-back tasks{---}a benchmark used to assess working memory, which involves temporarily holding and manipulating information. Our findings reveal that despite the increased model size, LLMs still face significant challenges in holding and processing information effectively, especially under complex task conditions. We also assess various prompting strategies, revealing their diverse impacts on LLM performance. The results highlight the struggle of current LLMs to autonomously discover optimal problem-solving patterns without heavily relying on manually corrected prompts. To move beyond these constraints, fundamental improvements in the planning and search of LLMs are essential for them to reason autonomously. Improving these capabilities will reduce the reliance on external corrections and enable LLMs to become more autonomous in their problem-solving processes.",
+}

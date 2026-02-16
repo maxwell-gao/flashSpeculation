@@ -1,0 +1,202 @@
+\begin{thebibliography}{35}
+\providecommand{\natexlab}[1]{#1}
+\providecommand{\url}[1]{\texttt{#1}}
+\expandafter\ifx\csname urlstyle\endcsname\relax
+  \providecommand{\doi}[1]{doi: #1}\else
+  \providecommand{\doi}{doi: \begingroup \urlstyle{rm}\Url}\fi
+
+\bibitem[Bellman(1957)]{MDP}
+Richard Bellman.
+\newblock A markovian decision process.
+\newblock \emph{Journal of Mathematics and Mechanics}, 6\penalty0 (5):\penalty0 679--684, 1957.
+\newblock ISSN 00959057, 19435274.
+\newblock URL \url{http://www.jstor.org/stable/24900506}.
+
+\bibitem[Chen et~al.(2023)Chen, Borgeaud, Irving, Lespiau, Sifre, and Jumper]{dm_sd}
+Charlie Chen, Sebastian Borgeaud, Geoffrey Irving, Jean-Baptiste Lespiau, Laurent Sifre, and John Jumper.
+\newblock Accelerating large language model decoding with speculative sampling, 2023.
+\newblock URL \url{https://arxiv.org/abs/2302.01318}.
+
+\bibitem[Chen et~al.(2024)Chen, Qin, Wang, Zhou, and Che]{unlocking}
+Qiguang Chen, Libo Qin, Jiaqi Wang, Jinxuan Zhou, and Wanxiang Che.
+\newblock Unlocking the boundaries of thought: A reasoning granularity framework to quantify and optimize chain-of-thought, 2024.
+\newblock URL \url{https://arxiv.org/abs/2410.05695}.
+
+\bibitem[Coquelin \& Munos(2007)Coquelin and Munos]{UCT}
+Pierre-Arnaud Coquelin and R\'{e}mi Munos.
+\newblock Bandit algorithms for tree search.
+\newblock In \emph{Proceedings of the Twenty-Third Conference on Uncertainty in Artificial Intelligence}, UAI'07, pp.\  67–74, Arlington, Virginia, USA, 2007. AUAI Press.
+\newblock ISBN 0974903930.
+
+\bibitem[Frantar et~al.(2022)Frantar, Ashkboos, Hoefler, and Alistarh]{frantar2022gptq}
+Elias Frantar, Saleh Ashkboos, Torsten Hoefler, and Dan Alistarh.
+\newblock Gptq: Accurate post-training quantization for generative pre-trained transformers, 2022.
+
+\bibitem[Hao et~al.(2023)Hao, Gu, Ma, Hong, Wang, Wang, and Hu]{hao2023reasoninglanguagemodelplanning}
+Shibo Hao, Yi~Gu, Haodi Ma, Joshua Hong, Zhen Wang, Daisy Wang, and Zhiting Hu.
+\newblock Reasoning with language model is planning with world model.
+\newblock In Houda Bouamor, Juan Pino, and Kalika Bali (eds.), \emph{Proceedings of the 2023 Conference on Empirical Methods in Natural Language Processing}, pp.\  8154--8173, Singapore, December 2023. Association for Computational Linguistics.
+\newblock \doi{10.18653/v1/2023.emnlp-main.507}.
+\newblock URL \url{https://aclanthology.org/2023.emnlp-main.507}.
+
+\bibitem[Hao et~al.(2024)Hao, Gu, Luo, Liu, Shao, Wang, Xie, Ma, Samavedhi, Gao, Wang, and Hu]{llmreaonser}
+Shibo Hao, Yi~Gu, Haotian Luo, Tianyang Liu, Xiyan Shao, Xinyuan Wang, Shuhua Xie, Haodi Ma, Adithya Samavedhi, Qiyue Gao, Zhen Wang, and Zhiting Hu.
+\newblock {LLM} reasoners: New evaluation, library, and analysis of step-by-step reasoning with large language models.
+\newblock In \emph{ICLR 2024 Workshop on Large Language Model (LLM) Agents}, 2024.
+\newblock URL \url{https://openreview.net/forum?id=h1mvwbQiXR}.
+
+\bibitem[Jumper et~al.(2021)Jumper, Evans, Pritzel, Green, Figurnov, Ronneberger, Tunyasuvunakool, Bates, Žídek, Potapenko, Bridgland, Meyer, Kohl, Ballard, Cowie, Romera-Paredes, Nikolov, Jain, Adler, and Back]{alphafold}
+John Jumper, Richard Evans, Alexander Pritzel, Tim Green, Michael Figurnov, Olaf Ronneberger, Kathryn Tunyasuvunakool, Russ Bates, Augustin Žídek, Anna Potapenko, Alex Bridgland, Clemens Meyer, Simon A.~A. Kohl, Andrew~J. Ballard, Andrew Cowie, Bernardino Romera-Paredes, Stanislav Nikolov, Rishub Jain, Jonas Adler, and Trevor Back.
+\newblock Highly accurate protein structure prediction with alphafold.
+\newblock \emph{Nature}, 596\penalty0 (7873):\penalty0 583–589, Jul 2021.
+\newblock \doi{https://doi.org/10.1038/s41586-021-03819-2}.
+\newblock URL \url{https://www.nature.com/articles/s41586-021-03819-2}.
+
+\bibitem[Leviathan et~al.(2023)Leviathan, Kalman, and Matias]{google_sd}
+Yaniv Leviathan, Matan Kalman, and Yossi Matias.
+\newblock Fast inference from transformers via speculative decoding.
+\newblock In \emph{Proceedings of the 40th International Conference on Machine Learning}, ICML'23. JMLR.org, 2023.
+
+\bibitem[Li et~al.(2023)Li, Holtzman, Fried, Liang, Eisner, Hashimoto, Zettlemoyer, and Lewis]{contrastivedecoding}
+Xiang~Lisa Li, Ari Holtzman, Daniel Fried, Percy Liang, Jason Eisner, Tatsunori Hashimoto, Luke Zettlemoyer, and Mike Lewis.
+\newblock Contrastive decoding: Open-ended text generation as optimization.
+\newblock In Anna Rogers, Jordan Boyd-Graber, and Naoaki Okazaki (eds.), \emph{Proceedings of the 61st Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers)}, pp.\  12286--12312, Toronto, Canada, July 2023. Association for Computational Linguistics.
+\newblock \doi{10.18653/v1/2023.acl-long.687}.
+\newblock URL \url{https://aclanthology.org/2023.acl-long.687}.
+
+\bibitem[Liu et~al.(2021)Liu, Sap, Lu, Swayamdipta, Bhagavatula, Smith, and Choi]{DExperts}
+Alisa Liu, Maarten Sap, Ximing Lu, Swabha Swayamdipta, Chandra Bhagavatula, Noah~A. Smith, and Yejin Choi.
+\newblock {DE}xperts: Decoding-time controlled text generation with experts and anti-experts.
+\newblock In \emph{Proceedings of the 59th Annual Meeting of the Association for Computational Linguistics and the 11th International Joint Conference on Natural Language Processing (Volume 1: Long Papers)}, pp.\  6691--6706, Online, August 2021. Association for Computational Linguistics.
+\newblock \doi{10.18653/v1/2021.acl-long.522}.
+\newblock URL \url{https://aclanthology.org/2021.acl-long.522}.
+
+\bibitem[McAleese et~al.(2024)McAleese, Pokorny, Uribe, Nitishinskaya, Trebacz, and Leike]{critic}
+Nat McAleese, Rai~Michael Pokorny, Juan Felipe~Ceron Uribe, Evgenia Nitishinskaya, Maja Trebacz, and Jan Leike.
+\newblock Llm critics help catch llm bugs, 2024.
+
+\bibitem[O'Brien \& Lewis(2023)O'Brien and Lewis]{contrastiveandreasoning}
+Sean O'Brien and Mike Lewis.
+\newblock Contrastive decoding improves reasoning in large language models, 2023.
+\newblock URL \url{https://arxiv.org/abs/2309.09117}.
+
+\bibitem[OpenAI(2024{\natexlab{a}})]{o1}
+OpenAI.
+\newblock Introducing openai o1.
+\newblock \url{https://openai.com/o1/}, 2024{\natexlab{a}}.
+\newblock Accessed: 2024-10-02.
+
+\bibitem[OpenAI(2024{\natexlab{b}})]{o1-2}
+OpenAI.
+\newblock How reasoning works.
+\newblock \url{https://platform.openai.com/docs/guides/reasoning/how-reasoning-works}, 2024{\natexlab{b}}.
+\newblock Accessed: 2024-10-02.
+
+\bibitem[Qi et~al.(2024)Qi, Ma, Xu, Zhang, Yang, and Yang]{mutualReasoning}
+Zhenting Qi, Mingyuan Ma, Jiahang Xu, Li~Lyna Zhang, Fan Yang, and Mao Yang.
+\newblock Mutual reasoning makes smaller llms stronger problem-solvers, 2024.
+\newblock URL \url{https://arxiv.org/abs/2408.06195}.
+
+\bibitem[Rafailov et~al.(2023)Rafailov, Sharma, Mitchell, Manning, Ermon, and Finn]{dpo}
+Rafael Rafailov, Archit Sharma, Eric Mitchell, Christopher~D Manning, Stefano Ermon, and Chelsea Finn.
+\newblock Direct preference optimization: Your language model is secretly a reward model.
+\newblock In A.~Oh, T.~Naumann, A.~Globerson, K.~Saenko, M.~Hardt, and S.~Levine (eds.), \emph{Advances in Neural Information Processing Systems}, volume~36, pp.\  53728--53741. Curran Associates, Inc., 2023.
+\newblock URL \url{https://proceedings.neurips.cc/paper_files/paper/2023/file/a85b405ed65c6477a4fe8302b5e06ce7-Paper-Conference.pdf}.
+
+\bibitem[Ren et~al.(2023)Ren, Zhao, Vu, Liu, and Lakshminarayanan]{pmlr-v239-ren23a}
+Jie Ren, Yao Zhao, Tu~Vu, Peter~J. Liu, and Balaji Lakshminarayanan.
+\newblock Self-evaluation improves selective generation in large language models.
+\newblock In Javier Antorán, Arno Blaas, Kelly Buchanan, Fan Feng, Vincent Fortuin, Sahra Ghalebikesabi, Andreas Kriegler, Ian Mason, David Rohde, Francisco J.~R. Ruiz, Tobias Uelwer, Yubin Xie, and Rui Yang (eds.), \emph{Proceedings on "I Can't Believe It's Not Better: Failure Modes in the Age of Foundation Models" at NeurIPS 2023 Workshops}, volume 239 of \emph{Proceedings of Machine Learning Research}, pp.\  49--64. PMLR, 16 Dec 2023.
+\newblock URL \url{https://proceedings.mlr.press/v239/ren23a.html}.
+
+\bibitem[Silver et~al.(2016)Silver, Huang, Maddison, Guez, Sifre, van~den Driessche, Schrittwieser, Antonoglou, Panneershelvam, Lanctot, Dieleman, Grewe, Nham, Kalchbrenner, Sutskever, Lillicrap, Leach, Kavukcuoglu, Graepel, and Hassabis]{silver}
+David Silver, Aja Huang, Chris~J. Maddison, Arthur Guez, Laurent Sifre, George van~den Driessche, Julian Schrittwieser, Ioannis Antonoglou, Veda Panneershelvam, Marc Lanctot, Sander Dieleman, Dominik Grewe, John Nham, Nal Kalchbrenner, Ilya Sutskever, Timothy Lillicrap, Madeleine Leach, Koray Kavukcuoglu, Thore Graepel, and Demis Hassabis.
+\newblock Mastering the game of go with deep neural networks and tree search.
+\newblock \emph{Nature}, 529\penalty0 (7587):\penalty0 484–489, Jan 2016.
+\newblock \doi{https://doi.org/10.1038/nature16961}.
+
+\bibitem[Silver et~al.(2017)Silver, Hubert, Schrittwieser, Antonoglou, Lai, Guez, Lanctot, Sifre, Kumaran, Graepel, Lillicrap, Simonyan, and Hassabis]{alphazero}
+David Silver, Thomas Hubert, Julian Schrittwieser, Ioannis Antonoglou, Matthew Lai, Arthur Guez, Marc Lanctot, Laurent Sifre, Dharshan Kumaran, Thore Graepel, Timothy Lillicrap, Karen Simonyan, and Demis Hassabis.
+\newblock Mastering chess and shogi by self-play with a general reinforcement learning algorithm, 2017.
+\newblock URL \url{https://arxiv.org/abs/1712.01815}.
+
+\bibitem[Sprague et~al.(2024)Sprague, Yin, Rodriguez, Jiang, Wadhwa, Singhal, Zhao, Ye, Mahowald, and Durrett]{cot-limitation}
+Zayne Sprague, Fangcong Yin, Juan~Diego Rodriguez, Dongwei Jiang, Manya Wadhwa, Prasann Singhal, Xinyu Zhao, Xi~Ye, Kyle Mahowald, and Greg Durrett.
+\newblock To cot or not to cot? chain-of-thought helps mainly on math and symbolic reasoning, 2024.
+\newblock URL \url{https://arxiv.org/abs/2409.12183}.
+
+\bibitem[Tian et~al.(2024)Tian, Peng, Song, Jin, Yu, Mi, and Yu]{towardself}
+Ye~Tian, Baolin Peng, Linfeng Song, Lifeng Jin, Dian Yu, Haitao Mi, and Dong Yu.
+\newblock Toward self-improvement of llms via imagination, searching, and criticizing.
+\newblock \emph{ArXiv}, abs/2404.12253, 2024.
+\newblock URL \url{https://api.semanticscholar.org/CorpusID:269214525}.
+
+\bibitem[Valmeekam et~al.(2023)Valmeekam, Marquez, Sreedharan, and Kambhampati]{valmeekam2023on}
+Karthik Valmeekam, Matthew Marquez, Sarath Sreedharan, and Subbarao Kambhampati.
+\newblock On the planning abilities of large language models - a critical investigation.
+\newblock In \emph{Thirty-seventh Conference on Neural Information Processing Systems}, 2023.
+\newblock URL \url{https://openreview.net/forum?id=X6dEqXIsEW}.
+
+\bibitem[Valmeekam et~al.(2024)Valmeekam, Marquez, Olmo, Sreedharan, and Kambhampati]{b1}
+Karthik Valmeekam, Matthew Marquez, Alberto Olmo, Sarath Sreedharan, and Subbarao Kambhampati.
+\newblock Planbench: an extensible benchmark for evaluating large language models on planning and reasoning about change.
+\newblock In \emph{Proceedings of the 37th International Conference on Neural Information Processing Systems}, NIPS '23, Red Hook, NY, USA, 2024. Curran Associates Inc.
+
+\bibitem[Wei et~al.(2024)Wei, Wang, Schuurmans, Bosma, Ichter, Xia, Chi, Le, and Zhou]{wei2023chainofthoughtpromptingelicitsreasoning}
+Jason Wei, Xuezhi Wang, Dale Schuurmans, Maarten Bosma, Brian Ichter, Fei Xia, Ed~H. Chi, Quoc~V. Le, and Denny Zhou.
+\newblock Chain-of-thought prompting elicits reasoning in large language models.
+\newblock In \emph{Proceedings of the 36th International Conference on Neural Information Processing Systems}, NIPS '22, Red Hook, NY, USA, 2024. Curran Associates Inc.
+\newblock ISBN 9781713871088.
+
+\bibitem[Xie et~al.(2024)Xie, Goyal, Zheng, Kan, Lillicrap, Kawaguchi, and Shieh]{Boostreasoing}
+Yuxi Xie, Anirudh Goyal, Wenyue Zheng, Min-Yen Kan, Timothy~P. Lillicrap, Kenji Kawaguchi, and Michael Shieh.
+\newblock Monte carlo tree search boosts reasoning via iterative preference learning, 2024.
+\newblock URL \url{https://arxiv.org/abs/2405.00451}.
+
+\bibitem[Xin et~al.(2024{\natexlab{a}})Xin, Guo, Shao, Ren, Zhu, Liu), Ruan, Li, and Liang]{Xin2024DeepSeekProverAT}
+Huajian Xin, Daya Guo, Zhihong Shao, Zhizhou Ren, Qihao Zhu, Bo~Liu~(Benjamin Liu), Chong Ruan, Wenda Li, and Xiaodan Liang.
+\newblock Deepseek-prover: Advancing theorem proving in llms through large-scale synthetic data.
+\newblock \emph{ArXiv}, abs/2405.14333, 2024{\natexlab{a}}.
+\newblock URL \url{https://api.semanticscholar.org/CorpusID:269983755}.
+
+\bibitem[Xin et~al.(2024{\natexlab{b}})Xin, Ren, Song, Shao, Zhao, Wang, Liu, Zhang, Lu, Du, Gao, Zhu, Yang, Gou, Wu, Luo, and Ruan]{deepprover1.5}
+Huajian Xin, Z.~Z. Ren, Junxiao Song, Zhihong Shao, Wanjia Zhao, Haocheng Wang, Bo~Liu, Liyue Zhang, Xuan Lu, Qiushi Du, Wenjun Gao, Qihao Zhu, Dejian Yang, Zhibin Gou, Z.~F. Wu, Fuli Luo, and Chong Ruan.
+\newblock Deepseek-prover-v1.5: Harnessing proof assistant feedback for reinforcement learning and monte-carlo tree search, 2024{\natexlab{b}}.
+\newblock URL \url{https://arxiv.org/abs/2408.08152}.
+
+\bibitem[Xu(2023)]{xu2023traingainunleashmathematical}
+Haotian Xu.
+\newblock No train still gain. unleash mathematical reasoning of large language models with monte carlo tree search guided by energy function, 2023.
+\newblock URL \url{https://arxiv.org/abs/2309.03224}.
+
+\bibitem[Yao et~al.(2024)Yao, Yu, Zhao, Shafran, Griffiths, Cao, and Narasimhan]{yao2023treethoughtsdeliberateproblem}
+Shunyu Yao, Dian Yu, Jeffrey Zhao, Izhak Shafran, Thomas~L. Griffiths, Yuan Cao, and Karthik Narasimhan.
+\newblock Tree of thoughts: deliberate problem solving with large language models.
+\newblock In \emph{Proceedings of the 37th International Conference on Neural Information Processing Systems}, NIPS '23, Red Hook, NY, USA, 2024. Curran Associates Inc.
+
+\bibitem[Yuan et~al.(2024{\natexlab{a}})Yuan, Lu, Huang, Yuan, and Zhou]{yuan-etal-2024-speculative}
+Hongyi Yuan, Keming Lu, Fei Huang, Zheng Yuan, and Chang Zhou.
+\newblock Speculative contrastive decoding.
+\newblock In Lun-Wei Ku, Andre Martins, and Vivek Srikumar (eds.), \emph{Proceedings of the 62nd Annual Meeting of the Association for Computational Linguistics (Volume 2: Short Papers)}, pp.\  56--64, Bangkok, Thailand, August 2024{\natexlab{a}}. Association for Computational Linguistics.
+\newblock URL \url{https://aclanthology.org/2024.acl-short.5}.
+
+\bibitem[Yuan et~al.(2024{\natexlab{b}})Yuan, Cui, Wang, Ding, Wang, Deng, Shan, Chen, Xie, Lin, Liu, Zhou, Peng, Liu, and Sun]{eurus}
+Lifan Yuan, Ganqu Cui, Hanbin Wang, Ning Ding, Xingyao Wang, Jia Deng, Boji Shan, Huimin Chen, Ruobing Xie, Yankai Lin, Zhenghao Liu, Bowen Zhou, Hao Peng, Zhiyuan Liu, and Maosong Sun.
+\newblock Advancing llm reasoning generalists with preference trees, 2024{\natexlab{b}}.
+
+\bibitem[Zhang et~al.(2024{\natexlab{a}})Zhang, Zhoubian, Hu, Yue, Dong, and Tang]{ReST-MCTS}
+Dan Zhang, Sining Zhoubian, Ziniu Hu, Yisong Yue, Yuxiao Dong, and Jie Tang.
+\newblock Rest-mcts*: Llm self-training via process reward guided tree search, 2024{\natexlab{a}}.
+\newblock URL \url{https://arxiv.org/abs/2406.03816}.
+
+\bibitem[Zhang et~al.(2024{\natexlab{b}})Zhang, Huang, Zhou, Li, and Ouyang]{zhang2024accessinggpt4levelmathematical}
+Di~Zhang, Xiaoshui Huang, Dongzhan Zhou, Yuqiang Li, and Wanli Ouyang.
+\newblock Accessing gpt-4 level mathematical olympiad solutions via monte carlo tree self-refine with llama-3 8b, 2024{\natexlab{b}}.
+\newblock URL \url{https://arxiv.org/abs/2406.07394}.
+
+\bibitem[Zhao et~al.(2024)Zhao, Huang, Han, Xu, Xiao, Zhang, Fang, Zhang, Liu, and Sun]{zhao2024ouroborosgeneratinglongerdrafts}
+Weilin Zhao, Yuxiang Huang, Xu~Han, Wang Xu, Chaojun Xiao, Xinrong Zhang, Yewei Fang, Kaihuo Zhang, Zhiyuan Liu, and Maosong Sun.
+\newblock Ouroboros: Generating longer drafts phrase by phrase for faster speculative decoding, 2024.
+\newblock URL \url{https://arxiv.org/abs/2402.13720}.
+
+\end{thebibliography}
