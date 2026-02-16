@@ -1,8 +1,12 @@
-"""CL-bench adapter: load data, filter tasks, format prompts, save outputs.
+"""CL-bench adapter: load data, format prompts, save outputs.
 
 CL-bench evaluation uses an external LLM judge (ref/CL-bench/eval.py), so
 grading is NOT done locally.  This module handles data loading and output
 formatting only.
+
+The design mirrors ref/CL-bench/infer.py: all 1900 tasks are loaded as-is,
+messages are passed directly to the model (they are already in standard
+OpenAI chat format), and outputs are saved in the format expected by eval.py.
 """
 
 from __future__ import annotations
@@ -13,22 +17,11 @@ from pathlib import Path
 
 def load_clbench(
     path: str | Path = "data/cl-bench/CL-bench.jsonl",
-    single_turn_only: bool = True,
-    max_char_len: int | None = None,
 ) -> list[dict]:
-    """Load CL-bench tasks from a local JSONL file.
+    """Load all CL-bench tasks from a local JSONL file.
 
-    Parameters
-    ----------
-    path:
-        Path to the CL-bench JSONL file.
-    single_turn_only:
-        If True, keep only tasks with exactly 2 messages (system + user).
-        These tasks have no dependency on prior assistant turns.
-    max_char_len:
-        If set, filter out tasks whose total message character length
-        exceeds this threshold.  Useful for staying within model context
-        windows (e.g. 24_000 chars ≈ 8K tokens).
+    No filtering is applied — the full benchmark (1900 tasks) is returned,
+    including multi-turn conversations and long contexts.
     """
     path = Path(path)
     tasks: list[dict] = []
@@ -38,19 +31,7 @@ def load_clbench(
             line = line.strip()
             if not line:
                 continue
-            item = json.loads(line)
-
-            messages = item.get("messages", [])
-
-            if single_turn_only and len(messages) != 2:
-                continue
-
-            if max_char_len is not None:
-                total_chars = sum(len(m.get("content", "")) for m in messages)
-                if total_chars > max_char_len:
-                    continue
-
-            tasks.append(item)
+            tasks.append(json.loads(line))
 
     return tasks
 
@@ -61,9 +42,8 @@ def format_clbench_prompt(
 ) -> str:
     """Convert CL-bench messages into a tokenizer chat template string.
 
-    The messages follow OpenAI chat format (system + user for single-turn).
-    We apply the tokenizer's ``apply_chat_template`` to produce the final
-    prompt string.
+    The messages are already in standard chat format (system/user/assistant
+    roles) and are passed directly to ``apply_chat_template``.
     """
     messages = example["messages"]
     try:
@@ -89,11 +69,12 @@ def save_clbench_output(
 ) -> None:
     """Append a single CL-bench result in the format expected by eval.py.
 
-    The output record contains the original messages, rubrics, metadata,
-    and the model's generated output.
+    The output record matches the structure used by ref/CL-bench/infer.py:
+    {idx, messages, model_output, rubrics, metadata}.
     """
+    task_id = example.get("metadata", {}).get("task_id", "")
     record = {
-        "idx": example.get("metadata", {}).get("task_id", ""),
+        "idx": task_id,
         "messages": example.get("messages", []),
         "model_output": model_output,
         "rubrics": example.get("rubrics", []),

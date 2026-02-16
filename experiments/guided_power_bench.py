@@ -223,11 +223,7 @@ def _make_clbench() -> BenchmarkConfig:
     from dg_ttt.grading.clbench_adapter import format_clbench_prompt, load_clbench
 
     def load() -> list[dict]:
-        return load_clbench(
-            path="data/cl-bench/CL-bench.jsonl",
-            single_turn_only=True,
-            max_char_len=24_000,
-        )
+        return load_clbench(path="data/cl-bench/CL-bench.jsonl")
 
     def fmt(ex: dict, tok: AutoTokenizer) -> str:
         return format_clbench_prompt(ex, tok)
