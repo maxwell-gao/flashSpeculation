@@ -46,10 +46,12 @@ def naive_temp(
 ) -> tuple[list[int], list[float], list[float]]:
     """Generate *n_new_tokens* continuation of *context* using temperature-scaled sampling.
 
-    When ``blend_layer`` and ``beta > 0`` are provided, the target log-probs are
+    When ``blend_layer`` and ``beta != 0`` are provided, the target log-probs are
     computed from the **guided** distribution (fused — no extra forward pass)::
 
         guided = (1 - beta) * logits_final + beta * lm_head(h_{blend_layer})
+
+    Positive beta smooths (interpolation), negative beta sharpens (extrapolation/DoLa).
 
     Returns:
         (full_sequence, proposal_log_probs, target_log_probs)
@@ -62,7 +64,7 @@ def naive_temp(
     if device is None:
         device = next(model.parameters()).device
 
-    use_blend = blend_layer is not None and beta > 0
+    use_blend = blend_layer is not None and beta != 0.0
 
     input_ids = torch.tensor([context], dtype=torch.long, device=device)
     output = model.generate(
