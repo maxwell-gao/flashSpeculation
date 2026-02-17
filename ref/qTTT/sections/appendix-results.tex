@@ -1,0 +1,172 @@
+\section{ZeroScrolls and LongBench-v2: All models and subsets.}
+\label{app:all_results}
+
+This appendix reports the complete breakdowns for all benchmarks, models, and inference settings. We compare three modes—vanilla in-context, chain-of-thought “Thinking”, and our test-time training method (\shortmethod{})—for Qwen3-1.7B/4B/8B across LongBench-v2 and ZeroScrolls. Unless otherwise noted, higher is better and bold indicates the best within each row/condition.
+
+Figure~\ref{fig:longbenchv2-overview} shows a FLOP-matched overview of LongBench-v2 results across its six domains. The detailed per-domain numbers that underlie this figure appear in Table~\ref{tab:longbench_v2_results}.
+Figure~\ref{fig:zeroscrolls-overview} summarizes the observed results on ZeroScrolls. The complete per-dataset numbers, including retrieval-heavy and summarization tasks, are provided in Table~\ref{tab:zeroscrolls_results}.
+
+Tables~\ref{tab:qwen32_longbench} and \ref{tab:qwen32_zeroscrolls} shows results on the Qwen3-32B model. We see that similar trends hold across subsets of the two datasets, validating the efficacy of \shortmethod{} across model sizes.
+
+% ---------- (a) LongBench-v2: 3 models ----------
+\begin{figure*}[t]
+    \centering
+    \begin{minipage}{\textwidth}\centering
+    \includegraphics[width=\linewidth]{figures/plots/longbench_v2_comprehensive_bars.pdf}
+    \end{minipage}
+    \caption{FLOP-matched comparison on \textbf{LongBench-v2} \citep{bai2023longbench} across six domains for Qwen3-$1.7$B/$4$B/$8$B under vanilla in-context only, with thinking (CoT), and with test-time training (TTT). TTT consistently yields the best accuracy across domains and model sizes, with the largest gains on long-dialogue and document-QA tasks, and benefits growing with model size.}
+    \label{fig:longbenchv2-overview}
+\end{figure*}
+
+% Table~\ref{tab:longbench_v2_results} lists the full LongBench-v2 results by domain and model size. Use this table to inspect how each inference mode scales across domains such as code repositories, long dialogue, and multi/single-document QA.
+
+% LongBench-v2 %
+\begin{table}[t]
+\centering
+\caption{Full \textbf{LongBench-v2} results for Qwen3-1.7B/4B/8B under In-context, Thinking, and \shortmethod{}. Scores follow benchmark-defined metrics; bold marks the best within each row/condition.}
+\label{tab:longbench_v2_results}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{lccccccccc}
+\toprule
+\multirow{2}{*}{\textbf{}} & \multicolumn{3}{c}{\textbf{Qwen3-1.7B}} & \multicolumn{3}{c}{\textbf{Qwen3-4B}} & \multicolumn{3}{c}{\textbf{Qwen3-8B}} \\
+\cmidrule(lr){2-4}\cmidrule(lr){5-7}\cmidrule(lr){8-10}
+ & \textbf{In-context} & \textbf{Thinking} & \textbf{\shortmethod{}} & \textbf{In-context} & \textbf{Thinking} & \textbf{\shortmethod{}} & \textbf{In-context} & \textbf{Thinking} & \textbf{\shortmethod{}} \\
+\midrule
+Code Repositories      & \textbf{26.0} & 18.0 & \textbf{26.0} & 25.0 & 28.0 & \textbf{32.0} & 30.0 & 44.0 & \textbf{52.0} \\
+Long Dialogue History  & 23.1 & 30.8 & \textbf{46.2} & 20.5 & 30.8 & \textbf{43.6} & 33.3 & 53.8 & \textbf{58.5} \\
+Long Structured Data   & 27.3 & \textbf{30.3} & \textbf{30.3 }& 30.3 & \textbf{35.3} & \textbf{35.3} & 34.3 & 38.2 & \textbf{42.4} \\
+Long In-Context        & 18.0 & 20.0 & \textbf{28.0} & 21.0 & 25.0 & \textbf{33.0} & 32.0 & 40.0 & \textbf{44.0} \\
+Multi-Document QA      & 26.0 & 26.0 & \textbf{42.0 }& 30.0 & 40.0 & \textbf{46.0} & 32.0 & 34.0 & \textbf{50.0} \\
+Single-Document QA     & 32.0 & 34.0 & \textbf{38.0 }& 35.0 & 42.0 & \textbf{48.0} & 32.0 & 44.0 & \textbf{46.0} \\
+\midrule
+\textbf{Average}       & 25.4 & 26.5 & \textbf{35.1} & 27.0 & 33.5 & \textbf{39.6} & 32.3 & 42.3 & \textbf{48.8} \\
+\bottomrule
+\end{tabular}%
+}
+\end{table}
+
+
+% ---------- (a) Zero SCROLLS: 3 models ----------
+\begin{figure*}[t]
+    \centering
+    \begin{minipage}{\textwidth}\centering
+    \includegraphics[width=\linewidth]{figures/plots/zeroscrolls_comprehensive_bars.pdf}
+    \end{minipage}
+    \caption{FLOP-matched comparison on the \textbf{ZeroScrolls} benchmark \citep{shaham2023zeroscrolls} for Qwen3-1.7B/4B/8B under long contexts, with thinking (CoT), and with test-time training (TTT). TTT achieves the highest scores on nearly all datasets—especially on the retrieval-focused tasks, with a general increase with model size.
+    % \rachit{enhance + group different dataset into buckets}
+    }
+    \label{fig:zeroscrolls-overview}
+\end{figure*}
+
+% Table~\ref{tab:zeroscrolls_results} presents the full ZeroScrolls results by dataset and model size. This table helps diagnose where each inference mode contributes most (e.g., multi-hop QA vs.\ summarization).
+
+% ZeroScrolls %
+\begin{table}[t]
+\centering
+\caption{Full \textbf{ZeroScrolls} results across eight datasets for Qwen3-1.7B/4B/8B under In-context, Thinking, and \shortmethod{}. Datasets span retrieval and summarization; bold marks the best within each row/condition (higher is better).}
+\label{tab:zeroscrolls_results}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{lccccccccc}
+\toprule
+\multirow{2}{*}{\textbf{}} & \multicolumn{3}{c}{\textbf{Qwen3-1.7B}} & \multicolumn{3}{c}{\textbf{Qwen3-4B}} & \multicolumn{3}{c}{\textbf{Qwen3-8B}} \\
+\cmidrule(lr){2-4}\cmidrule(lr){5-7}\cmidrule(lr){8-10}
+ & \textbf{In-context} & \textbf{Thinking} & \textbf{\shortmethod{}} & \textbf{In-context} & \textbf{Thinking} & \textbf{\shortmethod{}} & \textbf{In-context} & \textbf{Thinking} & \textbf{\shortmethod{}} \\
+\midrule
+GovReport     & 22.5 & 21.8 & \textbf{26.0} & 24.9 & 20.2 & \textbf{33.5} & 22.0 & 17.8 & \textbf{29.8} \\
+MuSiQue       & 11.6 & 22.6 & \textbf{26.2} & 17.1 & 7.5  & \textbf{30.5} & 22.5 & 43.9 & \textbf{48.9} \\
+NarrativeQA   & 15.0 & 8.9  & \textbf{11.7} & 11.0 & 30.0 & \textbf{38.0} & 18.9 & 35.1 & \textbf{42.8} \\
+QASPER        & 25.7 & 21.4 & \textbf{31.1} & 23.2 & 24.7 & \textbf{34.0} & 19.6 & 21.1 & \textbf{26.1} \\
+QMSum         & 6.2  & 7.5  & \textbf{9.5}  & \textbf{10.9} & 7.7  & 8.6  &\textbf{ 9.8}  & 8.6  & 8.6  \\
+QUALITY       & 47.6 & 61.9 & \textbf{76.2} & 40.5 & 76.2 & \textbf{87.0} & 71.4 & 90.5 & \textbf{94.5} \\
+SQuALITY      & 9.2  & 14.6 & \textbf{18.0} & 9.9  & 16.8 & \textbf{18.7} & 18.1 & 15.3 & \textbf{18.3} \\
+SummScreen-FD & 8.2  & 7.2  & \textbf{7.4}  & \textbf{9.9}  & 8.3  & \textbf{9.9}  & \textbf{10.4} & 7.9  & 7.9  \\
+\midrule
+\textbf{Average} & 18.3 & 20.7 & \textbf{25.8} & 18.4 & 23.9 & \textbf{32.5} & 24.1 & 30.0 & \textbf{34.6} \\
+\bottomrule
+\end{tabular}%
+}
+\end{table}
+
+% For ease of comparison, Table~\ref{tab:summary_performance} aggregates averages across all tasks for each model/dataset pair. 
+
+% % SUMMARY %
+% \begin{table}[t]
+% \centering
+% \caption{Averaged performance across all tasks for each model and dataset.
+% Useful for comparing overall trends across sizes and modes; bold indicates the best per row.}
+% \label{tab:summary_performance}
+% \begin{tabular}{llccc}
+% \toprule
+% \textbf{Model} & \textbf{Dataset} & \textbf{In-context} & \textbf{Thinking} & \textbf{\shortmethod{}} \\
+% \midrule
+% \multirow{2}{*}{Qwen3-1.7B} & LongBench-v2  & 25.4 & 26.5 & \textbf{35.1} \\
+%                             & ZeroScrolls   & 18.3 & 20.7 & \textbf{25.8} \\
+% \cmidrule(lr){2-5}
+% \multirow{2}{*}{Qwen3-4B}   & LongBench-v2  & 27.0 & 33.5 & \textbf{39.6} \\
+%                             & ZeroScrolls   & 18.4 & 23.9 & \textbf{32.5} \\
+% \cmidrule(lr){2-5}
+% \multirow{2}{*}{Qwen3-8B}   & LongBench-v2  & 32.3 & 42.3 & \textbf{48.8} \\
+%                             & ZeroScrolls   & 24.1 & 30.0 & \textbf{34.6} \\
+% \bottomrule
+% \end{tabular}%
+% \end{table}
+
+% % RELATIVE
+% \begin{table}[t]
+% \centering
+% \caption{Relative (\%) improvement of Thinking and \shortmethod{} over the in-context baseline, derived from Table~\ref{tab:summary_performance}.\\
+% Positive values denote gains vs.\ in-context; larger is better for both datasets and model sizes.}
+% \label{tab:relative_improvements}
+% \begin{tabular}{llcc}
+% \toprule
+% \textbf{Model} & \textbf{Dataset} & \textbf{$\Delta$ Thinking} & \textbf{$\Delta$ \shortmethod{}} \\
+% \midrule
+% \multirow{2}{*}{Qwen3-1.7B} & LongBench-v2  & +4.4\%  & +38.1\% \\
+%                             & ZeroScrolls   & +13.6\% & +41.2\% \\
+% \cmidrule(lr){2-4}
+% \multirow{2}{*}{Qwen3-4B}   & LongBench-v2  & +24.3\% & +47.0\% \\
+%                             & ZeroScrolls   & +30.0\% & +76.6\% \\
+% \cmidrule(lr){2-4}
+% \multirow{2}{*}{Qwen3-8B}   & LongBench-v2  & +31.2\% & +51.3\% \\
+%                             & ZeroScrolls   & +24.6\% & +43.7\% \\
+% \bottomrule
+% \end{tabular}%
+% \end{table}
+
+\begin{table}[ht]
+\centering
+\small
+\caption{\textbf{Qwen3-32B on LongBench-v2.} Comparison of In-context, Thinking, and \shortmethod{}. These findings demonstrate that that the improvements with \shortmethod{} hold across model scales.}
+\label{tab:qwen32_longbench}
+\begin{tabular}{lccc}
+\toprule
+ & \textbf{In-context} & \textbf{Thinking} & \textbf{qTTT} \\
+\midrule
+Code Repositories & 36.00 & 61.00 & \textbf{74.00} \\
+Long In-Context & 44.00 & 56.00 & \textbf{57.00} \\
+Long Structured Data & 39.30 & 42.20 & \textbf{51.50} \\
+Long Dialogue History & 47.10 & \textbf{77.90} & 75.50 \\
+Multi Document QA & 35.00 & 41.00 & \textbf{56.00} \\
+Single Document QA & 36.00 & 47.00 & \textbf{49.00} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[ht]
+\centering
+\small
+\caption{\textbf{Qwen3-32B on ZeroScrolls.} Comparison of In-context, Thinking, and \shortmethod{}. These findings demonstrate that that the improvements with \shortmethod{} hold across model scales.}
+\label{tab:qwen32_zeroscrolls}
+\begin{tabular}{lccc}
+\toprule
+ & \textbf{In-context} & \textbf{Thinking} & \textbf{qTTT} \\
+\midrule
+Gov Report & \textbf{26.70} & 24.80 & 26.00 \\
+Musique & 28.90 & 54.90 & \textbf{59.20} \\
+Narrative QA & 27.70 & 42.40 & \textbf{49.60} \\
+Qasper & 24.10 & 35.00 & \textbf{42.40} \\
+QMSum & \textbf{11.90} & 9.90 & 10.80 \\
+\bottomrule
+\end{tabular}
+\end{table}
+

@@ -1,0 +1,54 @@
+\section{FLOP Derivations for \S\ref{subsec:flops-summary}}
+\label{app:flops}
+We outline FLOP models for two inference-time modes and derive the equivalence summarized in Eq.~\eqref{eq:think-vs-qttt}. Consider a dense Transformer with $L$ layers, hidden size $d$, MLP ratio $r$ (so $d_{\text{ff}}=r d$), and long context length $T$. Let $T_{\text{think}}$ be the number of autoregressively generated ``thinking'' tokens, $N_{\text{\shortmethod{}}}$ the number of query-only updates, and $k$ the span size per update.
+
+\para{Cost coefficients.}
+Ignoring lower-order terms (layer norms, biases), we collect the dominant costs as
+\[
+C_{\text{quad}} \;=\; 2L d \quad\text{(quadratic attention term)}, 
+\qquad
+C_{\text{tok}} \;=\; (4{+}2r)L d^2 \quad\text{(per-token projections/MLP)}.
+\]
+A parallel forward over $T$ tokens (the prefill) costs
+\[
+F_{\text{prefill}}(T) \;=\; C_{\text{quad}}\,T^2 \;+\; C_{\text{tok}}\,T.
+\]
+
+\para{Case A (autoregressive ``thinking'').}
+After one prefill, generating $T_{\text{think}}$ tokens with a KV cache costs
+\[
+F_{\text{gen}}(T_{\text{think}};T)
+\;=\;
+C_{\text{quad}}\!\left(T_{\text{think}}\,T+\frac{T_{\text{think}}(T_{\text{think}}-1)}{2}\right)
+\;+\;
+C_{\text{tok}}\,T_{\text{think}},
+\]
+so the total is $F_A \;=\; F_{\text{prefill}}(T)+F_{\text{gen}}(T_{\text{think}};T)$.
+
+\para{Case C (\method{}: query-only with cached K/V).}
+With one prefill, each query-only pass recomputes queries for $k$ positions that attend to cached $\{K,V\}$ and backpropagates only into $\{W_Q\}$. The per-pass cost is
+\[
+G_{\text{partial}}(k;T)
+\;\approx\;
+2\Big(C_{\text{quad}}\,kT \;+\; (2{+}2r)L\,k\,d^2\Big),
+\]
+and the total is $F_C \;=\; F_{\text{prefill}}(T) + N_{\text{\shortmethod{}}}\,G_{\text{partial}}(k;T)$.
+(If the span also attends within itself, add $+\,C_{\text{quad}}k^2$ and $+\,2Lk d^2$ inside $G_{\text{partial}}$, which are dominated by $kT$ when $k\!\ll\!T$.)
+
+\para{Equivalence (A vs.\ C).}
+Cancelling the shared prefill and equating $F_{\text{gen}}(T_{\text{think}};T)=N_{\text{\shortmethod{}}}\,G_{\text{partial}}(k;T)$ yields
+\[
+C_{\text{quad}}\!\left(T_{\text{think}}\,T+\tfrac{T_{\text{think}}(T_{\text{think}}-1)}{2}\right)+C_{\text{tok}}\,T_{\text{think}}
+\;=\;
+2N_{\text{\shortmethod{}}}\,k\Big(C_{\text{quad}}\,T+(2{+}2r)L d^2\Big).
+\]
+For long contexts with $T\!\gg\!d$ and spans $k\!\ll\!T$ (hence $T_{\text{think}}\!\ll\!T$ in matched regimes), the dominant terms give
+\[
+T_{\text{think}}
+\;\approx\;
+2\,N_{\text{\shortmethod{}}}\,k,
+\]
+which is Eq.~\eqref{eq:think-vs-qttt}. First-order corrections are $O\!\big(\tfrac{T_{\text{think}}}{T}\big)$ from the $\tfrac{T_{\text{think}}(T_{\text{think}}-1)}{2}$ term and $O\!\big(\tfrac{d}{T}\big)$ from $C_{\text{tok}}$.
+
+\para{Sanity check (numeric instantiation).}
+Take $L{=}32$, $d{=}4096$, $r{=}4$ (a $\sim$7B dense model) and $T{=}10^5$. If the application budget allows decoding $T_{\text{think}}{=}8{,}000$ thinking tokens after prefill, the matched query-only schedules include, e.g., $(N_{\text{\shortmethod{}}}{=}10,\,k{=}400)$ since $2\cdot 10\cdot 400\approx 8{,}000$. This reallocation keeps the KV cache length fixed at $T$ and spends the same FLOPs to reshape queries against the existing $\{K,V\}$ instead of growing the cache with additional tokens.

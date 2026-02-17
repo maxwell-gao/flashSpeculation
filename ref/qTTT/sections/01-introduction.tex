@@ -1,0 +1,171 @@
+\section{Introduction}
+\label{sec:intro}
+
+\looseness=-1
+Many ambitious LLM use-cases are rooted in long context: analyzing scientific corpora~\citep{katz2023natural,taylor2022galactica}, synthesizing books~\citep{kryscinski2021booksum}, maintaining rich multi-turn histories~\citep{park2023generative,zhou2023webarena}, and reasoning over large multi-file code repositories~\citep{jimenez2024swebench,zhang2023repocoder}.
+Recent progress in pre-training and architectural strategies
+have enabled context windows with millions of tokens~\citep{yang_rope_2025, ding2402longrope, reid2024gemini,anthropic2024}.
+% —promising to "just read everything."
+In practice, however, persistent failure modes remain: models miss clauses buried in lengthy documents, overlook function definitions deep in repositories, or fail to retrieve facts from prior turns even when the relevant content is present ``in context''~\citep{liu2023lost,hsieh2024ruler,kamradt2024needle}.
+% The gap between what models can read and what they can reliably use is now one of the main bottlenecks for high-stakes deployments~\citep{levy2024same,shaham2023zeroscrolls}.
+
+\looseness=-1
+Concurrently, there is a growing interest in using
+inference-time compute to overcome limitations
+of vanilla transformer models.
+Methods such as chain-of-thought ``thinking" tokens
+\citep{wei2023chain},
+best-of-$n$ \citep{nakano2021webgpt,stiennon2020learning}, and other ``thinking" strategies \citep{zelikman2024quiet}
+have shown promise.
+% Current remedies tend to allocate \emph{more tokens} rather than \emph{better attention}. Chain-of-thought \citep{wei2023chain}, self-consistency \citep{wang2023selfconsistency}, best-of-$n$ \citep{nakano2021webgpt,stiennon2020learning}, and other ``thinking" strategies \citep{zelikman2024quiet} 
+However, all these methods generate additional tokens
+with the same static attention mechanism that is already under-allocating mass to the evidence.
+
+\looseness=-1
+We design two realistic sandbox tasks to perform
+controlled experiments
+and diagnose long-context failure modes.
+We identify that % both, 
+standard ``in-context only'' % and generating ``thinking tokens",
+settings fail with growing context length (\autoref{fig:figure_1}).
+% 
+We formalize this as a limitation of static,
+finite-precision self-attention,
+and term it \emph{score dilution}:
+% with a growing number of distractor tokens, the logit for the target is insufficiently separated from those of distractors, reducing the softmax probability assigned to the target (\S\ref{sec:failures}).
+In presence of ``distractor'' tokens,
+logit on a ``target'' is insufficiently separated
+from the distractor logits,
+weakening the target probability mass. 
+% We establish a \emph{logarithmic margin requirement}: As context length $T$ grows, in the worst case, the target–distractor logit margin must scale as $\Omega(\log T)$ to avoid vanishing target probability.
+We establish that as context length $T$ grows,
+% in the worst case,
+the target–distractor logit margin
+must scale as $\Omega(\log T)$ to avoid vanishing target probability.
+% 
+We extend this analysis
+to show that vanilla compute-scaling strategies, 
+such as ``thinking'' tokens,
+cannot retrieve the signal from buried target tokens.
+% beyond an $\varepsilon$-fraction (\S\ref{sec:failures}).
+
+\looseness=-1
+Hence, a natural question arises:
+\textit{How can we best use inference-time compute to improve long-context retrieval and reasoning?}
+% 
+We revisit test-time training (TTT) \citep{liu_ttt_2021, hardt_test-time_2024, akyurek_surprising_2025} as a way to adapt the model to a given long-context input rather than produce more text from an unchanged model.
+% 
+Our key idea, \emph{\method{}} (\emph{\shortmethod{}}), is a computationally frugal approach: 
+% perform a single forward pass over the long input to cache keys/values, then take several span-sampled updates
+% 
+% We propose a different use of inference compute: move from ``\emph{in-context}" generation to ``\emph{in-weights}" adaptation via \textbf{query-only test-time training (qTTT)}.
+% 
+Perform a single prefill to cache keys and values,
+followed by a few \textbf{lightweight gradient updates exclusively on the query projection matrices} in the attention layers,
+keeping all other parameters fixed
+and reusing the key-value cache (\autoref{fig:qttt}).
+% 
+We show theoretically that this targeted adaptation directly increases the separation between target and distractor logits for the specific context at hand, counteracting the limitations of vanilla in-context learning.
+
+\looseness=-1
+% Our results show that reallocating the budget from thousands of thinking tokens to a handful of query updates provides a principled and practical path to better use of long contexts without changing the pre-training strategies, architecture, or data.
+% We conduct experiments on more than 15 real-world datasets across the
+% SCROLLS~\citep{shaham2023zeroscrolls} and LongBench-v2~\cite{bai2023longbench} benchmarks
+% on Qwen3 and Llama3 models, ranging from $1.7$B to $8$B parameters.
+% As shown in Figure~\ref{fig:figure_1}~(c), we find that
+% spending inference-time compute via \method{}
+% improves performance across model sizes
+% and datasets. Further, \shortmethod{}
+% consistently exceeds the gains via intermediate thinking tokens
+% on FLOP-matched comparisons,
+% showing that it provides a better way to spend
+% inference time compute for long contexts.
+% Indeed, 
+% \rachit{to elaborate on results here}.
+We perform evaluations on 15+ real-world datasets
+from popular long-context benchmarks,
+ZeroScrolls~\citep{shaham2023zeroscrolls} and LongBench-v2~\citep{bai2023longbench}, with Qwen3 models spanning $1.7$B–$8$B parameters.
+We observe consistently large performance gains
+across model sizes and datasets.
+% \method{} substantially overcomes limitations of vanilla attention and inference-time scaling strategies.
+Under FLOP-matched inference-time compute budgets, \shortmethod{} consistently surpasses standard inference-time thinking strategies (\autoref{fig:figure_1_c}) with more than $20\%$ improvements
+on code comprehension, multi-document QA,
+and other multi-hop reasoning tasks.
+% showing that directing the same compute toward adapting attention yields a more effective use of inference-time resources for long contexts.
+% \rachit{quote some numbers here too.}
+Our results call for reallocating inference-time budget
+from thousands of ``thinking'' tokens to a small number of query updates
+for long-context retrieval and reasoning
+without altering pre-training, architecture, or data.
+
+\begin{figure*}[t]
+\centering
+\begin{subfigure}[t]{0.31\textwidth}
+\centering
+\vskip 0pt
+    \hspace*{-.2cm}\includegraphics[height=3.3cm]{figures/debug_code_olmo.pdf}
+    \vspace{.05cm}
+    % \small 
+    % %\centering
+    % \mbox{\hspace*{3cm}Transformer:} %\cblock{15}{82}{186}\hspace{1mm}Alibi\hspace{1.5mm} \cblock{115}{194}{251}\hspace{1mm}HAlibi 
+    % \\
+    % \hspace*{3.7cm}GSSM: %\cblock{250}{128}{114}\hspace{1mm}LSTM\hspace{1.5mm}\cblock{184}{15}{10}\hspace{1mm}Mamba
+    % \vspace{.6cm}
+    \small
+    % \mbox{\hspace*{0.5cm}\cblock{250}{128}{114} \hspace{0.5mm}In-Context Learning (ICL)}\\
+    % \mbox{\hspace*{-.95cm}\cblock{184}{15}{10} \hspace{0.5mm}ICL + thinking}\\
+    % \mbox{\hspace*{.5cm}\cblock{17}{52}{166}\hspace{1mm}Test-Time Training (qTTT)}
+    {\hspace*{.5cm}\caption{Bug tracing in code repository}}
+    \label{fig:in_distribution_copy}
+\end{subfigure}
+\hfill
+\begin{subfigure}[t]{0.31\textwidth}%0.33
+% \centering
+\vskip 0pt
+\hspace*{-.3cm}\includegraphics[height=3.3cm]{figures/debug_transactions.pdf}
+\small
+\mbox{\hspace*{-3.5cm}\cblock{229}{177}{129} \hspace{0.5mm}In-Context Only\hspace{3mm} \cblock{215}{122}{97} \hspace{0.5mm}With Thinking\hspace{3mm} \cblock{66}{158}{166}\hspace{1mm}With Query-only Test-Time Training (qTTT)}
+\caption{Bug tracing in transaction logs}
+\label{fig:length_gen}
+\end{subfigure}
+\hfill
+\begin{subfigure}[t]
+{0.31\textwidth}
+\centering
+\vskip 0pt
+\includegraphics[height=3.2cm]{figures/barplots_benchmarks.pdf}
+\centering
+\small
+\vspace{0.55cm}
+\caption{\label{fig:figure_1_c}LongBench-v2 + ZeroScrolls}
+\end{subfigure}
+\caption{\label{fig:figure_1}
+% \looseness=-1
+Query-only test-time training uses inference-time compute more effectively than ``thinking'' tokens for long contexts. \textbf{(a, b)} We construct two tasks to perform controlled long-context analysis: (a) bug localization in large code repositories, and (b) anomaly detection in transaction logs. As context length $T$ grows, in-context accuracy drops and thinking tokens show diminishing returns; with the same FLOP budget, \shortmethod{} consistently improves performance. \textbf{(c)} \shortmethod{} shows improvements across domains and model sizes on LongBench-v2 and ZeroScrolls benchmarks.
+}
+\end{figure*}
+
+\para{Contributions.}
+\begin{itemize}[leftmargin=*]
+\item
+% \textbf{Diagnosis of long-context failures.}
+We construct sandbox tasks to demonstrate long-context failure modes (\S\ref{sec:empirical-limits}).
+We formalize \emph{score dilution} in static, finite-precision self-attention and prove a \emph{logarithmic margin requirement}: the target–distractor logit gap must scale as $\Omega(\log T)$ to avoid vanishing target probability (\S\ref{subsec:theoretical-limits}). \looseness=-1
+\item
+% \textbf{Limits of decoding-based inference-time scaling.}
+We show theoretically and empirically that current inference-time compute scaling strategies primarily scale decoding and cannot reliably meet the margin requirement; in particular, they cannot amplify the signal from buried targets beyond an $\varepsilon$-fraction (\S\ref{sec:failures}).
+\item
+% \textbf{Query-only test-time training.}
+We introduce \method{} (\shortmethod{}): a compute-frugal TTT procedure that performs one prefill to cache K/V, then applies a few gradient updates \emph{only} to query projections while reusing the KV cache, directly increasing target–distractor separation (\S\ref{sec:method}).
+% We provide FLOP-matched comparisons to decoding-based baselines for fair evaluation (\S\ref{subsec:flops-summary}).
+\item
+% \textbf{Broad empirical gains under fixed compute.}
+On 15+ real-world datasets from ZeroScrolls and LongBench-v2, using Qwen3 models (1.7B–8B), \method{} consistently improves long-context performance and under FLOP-matched budgets, outperforms intermediate thinking-token baselines (\autoref{fig:figure_1_c}; \S\ref{sec:results}).
+\end{itemize}
+
+\looseness=-1
+Since \shortmethod{} takes place at inference-time,
+it can easily be applied on top of
+other existing strategies for long-context modeling:
+architectural changes such as sliding window attention~\citep{dai2019transformerxl,beltagy2020longformer}, adaptive positional encoding \citep{press2021alibi,su2024roformer}, training tweaks for longer windows \citep{chen2023extending,peng2023yarn},
+or retrieval augmented generation~\citep{,borgeaud2022retro,izacard2022atlas}.

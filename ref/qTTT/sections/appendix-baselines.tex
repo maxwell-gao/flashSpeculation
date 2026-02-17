@@ -1,0 +1,69 @@
+% Requires: \usepackage{booktabs}
+\section{Additional Test-Time Scaling Baselines}
+\label{app:tts-baselines}
+
+\para{Baselines.}
+We compare \textbf{Best-of-$N$ (BoN)} and \textbf{Beam Search} to our method under strict compute parity.
+\emph{BoN / Self-Consistency (SC-$N$):} we run $N$ independent decodes, each with an equal share of the extra
+reasoning budget, and select the final answer by majority vote (ties broken by sequence log-prob).
+\emph{Beam-$k$:} we run left-to-right beam search of width $k$; to enforce parity with other test-time scaling,
+the \emph{total} added ``thinking'' tokens across all beams is fixed.
+
+\para{Design choices (strict matching).}
+We match all methods to a fixed extra budget corresponding to $T_\text{think}=8192$ tokens beyond the vanilla decode.
+SC-$N$ allocates \(\approx 8192/N\) tokens to each sample; Beam-$k$ allocates \(\approx 8192/k\) tokens per beam.
+All results use the same prompt, output length (128 tokens); latencies are reported
+separately in \S\ref{app:latency}. This protocol removes budget-induced confounders and isolates the effect of
+test-time scaling itself.
+
+\para{Conclusion.}
+Across both LongBench-v2 and ZeroScrolls (Qwen3-4B), qTTT is competitive with or better than strictly
+FLOP-matched BoN and Beam. SC-$N$ helps when single-run accuracy is already high (e.g., \textit{Single Document QA},
+\textit{QUALITY}), but often degrades when the per-sample accuracy is below 50\%. Beam-$k$ provides only modest gains
+under equal budgets due to correlated beams and imperfect ranking, and frequently trails qTTT.
+
+\begin{table*}[t]
+\centering
+\small
+\caption{LongBench-v2 (Qwen3-4B): Strict FLOP-matched test-time scaling. Numbers are accuracies (\%). SC-$N$ uses $8192/N$ tokens per sample; Beam-$k$ uses $8192/k$ tokens per beam.}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{lcccccccc}
+\toprule
+\textbf{Task} & \textbf{Thinking} & \textbf{qTTT} & \textbf{SC-8} & \textbf{SC-16} & \textbf{SC-32} & \textbf{Beam-8} & \textbf{Beam-16} & \textbf{Beam-32} \\
+\midrule
+Code Repositories    & 28.0 & 32.0 & 30.5 & 18.4 &  5.2 & 27.5 & 15.1 &  4.8 \\
+Long In-Context      & 25.0 & 33.0 & 28.5 & 20.1 &  8.5 & 26.0 & 18.5 &  7.2 \\
+Long Structured Data & 35.3 & 35.3 & 36.1 & 30.5 & 12.2 & 34.8 & 28.1 & 11.0 \\
+Long Dialogue History& 30.8 & 43.6 & 34.2 & 31.0 & 15.5 & 29.5 & 25.2 & 12.0 \\
+Multi Document QA    & 40.0 & 46.0 & 44.5 & 41.2 & 25.8 & 39.8 & 35.5 & 22.1 \\
+Single Document QA   & 42.0 & 48.0 & 45.5 & 49.2 & 51.8 & 43.5 & 44.2 & 41.0 \\
+\midrule
+\textbf{Avg.}        & 33.5 & \textbf{39.7} & 36.6 & 31.7 & 19.8 & 33.5 & 27.8 & 16.4 \\
+\bottomrule
+\end{tabular}}
+\label{tab:tts-longbench}
+\end{table*}
+
+\begin{table*}[t]
+\centering
+\small
+\caption{ZeroScrolls (Qwen3-4B): Strict FLOP-matched test-time scaling. Numbers are accuracies (\%). SC-$N$ uses $8192/N$ tokens per sample; Beam-$k$ uses $8192/k$ tokens per beam.}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{lcccccccc}
+\toprule
+\textbf{Task} & \textbf{Thinking} & \textbf{qTTT} & \textbf{SC-8} & \textbf{SC-16} & \textbf{SC-32} & \textbf{Beam-8} & \textbf{Beam-16} & \textbf{Beam-32} \\
+\midrule
+gov report       & 20.2 & 33.5 & 24.5 & 15.2 &  2.1 & 22.8 & 12.5 &  1.8 \\
+musique          &  7.5 & 30.5 & 18.2 & 12.5 &  4.5 & 14.5 &  9.8 &  3.2 \\
+narrative qa     & 30.0 & 38.0 & 35.5 & 32.0 & 22.5 & 31.2 & 25.5 & 18.1 \\
+qasper           & 24.7 & 34.0 & 28.5 & 22.1 & 10.5 & 26.5 & 19.5 &  9.2 \\
+qmsum            &  7.7 &  8.6 &  9.2 &  5.1 &  0.8 &  8.5 &  4.5 &  0.7 \\
+quality          & 76.2 & 87.0 & 82.5 & 85.1 & 84.5 & 78.5 & 76.2 & 70.1 \\
+squality         & 16.8 & 18.7 & 17.5 & 19.2 & 20.5 & 17.1 & 17.5 & 17.8 \\
+summ screen fd   &  8.3 &  9.9 &  9.5 &  6.5 &  1.2 &  8.8 &  5.5 &  1.1 \\
+\midrule
+\textbf{Avg.}    & 23.9 & \textbf{32.5} & 28.2 & 24.7 & 18.3 & 26.0 & 21.4 & 15.3 \\
+\bottomrule
+\end{tabular}}
+\label{tab:tts-zeroscrolls}
+\end{table*}

@@ -1,0 +1,38 @@
+\section{Prior Work}
+\label{sec:prior}
+
+\looseness=-1
+\para{Long-Context LLMs.}
+Context windows have expanded rapidly, with models reaching million-token scale~\citep{reid2024gemini},
+usually extending limits via RoPE scaling~\citep{chen2023extending,bai2023qwen}.
+Parallel efforts reduce quadratic attention with sparse/structured patterns \citep{beltagy2020longformer,zaheer2020bigbird}.
+Evaluation has coalesced around long-context suites such as LongBench/LongBench-v2 \citep{bai2023longbench}, ZeroScrolls~\citep{shaham2023zeroscrolls}, RULER, and domain-specific code benchmarks like SWE-bench variants \citep{jimenez2024swebench}.
+% \para{Failure modes in long contexts.}
+However, these LLMs still exhibit
+strong position sensitivity,
+yielding the ``lost in the middle" effect \citep{liu2023lost}.
+Needle-in-a-haystack–style tests show
+that a single relevant span can be overwhelmed
+by many distractors,
+and this persists across languages and document structures \citep{kamradt2024needle}.
+Our work targets this retrieval
+failure by addressing how attention mass is allocated over very long inputs.
+
+\para{Inference-Time Compute Scaling.}
+A common approach is to spend more compute at inference via chain-of-thought~\citep{wei_chain--thought_2023}, self-consistency \citep{wang_self-consistency_2023}, best-of-$n$ \citep{nakano2021webgpt},
+or other strategies~\citep{zelikman2024quiet, zweiger_self-adapting_2025, kang_scalable_2025}. While often helpful, these methods scale decoding and can be compute-heavy with diminishing returns \citep{snell_scaling_2024,liu_can_2025}.
+% We instead allocate the same budget to \emph{adapt}
+% the model’s access to evidence rather than generate more tokens.
+% 
+% \para{Test-time training (TTT).}
+Another way to spend inference-compute is via
+test-time training~\citep{sun_test-time_2020, hardt_test-time_2024,akyurek_surprising_2025}.
+While typically done to handle distribution shifts,
+recent work has started focusing on long-context
+LLM use cases~\citep{sun_learning_2025, zuo_ttrl_2025}.
+% adapts models at inference using gradient updates, typically to handle distribution shift
+To our knowledge, our work is first to re-purpose
+TTT to micro-distribution of individual inputs via
+% introducing
+a query-only variant tailored to long-context.
+% To our knowledge, this is the first systematic treatment of efficient TTT for long-context comprehension in LLMs.

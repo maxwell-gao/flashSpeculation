@@ -1,0 +1,128 @@
+\section{Synthetic Tasks}
+\label{sec:dataset-examples}
+
+\begin{figure}[!t]
+   \begin{bluebox}
+    \raggedright
+    
+        \textbf{Bug Description:} The attention mechanism fails to properly normalize attention scores, leading to numerical instability and gradient explosion during training. The attention weights grow unbounded, causing immediate training divergence.
+        
+        \vspace{0.7em}
+        \textbf{Code context:}%\\[-4pt]
+        \begin{alltt}\ttfamily\footnotesize
+olmo/model.py
+L335: def _scaled_dot_product_attention(
+L336:\hspace{1cm}self,
+L337:\hspace{1cm}q: torch.Tensor,
+L338:\hspace{1cm}k: torch.Tensor,
+L339:\hspace{1cm}v: torch.Tensor,
+L340:\hspace{1cm}attn_mask: Optional[torch.Tensor] = None,
+L341:\hspace{1cm}dropout_p: float = 0.0,
+L342:\hspace{1cm}is_causal: bool = False,
+L343:\hspace{1cm}) -> torch.Tensor:
+L344:
+L345: \hspace{.8cm}attn_weights = torch.matmul(q, k.transpose(-2, -1))
+L346:
+L347: \hspace{.8cm}if is_causal:
+L348: \hspace{1.4cm}assert attn_mask is None
+L349: \hspace{1.4cm}query_len, key_len = q.shape[-2], k.shape[-2] 
+        \end{alltt}
+        
+        \vspace{0.3em}
+        
+        \textbf{Target:} Given the above code context, please identify the exact location of the bug.
+        
+        % \\ Output your answer in the following JSON format:
+        
+        % % In body
+        % \begin{lstlisting}[language=json, frame=none, framerule=0pt]
+        % {
+        %   "bug_location": "L{line_number}",
+        % }
+        % \end{lstlisting}
+        
+        \vspace{0.0em}
+        {\color{blue!60}\hdashrule{\linewidth}{0.7pt}{3mm 1.2mm}}
+        \vspace{-0.2cm}
+        
+        \textbf{Model output:} $\texttt{olmo/model.py:L345}$
+        \end{bluebox}
+    \caption{\label{fig:code_example}
+    An example of the code bug localization synthetic task.}
+\end{figure}
+
+
+
+
+
+\begin{figure}[!t]
+    \begin{redbox}
+    \raggedright
+    
+        \textbf{Task Description:} Analyze this banking transaction log for bugs.
+
+        \vspace{0.7em}
+        
+        \textbf{Initial state:} {\small $\texttt{\{"account\_A": 4000, "account\_B": 4200, "total": 8200\}}$}
+
+        \vspace{0.7em}
+
+        \textbf{Rules:} {1. Total money must remain constant (conservation)}
+
+        \hspace{1.05cm}{2.\; No account can go negative}
+
+        \hspace{1.05cm}{3.\; All calculations must be mathematically correct}
+        
+        \vspace{0.7em}
+        \textbf{Transaction logs:}%\\[-4pt]
+        \begin{alltt}\ttfamily\footnotesize
+[TX001]: Transfer \$107: A=4000 → 3893, B=4200 → 4307
+[TX002]: Transfer \$204: A=3893 → 3689, B=4307 → 4511 
+[TX003]: Transfer \$780: A=3689 → 2909, B=4511 → 5291
+[TX004]: Transfer \$2925:A=2909 → -16,  B=5291 → 8216 
+\mbox{[TX005]: Transfer \$699: B=8216 → 7517, A=-16  →  683} 
+        \end{alltt}
+        
+        \vspace{-0.3cm}
+
+        
+        
+        \textbf{Possible bug types} (choose exactly one):\\
+            \hspace{.2cm}-- \texttt{CALC\_ERROR}: Mathematical calculation is incorrect\\
+            \hspace{.2cm}-- \texttt{NEGATIVE\_BAL}: Account balance becomes negative\\
+            \hspace{.2cm}-- \texttt{LOST\_UPDATE}:  Concurrent update causes lost transaction\\
+            \hspace{.2cm}-- \texttt{DUPLICATE\_TXN}:  Same transaction processed multiple times
+
+        \vspace{0.2cm}
+        
+        \textbf{Target}: Please identify the bug type and location.
+%         Identify the SINGLE bug if any exists.
+% Respond with ONLY a JSON object:
+% {"bug_type": "<type>", "bug_location": "<TX_ID>"
+        % \\ Output your answer in the following JSON format:
+        
+        % % In body
+        % \begin{lstlisting}[language=json, frame=none, framerule=0pt]
+        % {
+        %   "bug_location": "L{line_number}",
+        % }
+        % \end{lstlisting}
+        
+        \vspace{0.0em}
+        {\color{red!60}\hdashrule{\linewidth}{0.7pt}{3mm 1.2mm}}
+        \vspace{-0.2cm}
+        
+        \textbf{Model output:} {\small $\texttt{\{"bug\_type": NEGATIVE\_BAL, "bug\_location": TX004\}}$} 
+        \end{redbox}
+    \caption{\label{fig:logs_example}
+    An example of the log transactions synthetic task.
+    }
+\end{figure}
+
+
+We illustrate two representative synthetic tasks used in our study. 
+Figure~\ref{fig:code_example} shows the \emph{code bug localization} task: the model receives a brief natural-language bug description together with a minimal, line-numbered code context and must return the exact file-and-line of the offending statement. In the example, the model correctly identifies the line where attention scores are computed without proper normalization (\texttt{olmo/model.py:L345}).
+
+Figure~\ref{fig:logs_example} shows the \emph{transaction-log consistency} task: given an initial account state, a set of invariants (e.g., conservation of total funds, no negative balances), and a short sequence of transfers, the model must select a single bug type and pinpoint the first offending transaction. In the example, the model outputs \texttt{NEGATIVE\_BAL} at \texttt{TX004}, where the balance of account A becomes negative, violating the stated rules.
+
+Together, these examples illustrate the input/output format of our synthetic tasks, the kind of structured context provided to the model, and the expected concise targets (a specific line for code or a \{\texttt{bug\_type}, \texttt{TX\_id}\} pair for logs). We use similarly formatted instances throughout our evaluation.

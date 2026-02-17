@@ -1,0 +1,87 @@
+% Requires: \usepackage{booktabs}
+\section{Score Dilution Evidence on Long Contexts}
+\label{app:score-dilution}
+
+\para{Motivation.}
+Long-context failures could be a result of a multitude of reasons
+and design choices.
+Past literature in long-context modeling has primarily
+focused on tuning positional encoding to improve
+long-context abilities.
+Here we present some evidence supporting our claim
+that \emph{score dilution}
+is one of the primary reasons for long-context failure.
+We show that as the context grows,
+attention mass on the target collapses,
+and accuracy falls
+even when rotary position embeddings (RoPE)
+are present and the model is not changed otherwise.
+We further show that qTTT counteracts this collapse
+suggesting that our approach
+actually counteracts score dilution in practice.
+
+\para{Experimental setting (RoPE ablation).}
+We evaluate Qwen3-4B on two tasks (Bank Transactions; OLMo Code Bugs) under three test-time regimes:
+(1) \emph{Thinking-only} with a fixed thinking budget (4k or 8k tokens), (2) \emph{qTTT (ours)} with a brief
+query-only adaptation while reusing the prefetched KV cache, and (3) a \emph{No-RoPE} ablation where we disable
+rotary phase application to $Q/K$ at inference (identity rotation), keeping all weights, prompts, and budgets
+unchanged and without any additional fine-tuning. This isolates the role of positional encoding while holding
+training and data fixed.
+
+\para{Attention-mass metric.}
+For each decode step $t$, layer $\ell$, and head $h$, let $A^{(\ell,h)}_{t,\tau}$ denote the softmax attention
+from the current query to context position $\tau$. Given a labeled set of target indices $\mathcal{T}$, we define
+the \emph{attention mass} at step $t$ as $\sum_{\tau \in \mathcal{T}} A^{(\ell,h)}_{t,\tau}$, then average over
+all layers and heads; for multi-token answers we average over their output steps. We report mean~$\pm$~std across
+multiple runs.
+
+\para{Findings.}
+Tables~\ref{tab:bank-rope-ablation} and \ref{tab:olmo-rope-ablation} show that thinking-only accuracy and attention
+mass both decay sharply with context length. Disabling RoPE accelerates this collapse (lower mass and accuracy),
+but \emph{even with} RoPE the decline is substantial. In contrast, {qTTT sustains markedly higher attention
+mass as context grows and correspondingly improves accuracy. These results support the view that score dilution, rather than
+training-data scarcity alone, is the dominant failure mode in these settings.
+
+\begin{table*}[t]
+\centering
+\small
+\caption{Bank Transactions (Qwen3-4B): Accuracy (\%) and attention mass vs.\ context length with and without RoPE, and with qTTT.}
+\begin{tabular}{lcccccc}
+\toprule
+\textbf{Context Tokens} &
+\multicolumn{2}{c}{\textbf{Thinking (RoPE)}} &
+\multicolumn{2}{c}{\textbf{Thinking (No-RoPE)}} &
+\multicolumn{2}{c}{\textbf{qTTT (Ours)}}\\
+\cmidrule(lr){2-3}\cmidrule(lr){4-5}\cmidrule(lr){6-7}
+& \textbf{Acc} & \textbf{Mass} & \textbf{Acc} & \textbf{Mass} & \textbf{Acc} & \textbf{Mass}\\
+\midrule
+512   & 36.00 & $0.46 \pm 0.04$ & 34.00 & $0.44 \pm 0.04$ & 28.00 & $0.42 \pm 0.06$ \\
+2{,}536 &  6.00 & $0.22 \pm 0.03$ &  5.00 & $0.20 \pm 0.02$ & 14.40 & $0.41 \pm 0.08$ \\
+5{,}120 &  2.50 & $0.11 \pm 0.02$ &  0.80 & $0.03 \pm 0.01$ & 10.00 & $0.36 \pm 0.09$ \\
+9{,}560 &  1.00 & $0.04 \pm 0.01$ &  0.50 & $0.01 \pm 0.00$ &  8.40 & $0.25 \pm 0.09$ \\
+\bottomrule
+\end{tabular}
+\label{tab:bank-rope-ablation}
+\end{table*}
+
+\begin{table*}[t]
+\centering
+\small
+\caption{OLMo Code Bugs (Qwen3-4B): Accuracy (\%) and attention mass vs.\ context length with and without RoPE, and with qTTT.}
+\begin{tabular}{lcccccc}
+\toprule
+\textbf{Context Tokens} &
+\multicolumn{2}{c}{\textbf{Thinking (RoPE)}} &
+\multicolumn{2}{c}{\textbf{Thinking (No-RoPE)}} &
+\multicolumn{2}{c}{\textbf{qTTT (Ours)}}\\
+\cmidrule(lr){2-3}\cmidrule(lr){4-5}\cmidrule(lr){6-7}
+& \textbf{Acc} & \textbf{Mass} & \textbf{Acc} & \textbf{Mass} & \textbf{Acc} & \textbf{Mass}\\
+\midrule
+512   & 50.00 & $0.64 \pm 0.05$ & 47.40 & $0.61 \pm 0.05$ & 45.70 & $0.58 \pm 0.06$ \\
+2{,}050 & 21.60 & $0.38 \pm 0.07$ & 16.20 & $0.29 \pm 0.04$ & 41.60 & $0.51 \pm 0.08$ \\
+7{,}450 & 17.20 & $0.26 \pm 0.06$ & 10.60 & $0.14 \pm 0.02$ & 28.00 & $0.42 \pm 0.09$ \\
+10{,}000 & 10.00 & $0.12 \pm 0.03$ &  3.00 & $0.04 \pm 0.01$ & 20.20 & $0.35 \pm 0.09$ \\
+\bottomrule
+\end{tabular}
+\label{tab:olmo-rope-ablation}
+\end{table*}

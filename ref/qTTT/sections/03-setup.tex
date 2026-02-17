@@ -1,0 +1,208 @@
+\section{Vanilla Compute-Scaling Strategies Fail for Long Contexts}
+\label{sec:failures}
+
+
+\looseness=-1
+In this section, we analyze how increasing context length $T$ affects static quadratic-attention LLMs and common inference-time compute–scaling strategies. Using controlled synthetic tasks that mirror realistic long-context retrieval, we observe sharp performance degradation as $T$ grows, while generating intermediate ``thinking" tokens yields rapidly diminishing returns. We then provide a theoretical explanation: with static, finite-precision self-attention, the target logit suffers \emph{score dilution} as distractors accumulate, and avoiding this requires a \emph{logarithmic margin requirement}---the worst-case target–distractor logit gap must scale as $\Omega(\log T)$. Decoding-based inference strategies do not reliably meet this requirement; in contrast, small gradient-based adaptations can increase the margin, which motivates our methodology (developed in \S\ref{sec:method}). All proofs are provided in~\autoref{app:proofs-long-context}.
+
+
+\subsection{Empirical Analysis on Synthetic Long-Context Tasks}
+\label{sec:empirical-limits}
+
+\looseness=-1
+First, we empirically analyze the effect of context length
+on vanilla transformer models
+and current inference-time compute-scaling strategies.
+% we perform controlled experiments on synthetic tasks.
+% Particularly,
+% we design two realistic controlled tasks that reflect
+% % real-world use cases of long-context models while allowing us to
+% where we can
+% flexibly scale context lengths for our analysis.
+% We begin by describing these tasks:
+We study two synthetic retrieval tasks that
+mirror realistic long-context
+use cases while allowing control over the context length $T$.
+For each example, the relevant evidence (``needle")
+is held fixed and only the surrounding ``haystack" grows,
+isolating the effect of length on retrieval.
+We provide examples from our datasets in~\autoref{sec:dataset-examples}.
+
+\para{Bug Localization in a Code Repository.}
+Starting from a large open-source repository\footnote{
+We use OLMo as a reference repository for the dataset: \url{https://github.com/allenai/OLMo}.
+}, we inject a single-line logical bug and ask the model to identify and fix it. Examples of bugs include missing softmax temperature scaling in the attention mechanism and layernorm misplacement in the Transformer block (see Appendix for details). 
+We vary the context length by the number of lines
+$L$ exposed to the model.
+% using a deterministic expansion procedure.
+For a given bug instance,
+we sample a span of $L$
+lines around the bug,
+extending to other files in the directory
+for large $L$.
+We create splits of the dataset
+with $L$ ranging from $5$ to $10000$.
+Across length conditions,
+the bug location and content are held fixed;
+only the surrounding code (the ``haystack”)
+grows to introduce realistic,
+semantically relevant distractors.
+
+\para{Error in a Log of Transactions.}
+We synthesize multi-account banking logs
+with an initial state and a sequence of operations,
+each line recording old$\rightarrow$new
+balances and indexed with a \texttt{TX\_ID}.
+Valid logs must satisfy invariants:
+conservation of total funds,
+non-negative balances, and arithmetic correctness.
+We inject exactly one anomaly and consider the following bug types: \texttt{CALC\_ERROR} (incorrect arithmetic),
+\texttt{NEGATIVE\_BAL} (over-debit),
+\texttt{LOST\_UPDATE} (stale write overwrites a prior commit) and \texttt{DUPLICATE\_TXN} (same payment applied twice). 
+The model must output the bug type and offending \texttt{TX\_ID}.
+Context length is controlled by the number of operations $n$;
+we sweep from $25$ operations to $500$ operations which varies the number of tokens from $\mathcal{O}(10^2)$ to $\mathcal{O}(10^4)$. 
+
+\para{Findings.}
+We evaluate Qwen3 models ranging from
+$1.7$B to $8$B parameters on these synthetic tasks.
+\autoref{fig:figure_1} shows the results
+for the Qwen3-4B model.
+For both tasks,
+we see clear consistent trends:
+(i) As the context lengths increases
+(number of code lines/transaction logs),
+the standard in-context performance
+(i.e., without any additional inference-time compute)
+decreases sharply.
+(ii) Further, using inference-time compute
+via thinking tokens improves performance
+for shorter contexts,
+but shows clear diminishing returns
+as the context length increases,
+asymptotically converging
+close to the standard model performance for long contexts.
+
+% \rachit{add a takeaway box. make the above paragraph stronger
+% by clearly stating the conclusion from these experiments.
+% provide a good segway to the theoretical section.}
+
+\begin{takeaway}[Empirical Takeaway:]{Across both controlled tasks, holding the needle fixed and increasing the haystack length $T$ yields a sharp, monotonic drop in \emph{in-context} accuracy. Allocating inference-time budget to ``thinking" tokens offers only short-horizon gains with clear saturation at large $T$. These trends suggest a structural limitation of static attention in long contexts.}
+\end{takeaway}
+
+We now formalize this limitation as \emph{score dilution} and derive the resulting \emph{logarithmic margin requirement}, which explains why decoding-based scaling fails to recover retrieval (§\ref{subsec:theoretical-limits}).
+
+\subsection{Preliminaries}
+Recall, for a sequence of $T$ tokens with hidden representations $\{h_i\}_{i=1}^T \in \mathbb{R}^d$, each Transformer layer $\ell$ computes query, key, and value projections:
+\begin{align}
+    q_i^{(\ell)} &= W_Q^{(\ell)} h_i, \quad k_j^{(\ell)} = W_K^{(\ell)} h_j, \quad v_j^{(\ell)} = W_V^{(\ell)} h_j ,
+\end{align}
+where $W_Q^{(\ell)}, W_K^{(\ell)} \in \mathbb{R}^{d_k \times d}$ and $W_V^{(\ell)} \in \mathbb{R}^{d_v \times d}$ are learned projection matrices. 
+Further, the scaled dot product between query $q_i$ and key $k_j$ gives the attention logits $z_{i,j}$ that are normalized via softmax to obtain attention weights $\alpha_{i,j}$. Finally, the output $o_i$ is a weighted sum of value vectors:
+\begin{align}\label{eq:attn}
+    z_{i,j} \coloneqq \frac{q_i^\top k_j}{\sqrt{d_k}},
+\qquad
+\alpha_{i,j} \coloneqq \frac{\exp(z_{i,j})}{\sum_{\ell=1}^T \exp(z_{i,\ell})},
+\qquad
+o_i=\sum_{j=1}^T \alpha_{i,j}v_j.
+\end{align}
+In the autoregressive setting, causal masking enforces $j \leq i$, so that each position $i$ can only aggregate information from its past. Multi-head attention extends this computation across several subspaces, allowing the model to capture diverse forms of dependency.
+
+\para{In-Context Learning.}
+This attention-based retrieval is the foundation of \emph{in-context learning} (ICL; \citep{dong2024surveyincontextlearning}).
+By inserting task demonstrations, instructions, or relevant passages directly into the input, LLMs can adapt their outputs without parameter updates.
+For applications such as analyzing codebases, synthesizing long documents, or sustaining multi-turn dialogues, the model must effectively identify and use information scattered across contexts of length $10^4$–$10^6$ tokens.
+
+\para{Thinking Tokens.}
+Given a prefix $x_{1:i}$ and a target at position $i{+}1$, \emph{thinking-token} methods~\citep{wei2022chainofthought,kojima2022large,wang2023selfconsistency} append $M\!\ge\!0$ auxiliary tokens at indices $t\in\{i{+}1,\dots,i{+}M\}$ before producing the final answer at $a\!=\!i{+}M{+}1$. Each token $t$ is generated with static parameters and the same attention kernel as in~\cref{eq:attn}, yielding logits $z_{t,j}$, weights $\alpha_{t,j}$, and outputs $o_t$ over the augmented sequence of length $T' \!=\! T{+}M$.
+
+\looseness=-1
+\begin{definition}[{Retrieval}]\label{def:retrieval}
+\label{def:tau-retrieval}
+When predicting token $x_{i+1}$, the relevant information may lie in a specific key–value pair $(k_{j^\ast}, v_{j^\ast})$ (the `\textit{needle}') at some earlier position $j^\ast < i$. For a threshold $\tau\in(0,1)$, we say that retrieval at position $i$ succeeds if $\alpha_{i,j^\star}\;\ge\;\tau.$ Equivalently, in margin form define
+$\gamma_i \;\coloneqq\; z_{i,j^\star}\;-\;\log\!\sum_{j\neq j^\star} e^{z_{i,j}},$
+then retrieval succeeds iff
+\[
+\gamma_i \;\ge\; \log\!\Big(\frac{\tau}{1-\tau}\Big).
+\]
+All other positions $j\neq j^\star$ are \emph{distractors}, contributing competing logits $\{z_{i,j}\}_{j\neq j^\star}$.
+\end{definition}
+
+\subsection{Theoretical Limitations of Static Attention and Thinking Tokens}
+\label{subsec:theoretical-limits}
+
+Informed by the empirical findings in~\S\ref{sec:empirical-limits},
+we now analyze a single attention layer as in \cref{eq:attn} on the retrieval task (Definition~\ref{def:retrieval}).
+We formalize the fundamental challenge of score dilution,
+which arises when ``near-tie'' distractors inflate
+the softmax denominator, causing even a unique maximal logit to receive vanishingly small attention mass.
+
+
+\begin{lemma}[Score dilution]
+\label{lem:score-dilution}
+If at least $m$ distractor keys satisfy $z_{i,j}\ge z_{i,j^\star}-\Delta$ for some $\Delta\ge 0$, then
+\[
+\alpha_{i,j^\star}\;\le\; \frac{1}{1+m e^{-\Delta}}.
+\]
+In particular, if $m\ge cT$ for some $c>0$ and $\Delta=O(1)$, then $\alpha_{i,j^\star}\to 0$ as $T\to\infty$.
+\end{lemma}
+This lemma formalizes a simple intuition: When a constant fraction of tokens are within $O(1)$ logit of the needle, the attention budget cannot concentrate and the needle’s mass vanishes with $T$.
+
+This dilution effect imposes a strict requirement on how much the target logit must stand out from all other distractors. The following corollary quantifies this necessary separation, showing that the required margin between needle and distractor must grow with the context length.
+\begin{lemma}[Logarithmic margin requirement]
+\label{lem:log-margin}
+Fix $\varepsilon\in(0,1)$. If
+\[
+\min_{j\neq j^\star}\big(z_{i,j^\star}-z_{i,j}\big)\;\ge\;\log\!\Big(\frac{(T-1)(1-\varepsilon)}{\varepsilon}\Big),
+\]
+then $\alpha_{i,j^\star}\ge 1-\varepsilon$.
+In particular, guaranteeing a fixed target mass against worst-case distractors requires a gap that scales as $\Omega(\log T)$.
+\end{lemma}
+
+\looseness=-1
+Achieving a margin that scales logarithmically
+is difficult for a model with static attention.
+% A common strategy is to use inference-time compute
+% to generate intermediate thinking tokens.
+Next, we evaluate the strategy
+of generating
+thinking tokens
+% efficacy of this approach
+in satisfying % margin requirement of Lemma~\ref{lem:log-margin}.
+the logarithmic margin requirement.
+
+\begin{proposition}[Needle-signal bound for generated tokens]
+\label{prop:needle-signal}
+For any thinking token $t\in\{i{+}1,\dots,i{+}M\}$ and any $u\in\mathbb{R}^{d_v}$,
+\[
+\big\langle u,\, o_t \big\rangle
+\;\le\;
+\alpha_{t,j^\star}\,\big\langle u, v_{j^\star}\big\rangle
+\;+\;
+\big(1-\alpha_{t,j^\star}\big)\,\max_{j\neq j^\star}\big\langle u, v_j\big\rangle.
+\]
+\end{proposition}
+
+
+\begin{corollary}[Specialization under small margin]
+\label{cor:needle-signal-eps}
+If the margin at token $t$ satisfies $\gamma_t \le \log\!\big(\varepsilon/(1-\varepsilon)\big)$ (equivalently, $\alpha_{t,j^\star}\le \varepsilon$ by Definition~\ref{def:retrieval}), then
+\[
+\big\langle u,\, o_t \big\rangle
+\;\le\;
+\varepsilon\,\big\langle u, v_{j^\star}\big\rangle
+\;+\;
+(1-\varepsilon)\,\max_{j\neq j^\star}\big\langle u, v_j\big\rangle.
+\]
+Moreover, by Lemma~\ref{lem:score-dilution}, if at least
+$m$ distractors satisfy $z_{t,j}\!\ge\! z_{t,j^\star}-\Delta$, then $\alpha_{t,j^\star}\le 1/(1+m e^{-\Delta})$, yielding the same bound with $\varepsilon\!=\!1/(1+m e^{-\Delta})$.
+\end{corollary}
+
+Proposition~\ref{prop:needle-signal} shows the fraction of needle signal any generated token can carry is \emph{at most} its own attention mass on the needle. Under dilution (small margin), this mass is provably tiny (Corollary~\ref{cor:needle-signal-eps}), so attending to thinking tokens cannot materially increase the final answer’s effective margin unless some intermediate token first assigns non-trivial attention to the needle.
+
+
+\begin{takeaway}[Takeaways:]
+\textbf{(i)} With fixed weights, worst-case retrieval requires a logit margin that grows like $\Omega(\log T)$; failing to achieve this leads to score dilution and vanishing $\alpha_{i,j^\star}$.
+\textbf{(ii)} Autoregressively generating additional tokens with the same static attention does not repair missing access to the evidence.
+\textbf{(iii)} Any successful inference-time strategy must change the similarity $q_i^\top k_j$ (e.g., by updating queries) rather than sampling more tokens with unchanged parameters.
+\end{takeaway}

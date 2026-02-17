@@ -1,0 +1,101 @@
+\section{Latency and Compute-Matched Measurements}
+\label{app:latency}
+
+\para{Setup.}
+All latency numbers were measured on a single NVIDIA A100 GPU in standard inference mode.
+We report wall-clock time in seconds (mean $\pm$ std) for three different context lengths.
+For a given model size and context length,
+we perform latency analysis based
+on the amount of FLOPs, $F_{qTTT}$,
+it takes to run $N_{qTTT}=32$
+steps for $k=128$ on a single evaluation example.
+We report the following metrics:
+
+\begin{itemize}
+    \item $N_{\text{think}}$: Number of thinking tokens
+    that can be generated to match $F_{qTTT}$ FLOPs.
+
+    \item $N_{\text{BoN}}$: Number of best-of-N trajectories
+    that can be generated to match $F_{qTTT}$ FLOPs.
+
+    \item $t_{\text{ICL}}$: Wall-clock time for a vanilla in-context pass on single example. This roughly corresponds to the prefill time.
+
+    \item $t_{\text{think}}$: Wall-clock time to generate
+    $N_{\text{think}}$ tokens, given a single example.
+
+    \item $t_{\text{BoN}}$: The amount of time to compute best-of-N via self-consistency for $N_{\text{BoN}}$ trajectories given a single example.
+
+    \item $t_{\text{qTTT}}$: The amount of time to perform $N_{qTTT}=32$ steps of qTTT steps with span length $k=128$
+    for a single example.
+\end{itemize}
+
+\begin{table*}[t]
+\centering
+\small
+\caption{Latency and wall-clock time comparisons given a fixed FLOP budget for Qwen3-1.7B.}
+\begin{tabular}{lcccccc}
+\toprule
+\textbf{Context Length} & \textbf{$t_{\text{ICL}}$ (s)} & \textbf{$t_{\text{qTTT}}$ (s)} & \textbf{$t_{\text{think}}$ (s)} & \textbf{$t_{\text{BoN}}$ (s)} & \textbf{$N_{\text{think}}$} & \textbf{$N_{\text{BoN}}$}\\
+\midrule
+8,000     & $8.73 \pm 0.35$  & $16.92 \pm 0.68$ & $16.93 \pm 0.68$ & $16.05 \pm 0.64$ & 1{,}434 & 11 \\
+32,000    & $34.93 \pm 1.40$ & $43.12 \pm 1.72$ & $43.11 \pm 1.72$ & $40.78 \pm 1.63$ & 358 & 3 \\
+128,000   & $139.70 \pm 5.59$& $147.89 \pm 5.92$& $147.93 \pm 5.92$& $139.70 \pm 5.59$& 90 & 1 \\
+\bottomrule
+\end{tabular}
+\label{tab:latency-1p7b}
+\end{table*}
+
+
+\begin{table*}[t]
+\centering
+\small
+\caption{Latency and wall-clock time comparisons given a fixed FLOP budget for Qwen3-4B.}
+\begin{tabular}{lcccccc}
+\toprule
+\textbf{Context Length} & \textbf{$t_{\text{ICL}}$ (s)} & \textbf{$t_{\text{qTTT}}$ (s)} & \textbf{$t_{\text{think}}$ (s)} & \textbf{$t_{\text{BoN}}$ (s)} & \textbf{$N_{\text{think}}$} & \textbf{$N_{\text{BoN}}$}\\
+\midrule
+8{,}000   & $14.61 \pm 0.58$  & $28.27 \pm 1.13$ & $28.26 \pm 1.13$ & $27.41 \pm 1.10$ & 1{,}365 & 11 \\
+32{,}000  & $58.45 \pm 2.34$  & $72.11 \pm 2.88$ & $72.09 \pm 2.88$ & $68.69 \pm 2.75$ & 341 & 3 \\
+128{,}000 & $233.81 \pm 9.35$ & $247.47 \pm 9.90$ & $247.41 \pm 9.90$ & $233.81 \pm 9.35$ & 85 & 1 \\
+\bottomrule
+\end{tabular}
+\label{tab:latency-4b}
+\end{table*}
+
+\begin{table*}[t]
+\centering
+\small
+\caption{Latency and wall-clock time comparisons given a fixed FLOP budget for Qwen3-8B.}
+\begin{tabular}{lcccccc}
+\toprule
+\textbf{Context Length} & \textbf{$t_{\text{ICL}}$ (s)} & \textbf{$t_{\text{qTTT}}$ (s)} & \textbf{$t_{\text{think}}$ (s)} & \textbf{$t_{\text{BoN}}$ (s)} & \textbf{$N_{\text{think}}$} & \textbf{$N_{\text{BoN}}$}\\
+\midrule
+8{,}000   & $22.13 \pm 0.89$  & $42.61 \pm 1.70$ & $42.62 \pm 1.70$ & $41.33 \pm 1.65$ & 1{,}229 & 10 \\
+32{,}000  & $88.53 \pm 3.54$  & $109.01 \pm 4.36$ & $109.00 \pm 4.36$ & $97.07 \pm 3.88$ & 307 & 2 \\
+128{,}000 & $354.13 \pm 14.17$ & $374.61 \pm 14.98$ & $374.67 \pm 14.99$ & $354.13 \pm 14.17$ & 77 & 1 \\
+\bottomrule
+\end{tabular}
+\label{tab:latency-8b}
+\end{table*}
+
+
+Tables~\ref{tab:latency-1p7b},~\ref{tab:latency-4b},~\ref{tab:latency-8b}
+show the results of the measurements on
+Qwen3-1.7B, 4B, and 8B, respectively.
+% 
+We find that the wall-clock time
+for all three test-time compute strategies---qTTT,
+thinking, and best-of-N---is quite similar.
+We also note that prefilling the KV cache,
+which is approximately equal to $t_{\text{ICL}}$
+dominates most of the decoding time,
+especially for longer sequence lengths.
+This motivates the frozen K/V attention weights
+in our setup, without which the prefill
+would need to be recomputed with every training step.
+
+
+% \para{Implementation note.}
+% qTTT’s adaptation runs outside CUDA-graph capture; decoding then proceeds with the same captured graphs
+% since tensor shapes and kernels are unchanged. Because only $W_Q$ is updated and the KV cache is frozen,
+% we retain a single prefill and production-style paged-KV behavior across all settings.

@@ -1,0 +1,231 @@
+\section{Experimental Results}
+\label{sec:results}
+
+In this section,
+we discuss experimental results
+across a suit of long-context tasks.
+Firstly, we callback the synthetic long-context
+setup from~\S\ref{sec:empirical-limits}.
+\autoref{fig:figure_1} shows
+that spending inference-time compute via
+\method{} results in significant performance
+improvements on top of just in-context decoding.
+We observe that the improvements are consistent
+across context lengths unlike thinking tokens
+that show rapid diminishing returns.
+In the rest of this section,
+we discuss our findings on 
+long-context benchmarks that involve 
+nuanced $n$-hop retrieval, reasoning, and comprehension.
+
+Further, we empirically verify that
+these improvements with \shortmethod{} are indeed
+a result of margin improvement and reducing score dilution.
+Appendix~\ref{app:score-dilution} (\Cref{tab:bank-rope-ablation})
+shows an analysis of attention mass on the target tokens
+with and without \shortmethod{}.
+Particularly, we aggregate the attention scores
+for the target tokens
+(well defined for these synthetic tasks)
+across model layers to study the influence of
+\shortmethod{} against vanilla attention.
+We observe that as number of input tokens increases
+(hence the number of distractors),
+the performance as well as attention mass
+for vanilla attention
+goes down drastically.
+However, \shortmethod{} helps preserve attention mass
+significantly across context lengths.
+
+% ---------- (a) LongBench-v2: 3 models ----------
+\begin{figure*}[t]
+  \centering
+  \begin{subfigure}[t]{0.49\textwidth}
+    \centering
+    \includegraphics[width=\linewidth]{figures/plots/longbench_v2_8b_bars.pdf}
+    \small
+    \mbox{\hspace*{1.5cm}\cblock{229}{177}{129} \hspace{0.5mm}In-Context Only\hspace{3mm} \cblock{215}{122}{97} \hspace{0.5mm}With Thinking\hspace{3mm} \cblock{66}{158}{166}\hspace{1mm}With Query-only Test-Time Training (qTTT)}
+    \subcaption{
+    \label{fig:longbench-v2-8b-bars}
+    Comparison on LongBench-v2 subsets
+    for Qwen3-8B.
+    Using \shortmethod{} consistently
+    outperforms standard in-context
+    and FLOP-matched thinking settings.}
+  \hfill
+  \end{subfigure}
+  \begin{subfigure}[t]{0.49\textwidth}
+    \centering
+    \includegraphics[width=\linewidth]{figures/plots/longbench_model_size_lines.pdf}
+    \vspace{.04cm}
+    \subcaption{
+    \label{fig:longbench-v2-size-lines}
+    Variation of performance across model size
+    on LongBench-v2 subsets.
+    \shortmethod{} improves performance consistently
+    across model sizes.}
+  \end{subfigure}
+  % \vspace{-0.5cm}
+  \captionsetup{skip=1pt, belowskip=1pt}
+  \caption{\label{fig:longbench-v2-main}
+  LongBench-v2~\citep{bai2023longbench}
+  provides a testbed to evaluate long-context
+  abilities across a diverse set of context types.
+  Here, we report evaluations across all six subsets
+  of the benchmark for Qwen3-\{$1.7$/$4$/$8$B\} models.
+  \shortmethod{} shows consistent improvements 
+  over both standard in-context learning and
+  FLOP-matched thinking tokens across
+  the different context types.
+}
+\end{figure*}
+
+
+% ---------- (a)ZeroScrolls: 3 models ----------
+\begin{figure*}[t]
+  \centering
+  \begin{subfigure}[t]{0.49\textwidth}
+    \centering
+    \includegraphics[width=\linewidth]{figures/plots/zeroscrolls_v2_8b_bars.pdf}
+    \small
+    \mbox{\hspace*{1.5cm}\cblock{229}{177}{129} \hspace{0.5mm}In-Context Only\hspace{3mm} \cblock{215}{122}{97} \hspace{0.5mm}With Thinking\hspace{3mm} \cblock{66}{158}{166}\hspace{1mm}With Query-only Test-Time Training (qTTT)}
+    \subcaption{
+    \label{fig:zeroscrolls-8b-bars}
+    Comparison on ZeroScrolls subsets
+    for Qwen3-8B.
+    Using \shortmethod{} consistently
+    outperforms standard in-context
+    and FLOP-matched thinking settings.}
+  \end{subfigure}
+  \hfill
+  \begin{subfigure}[t]{0.49\textwidth}
+    \centering
+    \includegraphics[width=\linewidth]{figures/plots/zeroscrolls_model_size_lines.pdf}
+    \vspace{.04cm}
+    \subcaption{
+    \label{fig:zeroscrolls-size-lines}
+    Variation of performance across model size
+    on ZeroScrolls subsets.
+    \shortmethod{} improves performance consistently
+    across sizes, often greater for larger models.}
+  \end{subfigure}
+  % \vspace{-0.25cm}
+  % \captionsetup{skip=0pt, belowskip=0pt}
+  \caption{\label{fig:zeroscrolls-main}
+  ZeroScrolls~\citep{shaham2023zeroscrolls}
+  evaluates a diverse set of tasks
+  and model abilities over long context inputs.
+  We report evaluations across six subsets
+  for Qwen3-\{$1.7$/$4$/$8$B\} models.
+  \shortmethod{} shows consistent improvements 
+  over both standard in-context learning and
+  FLOP-matched thinking tokens,
+  especially for retrieval-based multi-hop reasoning
+  and long form comprehension tasks.}
+  \captionsetup{skip=1pt, belowskip=1pt}
+\end{figure*}
+
+\para{Setup and Evaluation Protocol.}
+We evaluate \method{} (\shortmethod{}) on long-context tasks against two baselines: (i) \emph{In-context}—standard decoding with no intermediate tokens; and (ii) \emph{Thinking}—a chain-of-thought variant whose extra tokens are \emph{compute-matched} to \shortmethod{} via the FLOP equivalence in \S\ref{subsec:flops-summary}.
+Our experiments are performed over
+Qwen3 models across 1.7B, 4B, and 8B parameters,
+and cover all subsets of \textbf{LongBench-v2}~\citep{bai2023longbench} (six categories) and \textbf{ZeroSrolls}~\citep{shaham2023zeroscrolls} (eight datasets).
+% Unless otherwise noted, prompts and decoding settings are identical across methods; the \emph{Thinking} baseline differs only in allocating its matched budget to intermediate tokens, while \shortmethod{} reuses a single long-context KV cache and applies query-only span updates under the same FLOP budget. Detailed hyperparameters are provided in \autoref{app:flops}.
+% 
+% To ensure fairness under a fixed inference-time budget, we use the FLOP equivalence from \S\ref{subsec:flops-summary}.
+Unless stated otherwise, we use $T_{\text{think}}{=}8192$, $k{=}128$, $N_{\text{\shortmethod{}}}{=}32$,
+and a common budget of $512$ tokens to generate
+the final answer\footnote{We use the /think and /no\_think tokens in the Qwen3 model to control for this. We elaborate on further details
+including decoding parameters and
+prompt templates in \autoref{app:experimental-details}.}.
+% We follow the recommended model guidelines\footnote{\url{https://huggingface.co/Qwen/Qwen3-32B}}
+% to set the decoding parameters (temperature, top-$p$, top-$k$):
+% (0.6, 0.95, 20) for thinking, and (0.7, 0.8, 20) non-thinking modes.
+% \footnote{Add: decoding hyperparameters; prompt templates; maximum generate length; truncation policy when input exceeds the model’s limit; and whether \emph{Thinking} uses self-consistency or best-of-$n$ (here we disable voting unless specified).}
+% For \shortmethod{}, we update only $W_Q$ in all attention layers, using span-sampled next-token loss with fixed $\{K,V\}$ from one prefill.
+% We use the AdamW optimizer and perform a sweep over
+% $\text{LR}\in\{1e-5, 3e-5, 1e-6, 3e-6\}$ to find the optimal learning rate.
+% We use a batch size of $1$ for all \shortmethod{}
+% runs to account for memory constraints with long contexts.
+
+% \paragraph{Headline results.}
+%  On \textbf{LongBench-v2}, \shortmethod{} improves average accuracy over \emph{In-context} by \textbf{+38.1\%}/\textbf{+47.0\%}/\textbf{+51.3\%} for Qwen3-\{1.7B,4B,8B\}. On \textbf{ZeroSCROLLS}, the gains are \textbf{+41.2\%}/\textbf{+76.6\%}/\textbf{+43.7\%}. In all six LongBench-v2 categories, \shortmethod{} either wins outright or ties for best in \textbf{16/18} model–category combinations (Fig.~\ref{fig:benchmarks-overview}); on ZeroSCROLLS it wins or ties in \textbf{~20/24} model–dataset combinations (Fig.~\ref{fig:benchmarks-overview}). Under matched FLOPs, \emph{Thinking} helps on some subsets but is inconsistent and can even underperform \emph{In-context} (e.g., GovReport at 4B/8B), consistent with our analysis that decoding more tokens does not repair score dilution (\S\ref{sec:failures}).
+
+% \rachit{this section is still WIP.}
+
+\para{LongBench-v2.}
+LongBench-v2~\citep{bai2023longbench}
+evaluates long-context reasoning across 
+diverse context types.
+The benchmark probes 
+whether models can locate and use dispersed evidence
+to answer multiple-choice questions
+across a variety of context types:
+given multi-file project trees in the
+\textit{Code Repositories} setting,
+to resolve arguments of a particular function; and
+% (e.g., ``What are the arguments for the \texttt{foobar\(\)} function?").
+% Whereas, for ,
+given the context as a set of related documents
+in the \emph{Multi-Document QA} setting,
+% drawn from multiple sources;
+% and the task is to
+synthesize spans across sources to answer a question.
+% (``Based on the background memo and follow-up report, which committee issues the final verdict?").
+This allows us to assess the applicability of \shortmethod{}
+across forms of input contexts.
+
+\autoref{fig:longbench-v2-main} shows that, under compute-matched budgets, \shortmethod{} delivers consistent and often substantial gains across model sizes. On \emph{Long Dialogue History} and \emph{Multi-Document QA}, where evidence is most diffuse, \shortmethod{} outperforms standard in-context and thinking by wide margins (e.g., for Qwen3-4B: 30.8 $\rightarrow$ \textbf{43.6} on \emph{Long Dialogue History}; 40.0 $\rightarrow$ \textbf{46.0} on \emph{Multi-Document QA}). In \emph{Code Repositories}, \shortmethod{} scales especially well with model size (for Qwen3-8B: 30.0 $\rightarrow$ 44.0 $\rightarrow$ \textbf{52.0}).
+% suggesting improved retrieval and preservation of relevant spans as capacity grows.
+Overall, the LongBench-v2 results indicate that \shortmethod{} fares well across markedly different context types.
+% corroborating the desirable properties discussed in \S\ref{subsec:why-works}.
+
+
+\para{ZeroScrolls.}
+ZeroScrolls \citep{shaham2023zeroscrolls} evaluates long-context reasoning across diverse tasks. We group the datasets into three categories: (i) \emph{Multi-hop reasoning} (\texttt{MuSiQue}, \texttt{QASPER}, \texttt{NarrativeQA}), which require locating and composing evidence spread across long documents;
+% and are scored with the task’s official QA metrics (EM/F1 or equivalent)
+(ii) \emph{Long-form summarization} (\texttt{GovReport}, \texttt{QMSum}, \texttt{SQuALITY}), which emphasize distilling lengthy inputs;
+and (iii) \emph{Long-passage comprehension} (\texttt{QAuLITY}), which measures multiple-choice accuracy over extended contexts.
+% This suite of tests allows us to evaluate whether models can not only ingest long inputs but also retrieve,
+% integrate, and use the right spans during generation.
+In contrast to LongBench-v2, this suite of tests
+evaluates the ability to utilize some long context
+to solve a variety of different tasks.
+
+\autoref{fig:zeroscrolls-overview} shows that
+\shortmethod{} consistently outperforms
+% both \emph{In-context} and \emph{Thinking}
+vanilla thinking
+on multi-hop QA and comprehension tasks,
+with gains that strengthen with model size.
+% This aligns with our hypothesis developed in~\S\ref{subsec:why-works}.
+% adapting queries increases the target–distractor margin, directly counteracting score dilution, whereas generating more tokens leaves the attention kernel unchanged.
+On summarization-style datasets,
+improvements are smaller
+and comparable to thinking, suggesting that
+when generation quality, not retrieval, is the
+primary bottleneck, reweighting attention yields limited returns. 
+Overall,
+% results on ZeroScrolls show \shortmethod{} yields
+we see significant performance gains
+across datasets and model scales.
+% while using the same FLOP budget.
+% This strengthens the claim that reallocating
+% compute to query-only adaptation is a reliably
+% better use of resources in long-context regimes.
+
+The full set of results on LongBench-v2 and ZeroScrolls
+are elaborated in Appendix~\ref{app:all_results}.
+Moreover, we include additional test-time compute baselines
+such as best-of-N and beam search
+in Appendix~\ref{app:tts-baselines}.
+We also perform a comprehensive latency and wall-clock
+time comparison of \shortmethod{} with other approaches
+in Appendix~\ref{app:latency}.
+
+\begin{takeaway}[Takeaways:]{\textbf{(i)} We see consistent gains in performance across benchmarks and model sizes, \shortmethod{} yields the best average performance under matched FLOPs (\autoref{fig:longbenchv2-overview}, \autoref{fig:zeroscrolls-overview}).
+\textbf{(ii) }Retrieval-driven tasks benefit the most, validating the score dilution diagnosis and the margin increase with \shortmethod{} (\S\ref{sec:failures}, \S\ref{subsec:why-works}). \textbf{(iii) }Thinking tokens are not a reliable substitute: they sometimes help but can also trail \emph{In-context}, especially in very long contexts. \textbf{(iv)} \shortmethod{} is a more effective use of inference-time compute; without changing architecture, data, or pre-training.}
+\end{takeaway}
+
+% \vspace{2mm}
+% \noindent\textit{Reproducibility checklist (to be added).} Model checkpoints and tokenizer versions; context window and truncation policy; prompts; decoding hyperparameters; $T_{\text{think}}$, $N_{\text{TTT}}$, $k$; optimizer and LR for \shortmethod{}; precision (bf16/fp16), gradient clipping; hardware; evaluation scripts and commit hashes.

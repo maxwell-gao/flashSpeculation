@@ -1,0 +1,83 @@
+\section{Proofs for Section~\ref{sec:failures}}
+\label{app:proofs-long-context}
+
+\para{Notation.}
+For a fixed query $q_i$, logits are $z_{i,j}=\frac{q_i^\top k_j}{\sqrt{d_k}}$, attention weights $\alpha_{i,j}=\frac{e^{z_{i,j}}}{\sum_{\ell}e^{z_{i,\ell}}}$, and $o_i=\sum_j \alpha_{i,j}v_j$. We write $\mu_i=\sum_{\ell}\alpha_{i,\ell}k_\ell$.
+
+\begin{proof}[Proof of Lemma~\ref{lem:log-margin} (Score dilution)]
+Let $S=\{j\neq j^\star:\, z_{i,j}\ge z_{i,j^\star}-\Delta\}$ with $|S|=m$. Then
+\[
+\sum_{\ell=1}^T e^{z_{i,\ell}}
+\;\ge\; e^{z_{i,j^\star}}+\sum_{j\in S}e^{z_{i,j}}
+\;\ge\; e^{z_{i,j^\star}}\big(1+m e^{-\Delta}\big),
+\]
+hence $\alpha_{i,j^\star}=\frac{e^{z_{i,j^\star}}}{\sum_\ell e^{z_{i,\ell}}}\le\frac{1}{1+m e^{-\Delta}}$. 
+If $m\ge cT$ with $c>0$ and $\Delta=O(1)$, then $\alpha_{i,j^\star}\to 0$ as $T\to\infty$.
+\end{proof}
+
+\begin{proof}[Proof of Lemma~\ref{lem:log-margin} (Logarithmic margin requirement)]
+Let $\gamma=\min_{j\ne j^\star}(z_{i,j^\star}-z_{i,j})$. Then 
+$\sum_{j\ne j^\star}e^{z_{i,j}}\le (T-1)e^{z_{i,j^\star}-\gamma}$, so
+\[
+\alpha_{i,j^\star}
+=\frac{1}{1+\sum_{j\ne j^\star}e^{z_{i,j}-z_{i,j^\star}}}
+\;\ge\; \frac{1}{1+(T-1)e^{-\gamma}}.
+\]
+Rearranging $\frac{1}{1+(T-1)e^{-\gamma}}\ge 1-\varepsilon$ yields 
+$\gamma \ge \log\!\big(\tfrac{(T-1)(1-\varepsilon)}{\varepsilon}\big)$.
+\end{proof}
+
+\begin{proof}[Proof of Proposition~\ref{prop:needle-signal} (Needle-signal bound)]
+For any thinking token $t$,
+\[
+o_t=\sum_{j<t}\alpha_{t,j}v_j
+= \alpha_{t,j^\star} v_{j^\star} + (1-\alpha_{t,j^\star}) \sum_{j\neq j^\star}\tilde\alpha_{t,j} v_j,
+\quad
+\tilde\alpha_{t,j}=\frac{\alpha_{t,j}}{1-\alpha_{t,j^\star}}.
+\]
+For any $u\in\mathbb{R}^{d_v}$, take inner products and upper bound the convex combination by its maximum term:
+\[
+\big\langle u,o_t\big\rangle
+\le
+\alpha_{t,j^\star}\,\langle u,v_{j^\star}\rangle
++
+(1-\alpha_{t,j^\star})\,\max_{j\ne j^\star}\langle u,v_j\rangle.
+\]
+\end{proof}
+
+\begin{proof}[Proof of Corollary~\ref{cor:needle-signal-eps} (Specialization under small margin)]
+By Definition~\ref{def:retrieval}, $\gamma_t \le \log\!\big(\varepsilon/(1-\varepsilon)\big)$ iff $\alpha_{t,j^\star}\le \varepsilon$. Substitute $\alpha_{t,j^\star}\le\varepsilon$ in Proposition~\ref{prop:needle-signal} to obtain
+\[
+\langle u,o_t\rangle \le \varepsilon\langle u,v_{j^\star}\rangle + (1-\varepsilon)\max_{j\ne j^\star}\langle u,v_j\rangle.
+\]
+Moreover, Claim~\ref{lem:log-margin} implies $\alpha_{t,j^\star}\le 1/(1+ m e^{-\Delta})$ when at least $m$ distractors satisfy $z_{t,j}\ge z_{t,j^\star}-\Delta$, yielding the bound with $\varepsilon = 1/(1+m e^{-\Delta})$.
+\end{proof}
+
+\begin{proof}[Proof of Claim~\ref{claim:query-gradient} (Directional query update)]
+With $z_{i,\ell}=\frac{q_i^\top k_\ell}{\sqrt{d_k}}$,
+\[
+\ell_i(q_i)=-\log \alpha_{i,j^\star}=-z_{i,j^\star}+\log\!\sum_{\ell=1}^T e^{z_{i,\ell}}.
+\]
+Differentiating w.r.t.\ $q_i$ and using $\frac{\partial z_{i,\ell}}{\partial q_i}=\frac{k_\ell}{\sqrt{d_k}}$,
+\[
+\nabla_{q_i}\ell_i
+= -\frac{k_{j^\star}}{\sqrt{d_k}} + \frac{1}{\sum_{\ell'}e^{z_{i,\ell'}}}\sum_{\ell=1}^T e^{z_{i,\ell}}\frac{k_\ell}{\sqrt{d_k}}
+= \frac{1}{\sqrt{d_k}}\Big(\sum_{\ell=1}^T \alpha_{i,\ell}k_\ell - k_{j^\star}\Big)
+= \frac{1}{\sqrt{d_k}}(\mu_i - k_{j^\star}).
+\]
+Thus a descent step moves $q_i$ toward $k_{j^\star}$ and away from $\mu_i$.
+\end{proof}
+
+\begin{proof}[Proof of Lemma~\ref{lemma:margin-improvement} (Monotone margin improvement)]
+Define $M_i(q_i)=-\ell_i(q_i)$. Then $\nabla M_i(q_i)=-\nabla \ell_i(q_i)$. 
+For a step $q_i^+=q_i-\eta\nabla \ell_i(q_i)$, a first-order expansion gives
+\[
+M_i(q_i^+) = M_i(q_i) + \eta\|\nabla \ell_i(q_i)\|_2^2 + O(\eta^2).
+\]
+Using Claim~\ref{claim:query-gradient}, 
+$\|\nabla_{q_i}\ell_i\|_2^2=\frac{1}{d_k}\|k_{j^\star}-\mu_i\|_2^2$, which is strictly positive unless $k_{j^\star}=\mu_i$. 
+If $\nabla \ell_i$ is $L$-Lipschitz, choosing $\eta\in(0,1/L]$ ensures $M_i(q_i^+)\ge M_i(q_i)+\tfrac{\eta}{2}\|\nabla \ell_i(q_i)\|_2^2$.
+\end{proof}
+
+\para{Remarks on multi-head attention.}
+All statements apply per head. Let superscript $h$ index heads and define per-head logits/weights $\{z^{(h)}_{i,j},\alpha^{(h)}_{i,j}\}$. Claims on dilution and margin hold headwise; aggregation across heads is via concatenation and an output projection, which preserves the directional and margin-improvement arguments by linearity.

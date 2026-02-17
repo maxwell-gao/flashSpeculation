@@ -1,0 +1,166 @@
+\section{Efficient Test-Time Adaptation via Query-Only Updates}
+\label{sec:method}
+
+Having established that existing inference-time
+scaling strategies on vanilla transformer models
+fail for long contexts, we now investigate an
+alternate strategy of allocating inference-time compute
+via test-time training (TTT).
+First, we establish why a standard TTT approach,
+involving several forward and backward passes over
+the model,
+is computationally infeasible for long contexts.
+We introduce \method{} (\shortmethod{})
+that captures the benefits of TTT while
+minimizing the computational overhead
+by re-using the KV cache
+and only changing the query projections.
+We present theoretical (\S\ref{subsec:why-works})
+and empirical (\S\ref{sec:results}) evidence
+for the efficacy of \shortmethod{}
+over vanilla ICL and thinking tokens.
+
+\looseness=-1
+\paragraph{Naïve Test-Time Training is Infeasible for Long Contexts.}
+A natural first-step is full-parameter TTT:
+update FFN and all attention projections ($W_Q,W_K,W_V$)
+on the long input $x_{1:T}$.
+We find that this is impractical for long-context regimes:
+every update alters keys/values across the sequence,
+invalidating the KV cache and forcing fresh forward–backward
+passes over the \emph{entire} context at each step,
+with prohibitive compute and activation memory.
+
+Compute-wise, our FLOP calculations (\autoref{app:flops}) shows that even \emph{one} such full-parameter TTT step over a $T$-token context 
+is equivalent to generating about $1.2\times T$ decoding tokens.
+That is, for a context of about $T\approx 10^5$ tokens,
+this makes a single training step FLOP equivalent
+to generating $\sim120$K decoding tokens---rendering
+full-parameter TTT untenable.
+
+\looseness=-1
+These constraints motivate a cache-preserving alternative. Our approach, \method{} (\shortmethod{}), performs a single prefill to cache $\{K,V\}$ and then adapts \emph{only} the query projections on short spans, keeping the attention evidence pathway fixed while reshaping access to it. This retains the benefits of TTT without repeated full-context passes; we describe and formalize this procedure next.
+% and make FLOP comparisons to standard in-context decoding-based baselines in \S\ref{subsec:flops-summary}.
+
+\subsection{Query-Only TTT for Long Context}
+\begin{algorithm}[t]
+\caption{Query-Only Test-Time Training for Long Context}
+\label{alg:method}
+\begin{algorithmic}[1]
+\State \textbf{Input:} model $f_\theta$, long context $x_{1:T}$, number of steps $N_{\text{TTT}}$, span length $k$, step size $\eta$
+\State $\{K^{(\ell)}, V^{(\ell)}\}_{\ell=1}^L \leftarrow$ \textsc{ForwardPassAndCache}$(f_\theta, x_{1:T})$ \Comment{Single $O(T^2)$ operation}
+\For{$n=1$ to $N_{\text{TTT}}$}
+  \State Sample a random span $x_s = x_{t:t+k}$ from $x_{1:T}$
+  \State Compute $\mathcal{L}_{\text{TTT}}(\theta; x_s)$ using the frozen $\{K^{(\ell)}, V^{(\ell)}\}$
+  \State Update only the query parameters: $\{W_Q^{(\ell)}\} \leftarrow \{W_Q^{(\ell)}\} - \eta \, \nabla_{\{W_Q^{(\ell)}\}} \mathcal{L}_{\text{TTT}}$
+\EndFor
+\State \textbf{return} adapted model $f_{\theta'}$ to generate the final answer
+\end{algorithmic}
+\end{algorithm}
+
+\begin{wrapfigure}[18]{r}{0.45\textwidth} % [18]=approx lines to wrap; tweak if needed
+% \vspace{-0.8\baselineskip} % pull figure up a bit to align with heading
+\centering
+\vspace{-0.5cm}
+\includegraphics[width=\linewidth]{figures/figure_qttt.pdf}
+\captionsetup{font=small}
+\caption{\label{fig:qttt} Overview of \method{}.}
+% \vspace{-0.6\baselineskip} % reduce gap after the figure
+\end{wrapfigure}
+
+% Please fix N_{qTTT} -> N_{TTT} in Figure 2
+
+The core idea of \method{} % the TTT approach we cover here
+is to avoid repeated, costly forward
+and backward passes over the long context.
+Instead, we perform a single expensive prefill to cache the context's key and value representations and then execute a series of much cheaper, targeted gradient updates.
+The procedure, also outlined in
+Algorithm~\ref{alg:method} and Figure~\ref{fig:qttt}, is as follows:
+
+\begin{itemize}[leftmargin=*]
+    \item[\textbf{1.}] \textbf{Single-Pass KV Cache Generation.} Given a long context $x_{1:T}$, we perform exactly one full forward pass with the pre-trained model $f_\theta$. During this pass, for each layer $\ell$ in the model, we compute and store the Key and Value projection tensors, $K^{(\ell)} \in \mathbb{R}^{T \times d_k}$ and $V^{(\ell)} \in \mathbb{R}^{T \times d_v}$. These cached tensors represent the complete contextual information and remain frozen for the duration of the adaptation process.
+
+    \item[\textbf{2.}] \textbf{Span-Sampled, Query-Only Objective.} With the KV cache held constant, we perform $N_{\text{TTT}}$ steps of gradient descent. In each step, we update only the query projection matrices $\{W_Q^{(\ell)}\}_{\ell=1}^L$. The objective is the standard next-token prediction loss, computed over a small, randomly sampled contiguous span of tokens $x_s = x_{t:t+k}$, where the span length $k \ll T$: % The TTT loss is defined as:
+    \begin{align}
+    \mathcal{L}_{\text{TTT}}(\theta; x_s)
+    = - \sum_{i=t}^{t+k-1} \log p_\theta(x_{i+1}\mid x_{1:i}; \{K^{(\ell)}, V^{(\ell)}\}_{\ell=1}^L)
+    \end{align}
+    Crucially, the gradients $\nabla_\theta \mathcal{L}_{\text{TTT}}$ are computed and applied only with respect to the parameters $\{W_Q^{(\ell)}\}$, leaving all other model weights, including the now-static KV cache, unchanged.
+    % This targeted update trains the model to formulate better ``questions" (queries) to ask of the fixed context (keys and values).
+\end{itemize}
+
+
+\subsection{Why Query-Only Test-Time Training is Effective}
+\label{subsec:why-works}
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=0.8\linewidth]{figures/qtt_gd.pdf}
+    \caption{A visual representation of Proposition~\ref{claim:query-gradient} showing
+    how \shortmethod{} improves the logit margin. The gradient updates via \shortmethod{} directly move the query projection weights towards the target needles and counteracts score dilution.
+    }
+    \label{fig:qttt_margin}
+\end{figure}
+
+\looseness=-1
+\Cref{sec:failures} showed that long-context failures
+arise from score dilution and the resulting need for a
+growing target–distractor \emph{margin}.
+Query-only TTT targets this bottleneck directly:
+only adapt the query projections % $\{W_Q^{(\ell)}\}$
+while holding keys/values fixed (from a single prefill).
+This leaves the evidence (K,V)
+unchanged and instead reshapes \emph{query} to it by 
+modifying the similarity $q_i^\top k_j$ for a given input (Proposition~\ref{claim:query-gradient}; \Cref{fig:qttt_margin}).
+
+\looseness=-1
+\begin{proposition}[Query update]
+\label{claim:query-gradient}
+For loss $\ell_i=-\log\alpha_{i,j^\star}$ with fixed $K$, the gradient w.r.t.\ $q_i$ is
+\[
+\nabla_{q_i}\ell_i=\frac{1}{\sqrt{d_k}}\Big(\underbrace{\sum_{\ell=1}^T \alpha_{i,\ell}k_\ell}_{\mu_i}-k_{j^\star}\Big).
+\]
+A descent step $q_i\leftarrow q_i-\eta\nabla_{q_i}\ell_i$ moves $q_i$ toward $k_{j^\star}$ and away from the attention-weighted mean $\mu_i$, explicitly counteracting dilution. (The statement holds per head and aggregates across heads.)
+\end{proposition}
+
+\begin{lemma}[Margin improvement]
+\label{lemma:margin-improvement}
+Let $M_i(q_i)\coloneqq -\ell_i(q_i)$ denote the logit margin. For sufficiently small $\eta>0$,
+\[
+M_i\big(q_i-\eta\nabla_{q_i}\ell_i\big)
+= M_i(q_i) + \eta\|\nabla_{q_i}\ell_i\|_2^2 + O(\eta^2).
+\]
+Hence the margin strictly increases whenever $\nabla_{q_i}\ell_i\neq 0$, with the gain proportional to $\|k_{j^\star}-\mu_i\|_2^2$. Improvements are therefore largest precisely when attention is most diffuse, i.e., in the long-context regimes where score dilution is severe.
+\end{lemma}
+
+\looseness=-1
+\begin{takeaway}[Takeaway:]{Query-only TTT reallocates inference-time compute into \emph{margin-raising} updates: with fixed $\{K,V\}$ from a single prefill, each step moves $q_i$ toward $k_{j^\star}$ and \emph{provably} increases the target–distractor logit margin. It thus directly mitigates score dilution, most when attention is most diffuse, without re-encoding the context or growing the KV cache.}\end{takeaway}
+
+
+\subsection{FLOP Equivalence: Thinking Tokens vs.\ Query-Only TTT}
+\label{subsec:flops-summary}
+We compare two ways to spend inference-time compute after a single prefill: (i) generate $T_{\text{think}}$ \emph{thinking} tokens with frozen weights, or (ii) run $N_{\text{\shortmethod{}}}$ \emph{query-only} updates on spans of length $k\!\ll\!T$ while reusing the KV cache. For long $T$, FLOP equivalence (\autoref{app:flops}) yields the rule of thumb
+\begin{equation}
+\label{eq:think-vs-qttt}
+T_{\text{think}} \;\approx\; 2\,N_{\text{\shortmethod{}}}\,k
+\qquad\text{(long $T$, span $k\!\ll\!T$).}
+\end{equation}
+% i.e., one span update over $k$ tokens costs about the same as decoding $\approx 2k$ tokens.
+
+Consider a dense model of about $8$B parameters on a long context $T=10^5$
+and an inference-time budget budget to decode
+$8$K thinking tokens after the prefill.
+From~\cref{eq:think-vs-qttt}, the FLOPs equate to about
+$N_{\text{\shortmethod{}}}\!=\!16$ \method{} steps on spans of $k\!=\!128$,
+% (since $2\cdot 10\cdot 400\!\approx\!8000$).
+% If we prefer $k\!=\!256$,
+and
+% the same budget supports
+$N_{\text{\shortmethod{}}}\!=\!8$
+for $k\!=\!512$.
+In both cases, thinking tokens grow the KV cache
+by thousands of positions without changing attention,
+whereas query-only TTT keeps the cache length fixed at $T$
+and uses the matched FLOPs to \emph{reshape queries}
+against the existing keys/values, directly
+targeting the margin bottleneck from \S\ref{sec:failures}.

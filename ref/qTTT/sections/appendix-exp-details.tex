@@ -1,0 +1,99 @@
+\section{Experimental Details}
+\label{app:experimental-details}
+
+\para{Models and tokenization.}
+We evaluate Qwen3-\{1.7B, 4B, 8B\} with their native tokenizers and maximum supported context windows. All prompts use UTF-8, and inputs are delimited with explicit section headers (e.g., \texttt{[CONTEXT]}, \texttt{[QUESTION]}). Unless otherwise noted, we evaluate on the official validation/dev splits and follow each benchmark’s scoring script.
+
+\para{Decoding and “Thinking’’ budget.}
+We adopt model-recommended decoding parameters:
+% \footnote{Fill in if you deviated per-subset.}
+\emph{Thinking}: temperature=0.6, top-$p$=0.95, top-$k$=20; 
+\emph{Non-thinking}: temperature=0.7, top-$p$=0.8, top-$k$=20.
+We cap total generation length so that \emph{Thinking} consumes exactly $T_{\text{think}}$ intermediate tokens plus the final answer; for compute matching, we use $T_{\text{think}}=8192$ unless otherwise stated.
+Self-consistency/best-of-$n$ are \emph{disabled} by default to keep FLOPs matched.
+% \footnote{If any subset uses voting, list $n$ and the scorer.}
+
+\para{Query-only TTT (\method{}) hyperparameters.}
+We update only $W_Q$ in all attention layers using AdamW (weight decay 0.01) with a sweep over learning rates $\{3\mathrm{e}{-4}, 3\mathrm{e}{-5}, 1\mathrm{e}{-5}, 3\mathrm{e}{-6}, 1\mathrm{e}{-6}, 3\mathrm{e}{-7}\}$; we report the best per-dataset LR selected on a held-out portion of the validation set. Batch size is 1 (long contexts). We perform $N_{\text{TTT}}$ span updates of length $k$ with a single prefill/cached $\{K,V\}$; unless stated otherwise, $(k,N_{\text{TTT}})=(128,32)$, compute-matched to \emph{Thinking} via $T_{\text{think}}\approx 2N_{\text{TTT}}k$ (\S\ref{subsec:flops-summary}). Spans are sampled uniformly over $[1, T{-}k]$; gradient clipping at 1.0; bf16 precision.
+% 
+Additionally, we perform a sensitivity analysis of \shortmethod{}
+across learning rates.
+Table~\ref{tab:lr_sensitivity} shows the variation of
+accuracy on our synthetic tasks across context lengths.
+We find that qTTT is not very sensitive to the choice of LR: the performance is relatively consistent between $[1\mathrm{e}{-5}, 1\mathrm{e}{-6}]$ and only falls on the extreme values of LR.
+\color{black} %
+
+\begin{table}[ht]
+\centering
+% \small
+% \setlength{\tabcolsep}{5pt}
+\caption{\label{tab:lr_sensitivity}
+\textbf{Sensitivity to Learning Rate ($\eta$).} Performance of qTTT across varying learning rates. Extreme rates cause instability (high $\eta$) or insufficient adaptation (low $\eta$), with the optimal range typically between $1\text{e-}6$ and $1\text{e-}5$.}
+\begin{tabular}{l|c|c|c|c|c|c}
+\toprule
+\textbf{Task / Context} & \textbf{1e-4} & \textbf{3e-5} & \textbf{1e-5} & \textbf{3e-6} & \textbf{1e-6} & \textbf{3e-7} \\
+\midrule
+\multicolumn{7}{l}{\textit{Bank Transactions}} \\
+512 & 4.2 & 26.5 & \textbf{28.0} & 27.2 & 26.8 & 15.5 \\
+2,536 & 1.5 & 13.8 & \textbf{14.4} & 14.0 & 12.5 & 6.2 \\
+5,120 & 0.8 & \textbf{10.0} & 9.2 & 8.5 & 7.8 & 3.5 \\
+9,560 & 0.0 & 7.8 & \textbf{8.4} & 7.9 & 7.0 & 1.2 \\
+\midrule
+\multicolumn{7}{l}{\textit{OLMo Code Bugs}} \\
+512 & 8.5 & 42.0 & 44.5 & \textbf{45.7} & 43.2 & 22.0 \\
+2,050 & 5.1 & 38.5 & 40.2 & \textbf{41.6} & 39.5 & 18.5 \\
+7,450 & 2.2 & 25.0 & \textbf{28.0} & 27.5 & 24.8 & 10.5 \\
+10,000 & 1.0 & 18.2 & \textbf{20.2} & 19.5 & 17.8 & 5.2 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+% \para{Preprocessing and truncation.}
+% For inputs longer than the model limit, we apply \emph{head+tail} truncation with sentinel markers:
+% we retain the first $H$ tokens and last $T{-}H$ tokens, inserting \texttt{[...skipped...]} in between; $H$ is chosen so the total fits the window. For multi-document inputs, we keep document boundaries with \texttt{[DOC i]} tags. We normalize whitespace and Unicode punctuation; answers are lowercased for EM-style metrics where appropriate.
+
+\para{Evaluation metrics.}
+We use official scripts per subset: EM/F1 or dataset-specific accuracy for QA; ROUGE-\{1,2,L\} or benchmark-provided summary metrics for summarization; multiple-choice accuracy for \texttt{QAuLITY}. When a subset defines both EM and F1, we report the primary metric specified by the benchmark.
+
+\para{Prompts and templates.}
+Below we provide the base non-thinking and thinking templates used per task family. All runs share the same template within a family across methods; \emph{Thinking} adds a scratchpad section but the final answer must appear after a \texttt{Final:} tag.
+
+\textit{Non-thinking (base)}
+\begin{verbatim}
+[SYSTEM]
+You are a careful assistant. Use only the provided context.
+If the answer is not supported, output "unknown".
+[TASK]
+{TASK_DESCRIPTION}    # e.g., short answer QA / summary / MCQ
+[CONTEXT]
+{CONTEXT_BLOCKS}     # e.g., {DOCUMENTS}|{DIALOGUE}|{CODE}|{TABLE}
+[QUESTION or INSTRUCTION]
+{QUESTION_OR_INSTRUCTION}     # prompt for the required output
+[CONSTRAINTS]
+[ANSWER]
+\end{verbatim}
+
+\textit{Thinking (base)}
+\begin{verbatim}
+[SYSTEM]
+Reason privately in [SCRATCHPAD],
+then provide a single final output after "Final:".
+If not supported by the context, output "Final: unknown".
+[TASK]
+{TASK_DESCRIPTION}
+[CONTEXT]
+{CONTEXT_BLOCKS}
+[QUESTION or INSTRUCTION]
+{QUESTION_OR_INSTRUCTION}
+[SCRATCHPAD]
+...    # hidden chain-of-thought tokens (capped to T_think)
+[FINAL]
+Final:
+\end{verbatim}
+
+\para{Post-processing and extraction.}
+For “thinking’’ runs, we extract the substring after \texttt{Final:} (trim, strip quotes). For MCQ, we regex-match \texttt{[ABCD]}; for extractive QA, we normalize punctuation/whitespace (SQuAD-style). For summarization, we truncate to the requested budget (e.g., 200 words) and use the benchmark scorer verbatim.
+
+\para{Compute matching and seeds.}
+Unless otherwise specified, \emph{Thinking} uses $T_{\text{think}}=8192$ and \method{} uses $(k,N_{\text{TTT}})=(128,32)$ so that $T_{\text{think}}\approx 2N_{\text{TTT}}k$. We fix the random seed for span sampling and decoding across methods per run; results are averaged over one run per configuration (low variance in our setting).
+% \footnote{If multiple seeds were used, add $n$ and report mean$\pm$sd.}

@@ -1,0 +1,57 @@
+\abstract{
+\looseness=-1
+Progress on training and architecture strategies
+have enabled LLMs with millions of tokens in context length.
+% 
+However, empirical evidence suggests that
+such long-context LLMs can \emph{consume}
+far more text than they can reliably \emph{use}.
+% 
+% On retrieval‑heavy tasks, standard inference‑time scaling 
+% strategies like producing additional ``thinking''
+% tokens often plateau with growing context length.
+% because the model keeps querying the context with the same, unadapted weights.
+On the other hand, it has been shown that % there is a growing interest in
+inference-time compute can be used
+to scale performance of LLMs,
+often by generating thinking tokens,
+on challenging tasks involving
+multi-step reasoning.
+% 
+Through controlled experiments on sandbox long-context
+tasks, we find that such inference-time strategies
+show rapid diminishing returns, and fail at long context.
+% 
+We attribute these failures to \emph{score dilution},
+a phenomenon inherent to static self-attention.
+Further, we show that
+current inference-time strategies
+cannot  % satisfy margin requirements to
+retrieve relevant long-context signals
+under certain conditions.
+% We design two sandbox long context tasks
+% and corroborate these failure modes through
+% controlled experiments.
+% We formalize and attribute these failures
+% to an inherent limitation of \emph{score dilution}
+% with growing context lengths.
+We propose \emph{\fullmethod{}} (\shortmethod{})
+that, through targeted gradients updates on the given context,
+provably overcomes limitations of static self-attention.
+% 
+We find that this simple shift in how
+inference-time compute is spent
+leads to consistently large performance improvements
+across models and long-context benchmarks.
+% 
+\shortmethod{} leads to massive 12.6\% and
+14.1\% points improvements for Qwen3-4B on
+average across subsets of
+LongBench-v2 and ZeroScrolls benchmarks.
+% We revisit \emph{test‑time training} (TTT) as a way to spend the same compute on \emph{changing the model} rather than generating more text.
+% In this work we consider a simple TTT approach that performs a single pass to cache the long context and then applies a few lightweight, span‑sampled gradient updates that modify only the query projections.
+% We find that this simple shift in how compute is spent consistently improves long‑context understanding across benchmarks such as ZeroSCROLLS and LongBench‑v2 on several open-source models including Qwen3 and Llama3 ($1.7$B to $8$B), with the largest gains on retrieval‑centric subsets.
+% \rachit{state some actual numbers from the results here.}
+The takeaway is practical: for long context, a small amount of context‑specific training is a better use of inference compute than current inference-time scaling strategies like producing more thinking tokens.
+% and it complements architectural and retrieval‑augmented approaches.
+}

@@ -1,0 +1,257 @@
+\documentclass[]{fairmeta}
+
+\usepackage[most]{tcolorbox}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{subcaption}
+
+% ----- theorem tools -----
+\usepackage{mathtools} % gives \coloneqq, \eqqcolon, \vcentcolon
+% ----- theorem-like environments -----
+\usepackage{amsthm}
+\usepackage{listings}
+\lstset{basicstyle=\ttfamily\small, breaklines=true, breakatwhitespace=true}
+
+\usepackage{booktabs,multirow,graphicx}
+\usepackage{hyperref}
+% \usepackage[nameinlink,capitalize,noabbrev]{cleveref}
+\usepackage{wrapfig}
+\usepackage{caption}
+\usepackage[most]{tcolorbox}
+
+% Colors (tweak to taste)
+\definecolor{TakeawayBack}{HTML}{EEF5FF}  % light blue fill
+\definecolor{TakeawayFrame}{HTML}{7BA3D7} % medium blue border
+
+% Reusable Takeaway box
+\newtcolorbox{takeaway}[1][]{
+  enhanced, breakable,
+  colback=TakeawayBack,
+  colframe=TakeawayFrame,
+  boxrule=0.5pt, arc=2pt,
+  left=8pt, right=8pt, top=6pt, bottom=6pt,
+  before skip=0.8\baselineskip, after skip=0.8\baselineskip,
+  coltitle=black, fonttitle=\bfseries,
+  colbacktitle=TakeawayBack,
+  attach title to upper,           % put title inside the box
+  after title={\quad},             % space after title
+  title={#1}                       % optional [title]
+}
+
+% optional tightening for nicer wrap:
+\setlength\intextsep{0.6\baselineskip}
+\setlength\columnsep{1em}
+% \providecommand{\shortmethod}{qTTT} % fallback if not defined elsewhere
+
+% Number equations and theorems by section (optional)
+\numberwithin{equation}{section}
+
+\theoremstyle{plain} % italic body, bold head
+\newtheorem{theorem}{Theorem}[section]
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{corollary}[theorem]{Corollary}
+\newtheorem{claim}[theorem]{Claim}
+\newtheorem{proposition}[theorem]{Proposition}
+
+\theoremstyle{definition} % upright body
+\newtheorem{definition}[theorem]{Definition}
+\newtheorem{assumption}[theorem]{Assumption}
+\newtheorem{observation}[theorem]{Observation}
+
+\theoremstyle{remark} % upright body, italic head
+\newtheorem{remark}[theorem]{Remark}
+
+\crefname{theorem}{theorem}{theorems}
+\Crefname{theorem}{Theorem}{Theorems}
+\crefname{lemma}{lemma}{lemmas}
+\Crefname{lemma}{Lemma}{Lemmas}
+\crefname{corollary}{corollary}{corollaries}
+\Crefname{corollary}{Corollary}{Corollaries}
+\crefname{proposition}{proposition}{propositions}
+\Crefname{proposition}{Proposition}{Propositions}
+\crefname{claim}{claim}{claims}
+\Crefname{claim}{Claim}{Claims}
+\crefname{definition}{definition}{definitions}
+\Crefname{definition}{Definition}{Definitions}
+\crefname{assumption}{assumption}{assumptions}
+\Crefname{assumption}{Assumption}{Assumptions}
+\crefname{observation}{observation}{observations}
+\Crefname{observation}{Observation}{Observations}
+\crefname{remark}{remark}{remarks}
+\Crefname{remark}{Remark}{Remarks}
+
+
+
+\newcommand{\sj}[1]{\draftcomment{\textcolor{blue}{\small [SJ: #1]}}}
+
+
+% Optional: use a black square at end of proofs
+% \renewcommand{\qedsymbol}{$\blacksquare$}
+\usepackage{xcolor}
+\newcommand{\rachit}[1]{\textcolor{red}{[RB: #1]}}
+\newcommand{\samy}[1]{\textcolor{purple}{[SJ: #1]}}
+\newcommand{\david}[1]{\textcolor{blue}{[DB: #1]}}
+\newcommand{\dam}[1]{\textcolor{violet}{[DAM: #1]}}
+
+
+% Put this AFTER the four \newcommand definitions
+\newcommand{\nocomments}{%
+  \renewcommand{\rachit}[1]{}%
+  \renewcommand{\samy}[1]{}%
+  \renewcommand{\david}[1]{}%
+  \renewcommand{\dam}[1]{}%
+}
+
+
+\usepackage{tikz}
+\newcommand{\cblock}[3]{
+  \hspace{-1.5mm}
+  \begin{tikzpicture}
+    [
+    node/.style={square, minimum size=10mm, thick, line width=0pt},
+    ]
+    \node[fill={rgb,255:red,#1;green,#2;blue,#3}] () [] {};
+  \end{tikzpicture}%
+}
+ 
+% Optional math commands from https://github.com/goodfeli/dlbook_notation.
+\input{math_commands.tex}
+
+\usepackage{url}
+\usepackage{enumitem}
+\usepackage[para,online,flushleft]{threeparttable}
+\usepackage{subcaption} % provides subfigure (a)/(b) + shared caption
+\usepackage{adjustbox}
+
+% ---------- Helper macros ----------
+\newcommand{\fullmethod}{query-only test-time-training} % rename later
+\newcommand{\method}{query-only TTT} % rename later
+\newcommand{\shortmethod}{qTTT}
+\newcommand{\para}[1]{\vspace{0.5em}\noindent\textbf{#1}}
+\newcommand{\figph}[2]{% width, height
+  \begin{figure}[t]
+    \centering
+    \fbox{\rule{0pt}{#2} \rule{#1}{0pt}}
+    \caption{Placeholder. Replace with actual figure.}
+    \label{fig:placeholder}
+  \end{figure}}
+\newcommand{\tblph}{% generic placeholder table
+  \begin{table}[t]
+    \centering
+    \caption{Placeholder table. Replace with actual content.}
+    \label{tab:placeholder}
+    \begin{tabular}{lcccc}
+    \toprule
+    \multicolumn{1}{c}{Dataset/Task} & Metric & Ctx Len & Method A & Method B \\
+    \midrule
+    Foo-1 & Acc & 128K & 00.0 & 00.0 \\
+    Foo-2 & F1 & 1M & 00.0 & 00.0 \\
+    \bottomrule
+    \end{tabular}
+  \end{table}}
+
+\usepackage{alltt}
+\usepackage{amsmath,amssymb}
+\usepackage{xcolor}
+\usepackage{tcolorbox}
+\usepackage{dashrule} % for the dashed separator
+
+% % tcolorbox style
+% \tcbset{
+%   enhanced,
+%   colframe=blue!70!black,
+%   colback=blue!3!white,
+%   boxrule=1.2pt,
+%   arc=10pt,
+%   left=10pt,right=10pt,top=8pt,bottom=8pt
+% }
+
+\usepackage{tcolorbox,xcolor}
+\tcbset{panelcommon/.style={
+  enhanced, boxrule=1.2pt, arc=10pt,
+  left=10pt,right=10pt,top=8pt,bottom=8pt
+}}
+\newtcolorbox{bluebox}[1][]{panelcommon,
+  colframe=blue!70!black, colback=blue!3!white, #1}
+\newtcolorbox{redbox}[1][]{panelcommon,
+  colframe=red!70!black,  colback=red!3!white,  #1}
+
+
+\usepackage{listings}
+\lstdefinelanguage{json}{
+  basicstyle=\ttfamily\small,
+  showstringspaces=false,
+  breaklines=true,
+  frame=single,
+  morestring=[b]",
+  stringstyle=\color{teal!60!black},
+}
+
+\title{Let's (not) just put things in Context:\\Test-Time Training for Long-Context LLMs}
+
+\author[2\ 3\ *]{Rachit Bansal}
+\author[4\ *]{Aston Zhang}
+\author[5\ *]{\\Rishabh Tiwari}
+\author[1]{Lovish Madaan}
+\author[6\ *]{Sai Surya Duvvuri}
+\author[6\ *]{Devvrit Khatri}
+\author[1]{\\David Brandfonbrener}
+\author[2\ 3]{David Alvarez-Melis}
+\author[1]{Prajjwal Bhargava}
+\author[1]{Mihir Sanjay Kale}
+\author[2]{Samy Jelassi}
+
+\affiliation[1]{Meta}
+\affiliation[2]{Harvard University}
+\affiliation[3]{Kempner Institute at Harvard}
+\affiliation[4]{OpenAI}
+\affiliation[5]{UC Berkeley}
+\affiliation[6]{UT Austin}
+
+\contribution[*]{Work done while at Meta}
+
+\input{sections/00-abstract}
+
+% \date{\today}
+\correspondence{\email{rachitbansal@g.harvard.edu}, \email{az@astonzhang.com}}
+% , Aston Zhang (\email{az@astonzhang.com})}
+
+% You can add additional metadata fields as follows 
+% \metadata[Code]{\url{https://github.com/facebookresearch/qTTT}}
+% \metadata[Blogpost]{\url{https://ai.meta.com/blog/?page=1}}
+
+\begin{document}
+
+\maketitle
+% \input{sections/skeleton}
+\input{sections/01-introduction}
+\input{sections/03-setup}
+\input{sections/04-method}
+\input{sections/05-results}
+\input{sections/02-prior}
+\input{sections/06-conclusion}
+% \input{sections/07-future}
+\input{sections/08-acknowledgements}
+
+
+\clearpage
+\newpage
+\bibliographystyle{assets/plainnat}
+\bibliography{paper}
+
+\clearpage
+\newpage
+\beginappendix
+\input{sections/appendix-datasets}
+\input{sections/appendix-proofs}
+\input{sections/appendix-flops}
+\input{sections/appendix-exp-details}
+\input{sections/appendix-score-dilution}
+\input{sections/appendix-results}
+\input{sections/appendix-baselines}
+\input{sections/appendix-latency}
+
+
+\end{document}

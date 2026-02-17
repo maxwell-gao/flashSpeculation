@@ -1,0 +1,12 @@
+\section{Discussion}
+\label{sec:conclusion}
+We identify score dilution in static quadratic attention as a core cause of long-context failures.
+We design synthetic tasks to study long-context behavior controllably and show that accuracy falls sharply with context length $T$ and “thinking’’ tokens show diminishing returns (\S\ref{sec:failures}).
+We proposed \method{} (\shortmethod{}) to reallocate inference-time budget via few query-only updates that provably increase the target–distractor margin (\S\ref{sec:method}).
+Under matched FLOPs, \shortmethod{} consistently outperforms \emph{in-context} and \emph{thinking} on LongBench-v2 and ZeroSCROLLS,
+with the largest gains on retrieval and multi-hop reasoning (\S\ref{sec:results}). In short, adapting queries is a more effective use of inference-time compute than generating more tokens for long context tasks.
+
+\para{Future directions.}
+(1) We evaluate a single point on the $(k, N_{\text{TTT}})$ trade-off; exploring budget schedules across span size and steps is immediate. 
+(2) Our compute-matched baseline focuses on “thinking’’ tokens; extending to self-consistency and best-of-$n$ within the same framework is future work. 
+(3) Gains are task-dependent; developing simple predictors for when to prefer \shortmethod{} (vs.\ decoding-based scaling) is a practical next step.
