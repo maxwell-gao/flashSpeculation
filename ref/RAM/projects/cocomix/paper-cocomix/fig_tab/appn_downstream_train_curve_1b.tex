@@ -1,0 +1,40 @@
+\begin{figure*}[t]
+\centering\small
+
+\begin{subfigure}{0.245\textwidth}
+    \includegraphics[width=\textwidth,height=0.75\textwidth]{assets/learning_curve/1b/openwebtext_no_arrow.pdf}
+    \caption{OpenWebText, PPL ($\downarrow$)}
+\end{subfigure}
+\begin{subfigure}{0.245\textwidth}
+    \includegraphics[width=\textwidth,height=0.75\textwidth]{assets/learning_curve/1b/lambada.pdf}
+    \caption{LAMBADA, PPL ($\downarrow$)}
+\end{subfigure}
+\begin{subfigure}{0.245\textwidth}
+    \includegraphics[width=\textwidth,height=0.75\textwidth]{assets/learning_curve/1b/wikitext.pdf}
+    \caption{WikiText-103, PPL ($\downarrow$)}
+\end{subfigure}
+\begin{subfigure}{0.245\textwidth}
+    \includegraphics[width=\textwidth,height=0.75\textwidth]{assets/learning_curve/1b/hellaswag.pdf}
+    \caption{HellaSwag, Acc-n ($\uparrow$)}
+\end{subfigure}
+\begin{subfigure}{0.245\textwidth}
+    \includegraphics[width=\textwidth,height=0.75\textwidth]{assets/learning_curve/1b/piqa.pdf}
+    \caption{PIQA, Acc ($\uparrow$)}
+\end{subfigure}
+\begin{subfigure}{0.245\textwidth}
+    \includegraphics[width=\textwidth,height=0.75\textwidth]{assets/learning_curve/1b/siqa.pdf}
+    \caption{SIQA, Acc ($\uparrow$)}
+\end{subfigure}
+\begin{subfigure}{0.245\textwidth}
+    \includegraphics[width=\textwidth,height=0.75\textwidth]{assets/learning_curve/1b/arc_e.pdf}
+    \caption{Arc-Easy, Acc ($\uparrow$)}
+\end{subfigure}
+\begin{subfigure}{0.245\textwidth}
+    \includegraphics[width=\textwidth,height=0.75\textwidth]{assets/learning_curve/1b/winogrande.pdf}
+    \caption{WinoGrande, Acc ($\uparrow$)}
+\end{subfigure}
+\caption{
+\textbf{\sname vs. NTP performance at different training checkpoints on 1.38B parameter model.} Each model is trained on the 200B tokens sampled from the OpenWebText dataset. The plot shows the result of (a) OpenWebText, (b) LAMBADA, (c) WikiText-103, (d) HellaSwag, (e) PIQA, (f) SIQA, (g) Arc-Easy, and (h) WinoGrande datasets. We use the concepts extracted from a 124M-sized model for training \sname.
+}
+\label{fig:downstream_curve_1b}
+\end{figure*}

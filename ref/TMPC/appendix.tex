@@ -1,0 +1,328 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+\newpage
+\appendix
+\section{Large Language Models Usage}
+Throughout the preparation of this manuscript and the accompanying code, we utilized Large Language Models (LLMs) as assistive tools.  During the writing process, LLMs were employed to improve the clarity and readability of the text by rephrasing sentences and refining wording. For software development, we used a code editor with generative AI functionalities. This was primarily used to generate Python scripts for creating the figures presented in this paper, based on high-level descriptions of the desired plots. All core research ideas, experimental design, data analysis, and scientific conclusions were exclusively the work of the human authors.
+
+\section{Limitations and Future Work}
+\label{sec:limitation}
+While TMPC effectively improves output quality through test-time preference alignment, it is fundamentally constrained by the expressiveness of the underlying language model. It can only steer generation toward outputs already supported by the model’s capabilities, and may struggle when the desired outputs lie far from the model’s original distribution. In future work, we aim to better understand the conditions under which iterative alignment shifts the output distribution effectively. This could enable stronger integration with training-time methods, such as lightweight fine-tuning or reward model co-optimization, to improve robustness in harder settings and under distribution shifts.
+
+\section{Broader Impacts}
+\label{sec:boarder_impacts}
+We anticipate that TMPC will contribute positively to the development of more controllable and aligned language models, particularly in low-resource or safety-critical applications where fine-tuning is impractical. By enabling preference-aware generation at test time without modifying model weights, our method may lower the barrier to deploying LLMs in real-world scenarios. However, test-time alignment methods also introduce new risks, such as reinforcing spurious patterns if reward signals are poorly calibrated. To mitigate this, we recommend careful design and auditing of reward models, especially in domains involving sensitive or subjective outputs.
+
+
+\section{Details of Preference Data}
+\label{sec:preference}
+
+\subsection{Long-Form Responses}
+
+For the long-form response task, we construct a pairwise preference dataset using the \texttt{Dahoas/full-hh-rlhf} dataset, where each pair consists of a \texttt{chosen} and a \texttt{rejected} response. To train the reward model, we select the first 6,000 \texttt{chosen} responses whose lengths are closest to 1,024 tokens. For evaluation, we use the first 1,024 \texttt{chosen} responses under the same criterion, ensuring that test examples also have continuation lengths close to 1,024 tokens. This setup provides both a controlled training signal for the reward model and a consistent benchmark for evaluating long-form generation.
+
+
+\subsection{Paragraph-Level MT}
+For paragraph-Level machine translation task, we used \textbf{MetricX-24-XL} to labeled our pairwise preference datasets, the Chinese sources sentences are from  WMT’24 Discourse-Level Literary Translation benchmark,  we employed \textbf{LLaMA-3.1-8B-Instruct}, \textbf{Gemma-2-9B}, and \textbf{GPT-4o} to generate translations across three language pairs; each language pair has 2000 records, with a maximum length of 1024 tokens. The distribution of preferences, indicating the number of translation is the best translation among the three,indicating the number of translation is the best translation among the three, given that \textbf{MetricX-24} scores range from 0 to 25, where 0 is the best and 25 is the worst. We removed translations scoring above 20, and if two out of three translations in a paragraph exceeded this threshold, we did not use that paragraph. The details are in Table~\ref{tab:preference}. 
+
+\begin{table}[th]
+\centering
+\resizebox{0.65\linewidth}{!}{
+\begin{tabular}{lccc}
+
+\hline
+& {\small LLaMA Wins} & {\small Gemma Wins} & {\small GPT4 Wins} \\ 
+\hline
+\texttt{zh}$\rightarrow$\texttt{en} & 310         & 421        & 1269  \\
+\texttt{zh}$\rightarrow$\texttt{de} & 82         & 99        & 1814  \\
+\texttt{zh}$\rightarrow$\texttt{ru} & 32         & 127        & 1680  \\
+\hline
+\\
+\end{tabular}
+}
+\caption{The statistics of winning translations for each language pairs evaluated by MetricX-24.}
+\label{tab:preference}
+\end{table}
+
+\section{Supplementary Results} 
+
+ 
+
+\subsection{Robustness and Sensitivity Analysis}
+\label{app:robustness}
+
+To complement the iteration-wise trends shown in Figure~\ref{fig:iter_trends}, we report the full numerical results for robustness and sensitivity analysis in Table~\ref{tab:robustness_full}. The analysis covers variations in hyperparameters (buffer size and segment length), reward model fidelity, injected noise, and number of iterations. These results provide a more detailed view of how TMPC behaves under different conditions.  
+
+\begin{table}[h]
+\centering
+\footnotesize
+\begin{tabular}{llccc}
+\toprule
+Category & Setting & Iter=1 & Iter=2 & Iter=3 \\
+\midrule
+\multirow{4}{*}{Hyperparameters} 
+& default (buf=3, seg=3) & 4.359 & 4.533 & 4.595 \\
+& buf=6, seg=3 & 4.293 & 4.438 & 4.482 \\
+& buf=3, seg=6 & 4.317 & 4.463 & 4.512 \\
+\midrule
+\multirow{3}{*}{RM Variants} 
+& original & 4.359 & 4.533 & 4.595 \\
+& weaker RM (GRM) & 4.144 & 4.272 & 4.332 \\
+& add noise ($\sigma^2=1$) & 4.295 & 4.443 & 4.457 \\
+\bottomrule
+\end{tabular}
+\caption{Robustness of TMPC on HH-RLHF-RLHF (3 iterations). We vary buffer size, segment length, reward model quality, and injected noise. Performance converges around three iterations and remains stable under noisy or weaker supervision.}
+\label{tab:robustness_full}
+\end{table}
+
+
+\subsection{Computational Cost}
+
+\begin{wrapfigure}{r}{0.5\textwidth}
+    \vspace{-10pt}
+    \centering
+    \includegraphics[width=\linewidth]{figures/time_bar_chart_iclr.png}
+    \caption{Average inference time in seconds for a single long-form response generation.}
+    \label{fig:computation_time}
+\end{wrapfigure}
+
+Figure~\ref{fig:computation_time} presents the average inference time for generating a single long-form response. TMPC demonstrates a  computational cost at 108 seconds. This time can be substantially reduced as the $K$ candidate rollouts are highly parallelizable, given sufficient hardware memory.
+In contrast, methods like ARGS (363s) and RAIN (1930s) are significantly slower because they require fully decoding responses to be fed into an external reward model or the LLM itself for evaluation.
+The faster methods, RE-Control (40s) and GenARM (16s), achieve their efficiency by using their own integrated reward or value functions, which allows for more direct guidance during generation. It is important to note, however, that for our experiments, GenARM was executed on an NVIDIA H200 Tensor Core GPU, while all other methods were benchmarked on an NVIDIA RTX 6000 Ada Generation GPU. This was necessary because GenARM's memory footprint is too large for the A6000, which would have restricted its batch size and degraded its performance. The difference in hardware is a primary contributor to GenARM's exceptionally low reported inference time.
+
+
+\section{Evaluation prompt of GPT-4}
+Figure~\ref{fig:gpt4_eval} is the prompt template for the GPT-4 evaluation, we follow the ARGS evaluation setup~\citep{khanov2024args}, with a slight modification:Our prompt explicitly instructs GPT-4 to consider how well each assistant addresses the user’s question, rather than to evaluate the response in isolation. The prompt asks GPT-4 to rate responses based on overall performance, considering criteria such as helpfulness, harmlessness, relevance, accuracy, depth, creativity, and level of detail
+\label{sec:gptevalprompt}
+\begin{figure*}[h]
+    \centering
+    \includegraphics[width=1\textwidth]{figures/gpt4_eval/gpt4_eval_system_prompt.pdf}
+    \includegraphics[width=1\textwidth]{figures/gpt4_eval/gpt4_eval_user_prompt.pdf}  
+    \caption{System prompt and user prompt of GPT-4 evaluation.}
+    \label{fig:gpt4_eval}
+\end{figure*}
+
+\section{Implementation Details of Baselines}\label{sec:baselines_imp}
+\subsection{Test-Time Alignment Methods}
+\label{sec:test-time imp}
+\subsubsection{ARGS}
+We follow the setting of ARGS, We adopt the ARGS-greedy method in ARGS as our baseline. Following the setting of ARGS-greedy. We set w to 1.5 and k to 10. For fairness, we replaced the backbone model with the same LLaMA3.1-8B-Instruct as TMPC, and the reward model was also replaced with the reward model used by TMPC.
+Although ARGS settings indicate that using ARGS-greedy results in answers more closely aligned with the characteristics specified in the reward model, ARGS uses the weighted sum of logit of the token and the reward for token generation. Given that the number of tokens generated by ARGS-greedy does not exceed those produced by TMPC and RAIN, we included ARGS-stochastic for comparison and conducted best-of-n to optimize results, the choice of n was determined based on the average number of tokens required by TMPC and RAIN to generate a single translation. \\
+However, ARGS-stochastic's best-of-n did not surpass ARGS-greedy in performance, leading us to ultimately select ARGS-greedy as the baseline. 
+
+\subsubsection{RAIN}
+In RAIN, we also replaced the backbone model with LLaMA3.1-8B-Instruct and replaced the self-evaluation prompt in RAIN with text in the Figure~\ref{fig:rain text}.
+For parameters in RAIN, we set value threshold V to 0.8 as the default setting of RAIN. We try four combinations of maximum and minimum number of search iterations for finding the parameter that generates the required number of tokens close to TMPC, which are \textbf{[10,20]}. The detailed configuration of the tokens generated in each parameter pairs is in Table~\ref{tab:token}.
+
+\begin{table}[h]
+\centering
+\scalebox{0.95}{\begin{tabular}{lc}
+\hline
+\textbf{(MinT,MaxT)} & \textbf{AVG. tokens} \\
+\hline
+\text{[6,12]} & 6575\\
+\text{[8,16]} & 8972\\
+\text{[10,20]} & 13401\\
+\text{[12,24]} & 17291\\
+\hline
+\\
+\end{tabular}}
+\caption{The average number of tokens required to generate a translation for RAIN in each maximum and minimum number of search iterations pairs.}
+\label{tab:token}
+\end{table}
+
+\begin{figure*}[h]
+\centering
+  \includegraphics[width=\linewidth]{figures/rain_prompt-crop.pdf}
+  \caption{Prompt templates for RAIN.}
+    \label{fig:rain text}
+\end{figure*}
+
+\subsubsection{GenARM}
+In GenARM, we utilize a preference dataset to train an autoregressive reward model, which can predict the next token reward and support the LLM generation process to make the response more preferable. In our implementation, we used LLaMA3.1-8B-Instruct as our backbone model. For each task, the dataset includes both chosen and rejected responses. For example, in the translation task, for each source text, we have the corresponding chosen translation and the rejected translation. Then, we can treat a chosen response and a rejected response as responses with preference signals for training an autoregressive reward model.
+
+\subsubsection{RE-Control}
+In RE-Control, we utilize the reward obtained from a reward model to train a value function for test-time alignment. In our implementation, we used LLaMA3.1-8B-Instruct as the LLM backbone throughout the training process and used our own reward models to generate reward labels to train the value function.
+The performance of RE-Control heavily depends on the reward model since the training process requires the reward signals from a reward model. Sometimes, it is hard to train good value models for some reward models. For example, for the HH-RLHF dataset, given our reward model, the value function did not train well under the framework of RE-Control. On the other hand, RE-control performed well with our own reward model for the translation task.
+
+\subsubsection{TPO}
+
+TPO uses textual optimization to mimic the behavior of numerical optimization (e.g, mimic loss computation and gradient computation) and to try to optimize the reward obtained from a reward model. In TPO, we replaced the backbone model with LLaMA3.1-8B-Instruct and replaced the original reward model with our own reward models.
+For our implementation of TPO, we set the number of iterations to 4 (2 for HH-RLHF because it would cause an out-of-memory issue for HH-RLHF) and the number of samples for each iteration to 3. Since TPO requires a textual loss operation and a textual gradient operation, we need additional 2 operations of LLM. So, for each iteration, it requires $2+3$ LLM operations, and thus it costs $4 \times (2+3)$ LLM operations for each problem ($2 \times (2+3)$ for HH-RLHF). Because of the limitations of the VRAM of our GPUs and for the fairness to compare the inference time between TMPC and TPO, we remove the vLLM library from the original implementation of TPO.
+
+
+\subsection{Training-Time Alignment Methods and Reward Model}
+\label{sec:training}
+We adopt LLaMA3.1-8B-Instruct as the backbone model for all experiments, including the reward model and training-time alignment methods. Model training is conducted using a single NVIDIA RTX 6000 Ada Generation GPU, with the implementation based on the LLaMA Factory library\footnote{\url{https://github.com/hiyouga/LLaMA-Factory}}~\citep{zheng2024llamafactory}.
+For training setups, the SFT model is trained solely on the preferred responses from the preference dataset, while the Reward Model, DPO, and SimPO are trained on the full preference data, which includes the input, chosen, and rejected responses, as detailed in Appendix~\ref{sec:preference}.
+
+All models are trained using identical hyperparameters: the AdamW optimizer~\citep{loshchilov2019decoupled} with gradient accumulation steps set to 8, a sequence cutoff length of 2048 tokens, and a maximum gradient norm clipped at 1.0 for stability. Training is performed using bf16 precision, with a batch size of 2, for one epoch. We apply LoRA~\citep{hu2022lora} with a rank of 16 and alpha of 128 across all models.
+The learning rates are configured as follows: 2e-5 for the Reward Model and SFT, and 5e-6 for both DPO and SimPO, in accordance with recommendations from~\citet{rafailov2023direct} and~\citet{meng2024simpo}. Additionally, SimPO is trained with a gamma value of 0.4, while DPO uses a beta value of 0.1, consistent with the original settings proposed in their respective works.
+
+
+\section{Implementation Details of TMPC}
+\label{sec:imple:TMPC}
+
+The TMPC framework is operationalized by the iterative planning process detailed in Algorithm~\ref{alg:TMPC_unified}. 
+The power of TMPC lies in how these subgoals are identified and utilized. The \texttt{UpdateBuffer} function implements \textbf{Hindsight Subgoal Identification}. After a rollout, it analyzes the generated response to identify and extract subset of locally-optimal actions ($\widetilde{\boldsymbol{a}}^{\text{TMPC}}$) that meet a quality threshold. These validated subsequences are then stored in $\mathcal{B}$ as subgoals.
+
+The rollout generation itself, $\pi(x, \mathcal{B})$, implements \textbf{Subgoal-Conditioned Re-Generation}. The subgoals in the buffer are not treated as raw text to be merely concatenated, but as operational directives for constructing new prompts. A subgoal prompts the LLM to generate a new, \textit{complete} response that is coherently anchored by past successes. This approach deliberately avoids generating and stitching disjointed fragments, a common cause of semantic incoherence. The instantiation of these subgoal-conditioned prompts is tailored to each task's structure:
+\begin{itemize}
+    \item \textbf{In Paragraph-Level Machine Translation,} the prompt reuses validated source-target sentence pairs from the buffer as few-shot examples to anchor the generation, ensuring contextual consistency.
+    \item \textbf{In Long-Form Response Generation,} the prompt instructs the LLM to synthesize high-scoring ideas and phrases from the buffer into a single, comprehensive, and well-structured response.
+    \item \textbf{In Programmatic Synthesis,} the prompt provides validated code snippets from the buffer that passed a subset of unit tests, instructing the model to integrate their logic into a new, complete solution that solves further tests.
+\end{itemize}
+
+\begin{algorithm}[h]
+\caption{Textual Model Predictive Control}
+\label{alg:TMPC_unified}
+\begin{algorithmic}[1]
+\REQUIRE Input prompt $x$, base LLM $\pi$, evaluation function $R$, iterations $T$, rollouts per iteration $K$.
+\ENSURE Final response $\tau_{T}$.
+
+\STATE Initialize subgoal buffer $\mathcal{B} \gets \emptyset$
+\STATE Initialize candidate set $\mathcal{T} \gets \emptyset$ \COMMENT{Stores all full (response, score) pairs}
+
+\STATE Generate initial response $\tau_0 \gets \pi(s_0)$
+\STATE Add $(\tau_0, R(\tau_0))$ to $\mathcal{T}$
+\STATE Compute $\widetilde{\boldsymbol{a}}^{\text{TMPC}}_0(s_0)$ based on (\ref{eq:sub goal compute})
+\STATE $\mathcal{B} \gets \text{UpdateBuffer}(\mathcal{B}, \widetilde{\boldsymbol{a}}^{\text{TMPC}}_0(s_0), R(s_0,\widetilde{\boldsymbol{a}}^{\text{TMPC}}_0(s_0)))$ \COMMENT{Hindsight Subgoal Identification}
+
+\FOR{$t = 1$ to $T$} \STATE \COMMENT{Iterative Planning Loop}
+    \STATE \textit{Generate K rollouts conditioned on the current subgoal buffer}
+    \STATE $\{\tau_t^{(i)}\}_{i=1}^K \gets \text{GenerateRollouts}(\pi, s_0, \mathcal{B}, K)$ 
+    
+    \FOR{each candidate $\tau_t^{(i)}$}
+        \STATE Add $(\tau_t^{(i)}, R(\tau_t^{(i)}))$ to $\mathcal{T}$
+        \STATE // \textit{Identify new subgoals from the successful rollout and update the buffer}
+        \STATE Compute $\widetilde{\boldsymbol{a}}^{\text{TMPC}}_t(s_0)$ based on (\ref{eq:sub goal compute})
+        \STATE $\mathcal{B} \gets \text{UpdateBuffer}(\mathcal{B}, \widetilde{\boldsymbol{a}}^{\text{TMPC}}_t(s_0), R(s_0,\widetilde{\boldsymbol{a}}^{\text{TMPC}}_t(s_0)))$
+    \ENDFOR
+\ENDFOR
+
+\STATE Select $\tau_T \gets \arg\max_{\tau \in \mathcal{T}} R(\tau)$
+\RETURN $\tau_T$
+\end{algorithmic}
+\end{algorithm}
+
+
+
+
+
+
+
+
+
+
+
+
+
+\subsection{Long-Form Response Generation}
+
+\subsubsection{Parameter Setting}
+For long-form generation, we set the segment size to 3 sentences and fix the number of iterations to 3. At each iteration, TMPC samples 3 candidate rollouts conditioned on different system prompts to encourage diversity. A quality threshold of $\alpha=4$ is applied to determine which high-reward segments are stored as inference-time actions for subsequent generation. 
+
+\subsubsection{Prompt Design}\label{sec:prompt_design_for_hh}
+We use three distinct system prompts to diversify generation and encourage the discovery of promising states. These prompts are designed to bias responses toward being (i) concise and clear, (ii) detailed and informative, or (iii) balanced and well-structured. Figure~\ref{fig:roll_out_hh} illustrates the prompt template used in TMPC, where sampled high-quality segments are treated as actions that guide the model back to promising states for further generation.
+
+\subsection{Paragraph-Level Machine Translation}
+
+\subsubsection{Parameter Setting}
+For translation, we set the segment size to 3 sentences and the number of iterations to 3. At each iteration, 3 diverse candidate translations are sampled via different system prompts. Unlike long-form responses, we fix the quality threshold to $\alpha=1$.
+To leverage the increasing pool of promising segments across iterations, we adopt an adaptive sampling strategy: the number of segments included from the inference-time action buffer grows linearly with the iteration index, defined as $\textit{sampled segments} = \textit{iteration} + 5$.
+
+\subsubsection{Prompt Design}\label{sec:prompt_design_for_mt}
+To ensure diversity, we design three distinct system prompts for translation: (i) sentence-by-sentence translation, (ii) precise and literal translation, and (iii) imaginative or stylistically enriched translation. These complementary perspectives increase the likelihood of uncovering high-quality segments. Figure~\ref{fig:roll_out} shows the template used for exploration in TMPC, and Figure~\ref{fig:rewrite1} provides concrete examples of the system prompts.
+
+\subsection{Programmatic Synthesis}
+\subsubsection{Parameter Setting}
+We adopt LLaMA-3.1-8B-Instruct as the backbone model for all generation steps. The planning process is configured to run for $I=5$ iterations, with $K=2$ candidate rollouts sampled at each iteration, consistent with our other experiments. A code candidate is considered a \textit{promising state} if its pass rate is greater than zero ($\alpha > 0.0$), meaning it successfully solves at least one unit test. This state is then added to the promising states buffer $\mathcal{B}$. The buffer $\mathcal{B}$ does not store raw code segments, but rather the high-level directives (i.e., the system prompts) that led to a successful generation. This allows the planner to reuse successful \textit{strategies} in subsequent rollouts.
+
+\subsubsection{Prompt Design}
+To explore more subgoals for TMPC, the \texttt{GenerateCandidates} function samples from a portfolio of three distinct system prompts, ensuring strategic diversity in the rollouts. These prompts are designed to guide the LLM toward different solution pathways, which is crucial for overcoming logical bugs that simple refinement might miss. The prompts are:
+
+\begin{enumerate}
+    \item \textbf{Refinement and Debugging:} This prompt provides the current best code and the specific error message from a failing test case. It frames the task as a targeted debugging session, encouraging a focused, incremental improvement. This represents an \textit{exploitation} strategy.
+    \item \textbf{Algorithmic Diversification:} This prompt encourages a fundamentally different approach to the problem. Examples include asking the model to solve the problem using a recursive approach instead of iteration, or to leverage functions from a specific library like \texttt{collections} or \texttt{itertools} for a more efficient solution. This represents an \textit{exploration} strategy.
+    \item \textbf{Robustness and Synthesis:} This prompt asks the model to generate a holistic and robust solution from scratch, but includes distilled insights from previously discovered promising states in $\mathcal{B}$. For example, it might be prompted to \texttt{write a robust and efficient Python function, paying close attention to edge cases like empty lists} or \texttt{invalid inputs, drawing inspiration from previously successful logic}.
+\end{enumerate}
+
+These system prompts are integrated into the main user prompt template shown in Figure~\ref{fig:code_prompt_template}. This structure allows TMPC to dynamically construct a tailored prompt for each rollout, combining a high-level strategy with the full problem context and insights from past successes.
+
+\begin{figure}
+\centering
+\begin{verbatim}
+system_prompt = f"""
+{one_of_the_three_strategies_above}
+You must only output a single, complete Python code block.
+Do not include any explanations or surrounding text.
+"""
+
+context_prompt = f"""
+### Problem Description
+{problem_description}
+
+### Public Test Cases
+{public_test_cases}
+
+### Insights from Promising States
+{insights_from_buffer_B}
+
+### Your Python Solution
+```python
+"""
+
+input_messages = [
+    {"role": "system", "content": system_prompt},
+    {"role": "user", "content": context_prompt}
+]
+\end{verbatim}
+\caption{The prompt template used for the programmatic synthesis task in TMPC. The \texttt{\{insights\_from\_buffer\_B\}} section is populated with directives from successful past rollouts, enabling further generation.}
+\label{fig:code_prompt_template}
+\end{figure}
+
+
+
+\begin{figure*}[h]
+    \centering
+    \includegraphics[width=\textwidth]{figures/generation_prompt/processed_source-crop.pdf}
+    \includegraphics[width=\textwidth]{figures/generation_prompt/roll_out_system-crop.pdf}
+    \includegraphics[width=\textwidth]{figures/generation_prompt/roll_out_context-crop.pdf}
+    \includegraphics[width=\textwidth]{figures/generation_prompt/roll_out_message-crop.pdf}
+    \caption{The prompt template used for translation task in TMPC and an actual example.}
+    \label{fig:roll_out}
+\end{figure*}
+
+\begin{figure*}[h]
+    \centering
+    \includegraphics[width=\textwidth]{figures/generation_prompt/source_sentence-crop.pdf}
+    \includegraphics[width=\textwidth]{figures/generation_prompt/initial_translation-crop.pdf}
+    \includegraphics[width=\textwidth]{figures/generation_prompt/rewrite1-crop.pdf}
+    \caption{The prompt template used for generating final translation in TMPC and an actual example.}
+    \label{fig:rewrite1}
+\end{figure*}
+
+\begin{figure*}[h]
+    \centering
+    \includegraphics[width=\textwidth]{figures/hh_prompt/system_prompt_hh-crop.pdf}
+    \includegraphics[width=\textwidth]{figures/hh_prompt/user_prompt_hh-crop.pdf}
+    \includegraphics[width=\textwidth]{figures/hh_prompt/context_prompt_hh-crop.pdf}
+    \caption{The prompt template used for response generation task in TMPC and an actual example.}
+    \label{fig:roll_out_hh}
+\end{figure*}

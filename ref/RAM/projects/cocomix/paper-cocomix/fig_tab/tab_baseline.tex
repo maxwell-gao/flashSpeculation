@@ -1,0 +1,34 @@
+\begin{table*}[t!]
+
+\centering\small
+\resizebox{\textwidth}{!}{
+\begin{NiceTabular}{lccccccccccc}
+\CodeBefore
+\rectanglecolor{metabg}{5-1}{5-12}
+\rectanglecolor{metabg}{8-1}{8-12}
+\rectanglecolor{metabg}{11-1}{11-12}
+\Body
+\toprule
+\multirow{2}{*}{Method} & \multirow{2}{*}{\makecell{Total\\ Params}} & OWT & LAMB & Wiki & HellaS & PIQA  & SIQA & Arc-E  & WinoG & Avg & Avg \\ 
+& & PPL ($\downarrow$) & PPL ($\downarrow$) & PPL ($\downarrow$) & Acc-n ($\uparrow$) & Acc ($\uparrow$) & Acc ($\uparrow$) & Acc ($\uparrow$) & Acc ($\uparrow$) & PPL ($\downarrow$) & Acc ($\uparrow$) \\
+\midrule
+NTP & 69M & 25.3 & 107.6 & 52.3 & 27.4 & 59.4 & 36.6 & 39.7 & 50.7 & 61.8 & 42.7 \\
+KD & 69M & 25.2 & \textcolor{white}{0}99.3 & 51.0 & 27.4 & $\bm{59.8}$ & 36.2 & $\bm{39.8}$ & 50.7 & 58.5 & 42.8 \\
+\sname & 69M & $\bm{24.7}$ & \textcolor{white}{0}$\bm{99.1}$ & $\bm{50.9}$ & $\bm{27.6}$ & {59.5} & $\bm{37.2}$ & {39.3} & $\bm{51.0}$ & $\bm{58.2}$ & $\bm{42.9}$ \\
+\midrule
+NTP & 386M & 16.3 & 26.3 & 29.9 & 33.6 & $\bm{64.1}$ & 38.4 & 47.3 & 50.9 & 24.2 & 46.8 \\
+KD & 386M & 16.4 & 24.6 & $\bm{29.1}$ & 33.6 & 63.6 & 38.0 & $\bm{48.5}$ & 51.4 & 23.4 & 47.0 \\ 
+\sname & 386M & $\bm{15.9}$ & $\bm{19.3}$ & $\bm{29.1}$ & $\bm{34.7}$ & 63.6 & $\bm{39.2}$ & {47.9} & $\bm{52.3}$ & $\bm{21.4}$ & $\bm{47.5}$ \\
+\midrule
+NTP & 1.38B & 14.3 & 16.6 & 25.0 & 38.1 & 66.1 & 38.9	& 50.5 & 50.0 & 18.6 & 48.7 \\
+KD & 1.38B & 14.2 & 16.6 & $\bm{24.9}$	& 37.4 & 66.7 & 39.0 & 50.1 & 52.3 & 18.5 & 49.1 \\
+\sname & 1.38B & $\bm{13.9}$ & $\bm{15.4}$ & $\bm{24.9}$ & $\bm{38.4}$ & $\bm{66.9}$ & $\bm{39.5}$ & $\bm{50.8}$ & $\bm{53.0}$ & $\bm{18.1}$ & $\bm{49.7}$ \\
+\bottomrule
+\end{NiceTabular}
+}
+\caption{
+\textbf{\sname vs. Next Token Prediction (NTP) vs. Knowledge Distillation (KD).} We report performance on the OpenWebText (OWT) training set, as well as downstream tasks, including LAMBADA (LAMB), WikiText-103 (Wiki), HellaSwag (HellaS), PIQA, Social Interaction QA (SIQA), Arc-Easy (Arc-E), and WinoGrande (WinoG). We train three different sizes of models where 124M model is used as a teacher. All models are trained on 20B tokens sampled from the OpenWebText dataset. The bold indicates the best result.
+}
+\label{tab:baseline}
+\end{table*}
+

@@ -1,0 +1,12 @@
+\section{Related Work}
+
+\subsection{Preference Alignment Through Fine-tuning}
+Aligning large language models (LLMs) with human preferences has traditionally relied on post-training strategies. Supervised fine-tuning (SFT) \citep{ziegler2019finetuning} and reinforcement learning from human feedback (RLHF) \citep{ouyang2022training} are widely used but computationally expensive. Direct Preference Optimization (DPO) \citep{rafailov2023direct} simplifies RLHF by converting it into a supervised learning objective, though it requires managing dual policies. More recent approaches like SimPO \citep{meng2024simpo} and Contrastive Preference Optimization (CPO)~\citep{xu2024contrastive} reduce memory and resource demands using reference models and contrastive signals. Despite these improvements, fine-tuning methods remain rigid and slow to adapt to changing data or objectives, posing challenges in dynamic environments.
+
+\subsection{Test-Time Preference Alignment}
+Test-time preference alignment offers an efficient way to align frozen language models by guiding generation at inference, without requiring any parameter updates. Beyond simple prompting or in-context learning, guided decoding methods harness external signals to control the generation itself. 
+ARGS \citep{khanov2024args} is a representative example that incorporates reward model guidance at the token level, and InferAligner \citep{wang-etal-2024-inferaligner} adopts a similar strategy. Among guided decoding methods, there are also approaches that directly modify internal representations. For instance, RE-Control \citep{re-control} trains a value function on hidden states using the Bellman equation, and applies gradient-based optimization to align with preferences.
+TreeBoN \citep{qiu2024treebon} and RAIN \citep{li2024rain} leverage tree-based structures: TreeBoN combines tree search with Best-of-N sampling, while RAIN performs self-evaluation without relying on a reward model to align preferences. 
+GenARM~\citep{GenARM} enhances test-time alignment by introducing an autoregressive reward model that predicts next-token reward signals conditioned on prior context, enabling efficient, token-wise guidance that is theoretically expressive under a KL-regularized RL framework. Test-Time Preference Optimization (TPO)~\citep{tpo} takes a distinct approach, translating reward feedback into textual critiques that serve as language-based rewards. The model uses these to iteratively refine its output—effectively learning alignment on the fly.
+
+

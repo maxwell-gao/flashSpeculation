@@ -1,0 +1,8 @@
+\begin{figure*}[t!]
+\centering
+\includegraphics[width=\textwidth]{assets/concept_figure.pdf}
+\caption{\textbf{Overview of \sname.} We use an SAE to extract concepts from a pretrained model's hidden state $h_\mathtt{con}$ and then select important concepts based on the attribution score (i.e., measuring the influence on the output). These selected concepts are used as labels $\mathcal{I}$ for concept prediction by minimizing the cross-entropy loss $\mathrm{CE}(\cdot,\cdot)$.
+The predicted concepts $\rvz$ are then compressed into a compact vector, forming a continuous concept $\rvc$, which is mixed into the model’s hidden state by interleaving with token hidden representations. We demonstrate that \sname is more sample efficient and outperforms standard next-token prediction and knowledge distillation baselines.
+}
+\label{fig:concept}
+\end{figure*}

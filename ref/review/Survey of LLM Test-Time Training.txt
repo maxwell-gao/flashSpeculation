@@ -1,0 +1,295 @@
+﻿Test-Time Training (TTT) for Large Language Models: A Comprehensive Survey of Methods, Theoretical Foundations, and Open Problems (2023–2026)
+1. Executive Summary
+The prevailing paradigm of Large Language Model (LLM) deployment—characterized by the "train once, infer many" methodology—is undergoing a fundamental transformation. Between 2023 and 2026, the rigid demarcation between the training phase (optimization of parameters $\theta$) and the inference phase (fixed-parameter utilization) has eroded, giving rise to Test-Time Training (TTT) and Test-Time Adaptation (TTA). This shift is driven by the theoretical identification of static attention's limitations in infinite-context regimes and the empirical observation that inference-time compute can be more effectively allocated to parameter updates than to autoregressive token generation alone.
+This report provides an exhaustive, critical survey of TTT methods for autoregressive LLMs. We analyze the landscape through a rigorous taxonomy, distinguishing between Adaptation-Centric approaches (which update specific modules of standard Transformers, such as query projections or LoRA adapters) and Architecture-Centric approaches (which redesign the neural layer to make the hidden state equivalent to a weight matrix updated via dual-form gradient descent).
+Our analysis synthesizes evidence from over 50 key publications, highlighting that TTT offers a provable solution to "score dilution"—the phenomenon where static attention mechanisms fail to distinguish signal from noise as context length grows logarithmically. We contrast TTT with competing inference-time scaling strategies, such as Chain-of-Thought (CoT) and Best-of-N sampling, arguing that while CoT scales linearly with output length, TTT scales with input complexity, offering a more robust mechanism for long-context retrieval and reasoning. Furthermore, we explore the nascent intersection of TTT with speculative decoding, where online learning updates draft models to bridge the distribution gap with target models, and identify critical open problems in hardware efficiency, stability, and non-autoregressive generation.
+________________
+2. Introduction: The Ephemeral Learning Paradigm
+2.1 The Limits of Static Representations
+For the past decade, the foundational assumption of deep learning deployment has been that the model $\mathcal{M}_\theta$ is a static artifact. Once pre-training and fine-tuning are complete, the parameters $\theta$ are frozen. Adaptation to a specific test instance $x_{test}$ occurs solely through the activation space—specifically, via the mechanism of In-Context Learning (ICL), where the Key-Value (KV) cache serves as a temporary, specialized memory.
+However, recent theoretical inquiries 1 have exposed inherent bottlenecks in this static architecture. The "Fixed Capacity Hypothesis" suggests that a model with frozen weights has a finite capacity to process information within its activation window. As the context length $T$ approaches millions of tokens, the attention mechanism $\text{softmax}(QK^T/\sqrt{d})$ suffers from score dilution: the probability mass assigned to the relevant "needle" token diminishes inversely with the number of distractor tokens. Unless the dot-product margin between the target and distractors grows logarithmically with $T$—a condition impossible to guarantee with fixed weights—the model inevitably loses the signal.1
+2.2 Defining the Test-Time Training (TTT) Landscape
+Test-Time Training represents a paradigm shift where the processing of a test instance involves an optimization loop. The inference process is redefined from a function evaluation $y = f_\theta(x)$ to a dynamic procedure:
+
+
+$$\theta' \leftarrow \theta - \eta \nabla_\theta \mathcal{L}_{\text{self}}(x)$$
+
+
+$$y = f_{\theta'}(x)$$
+where $\mathcal{L}_{\text{self}}$ is a self-supervised objective derived solely from the test input $x$.
+While the terms are often used interchangeably, distinct sub-fields have emerged:
+* Test-Time Adaptation (TTA): Primarily focuses on domain adaptation. The goal is to mitigate distribution shifts (e.g., changing from formal news text to noisy social media logs) by updating normalization statistics or adapters to minimize entropy or perplexity. The modifications are often transient or cumulative across a batch.
+* Test-Time Training (TTT): Often refers to instance-specific learning, where the model "memorizes" or compresses the current context into its parameters. Recent work by Sun et al. 3 elevates TTT to an architectural principle, proposing layers where the "hidden state" is mathematically equivalent to the weights of a linear model trained on the history.
+2.3 The "Inference-Training" Continuum
+The emergence of TTT blurs the line between memory and computation. In standard Transformers, memory is explicit (the KV cache). In TTT architectures, memory is implicit (the updated weights). This continuum allows for a trade-off: we can trade the memory bandwidth cost of accessing a massive KV cache for the compute cost of performing gradient updates. As we will explore, this trade-off is central to addressing the "memory wall" in modern hardware.
+________________
+3. Taxonomy of TTT Methods for LLMs
+To organize the rapid proliferation of methods between 2023 and 2026, we propose a taxonomy based on five axes: Adaptation Target, Training Signal, Adaptation Phase, Compute Model, and Target Modification.
+3.1 Axis 1: What is Adapted?
+The choice of parameters $\phi \subset \theta$ to update determines the plasticity-stability dilemma: updating too few parameters limits adaptation, while updating too many risks catastrophic forgetting or excessive latency.
+
+
+Adaptation Target
+	Description
+	Representative Methods
+	Theoretical Justification
+	Query Projections ($W_Q$)
+	Updates only the query projection matrices in self-attention layers.
+	qTTT (Bansal et al., 2026) 2
+	Directly targets the "score dilution" failure mode by rotating queries to align with frozen keys, artificially boosting the attention margin without invalidating the prefilled KV cache.
+	Hidden States / Weights
+	Treats the recurrent hidden state as a weight matrix updated via dual-form gradients.
+	TTT-Linear, TTT-RNN (Sun et al., 2024/2025) 3
+	Based on the equivalence between linear attention and gradient descent (Fast Weights). Allows compression of infinite context into fixed-size weights.
+	LoRA Adapters
+	Low-Rank Adaptation modules ($A \times B$) inserted into FFN or Attention blocks.
+	TLM (Tan et al., 2025) 6, SyTTA 8
+	Provides a parameter-efficient subspace for adaptation. LoRA is empirically shown to be more stable than full fine-tuning and prevents forgetting of safety alignment.6
+	Layer Norm / Affine
+	Updates scaling ($\gamma$) and shifting ($\beta$) parameters in normalization layers.
+	Tent (Wang et al., 2021) 9
+	Computationally cheapest ($<1\%$ parameters). Sufficient for domain alignment (feature distribution matching) but insufficient for complex reasoning or retrieval tasks.
+	Intermediate Representations
+	Updates auxiliary cross-attention modules reading frozen backbone features.
+	InCA (Zancato et al., 2023) 10
+	Allows "introspective" adaptation where the adapter learns to extract relevant features from a frozen giant model (e.g., ViT-G/14) without backpropagating through it.
+	Draft/Auxiliary Models
+	Updates a separate small model used for speculative decoding.
+	DVI (Draft, Verify, Improve) 11, Online Speculative Decoding 12
+	The draft model learns the distribution of the target model on the fly, increasing acceptance rates in speculative decoding.
+	3.2 Axis 2: What is the Training Signal?
+Since ground-truth labels $y_{true}$ are unavailable, TTT relies on self-supervised signals extracted from $x_{test}$.
+3.2.1 Next-Token Prediction (Reconstruction) on Context
+* Mechanism: The model treats the input context $x_{1...T}$ as a training set. It minimizes the negative log-likelihood of predicting $x_{t+1}$ given $x_{1...t}$.
+* Usage: TTT-E2E 13, qTTT.4
+* Rationale: This forces the model to compress the syntactic and semantic dependencies of the current document into its parameters. For long-context retrieval, optimizing this loss ensures that the query representations are primed to attend to the specific entities mentioned in the text.
+3.2.2 Entropy Minimization
+* Mechanism: Minimizes the Shannon entropy $H(p(y|x)) = -\sum p_i \log p_i$ of the model's predictions at test time.
+* Usage: Tent 9, TLM (as a component).6
+* Rationale: Assumes the Cluster Assumption: decision boundaries should pass through low-density regions. By forcing the model to be confident (low entropy), we push the representations away from decision boundaries, effectively aligning the model to the target domain.
+* Critique: Can lead to degenerate solutions or mode collapse (e.g., predicting the same high-probability token repeatedly) if not constrained.
+3.2.3 Input Perplexity vs. Output Entropy (Synergistic)
+* Mechanism: SyTTA 8 combines minimizing input perplexity (how well the model "understands" the prompt) with output entropy (how confident the generation is).
+* Rationale: Input perplexity serves as a proxy for domain familiarity. Minimizing it adapts the encoders. Output entropy ensures generation quality. SyTTA dynamically weights these two objectives.
+3.2.4 Consistency and Self-Training
+* Mechanism: Generates a pseudo-label $\hat{y}$ (using beam search or high-confidence sampling), then updates the model to maximize $P(\hat{y}|x)$.
+* Usage: TTT-MAE (Masked Autoencoders) 9, various robust QA adaptation methods.9
+* Rationale: Useful for reasoning tasks where simple entropy minimization is insufficient. The model "bootstraps" its own predictions.
+3.3 Axis 3: Operational Phase
+The timing of the update dictates the latency profile.
+1. Prefill Adaptation (One-Shot):
+   * Process: The model processes the prompt/context $x$. It computes gradients based on $x$ and updates parameters $\theta \to \theta'$. It then generates the response $y$ using frozen $\theta'$.
+   * Latency Impact: Adds a fixed overhead to the "Time to First Token" (TTFT).
+   * Examples: qTTT 4, TLM.6
+   * Fit: Best for Retrieval-Augmented Generation (RAG) or Long-Document Summarization, where reading the context accurately is the primary bottleneck.
+2. Continuous / Online Adaptation:
+   * Process: The model updates $\theta_t \to \theta_{t+1}$ after every token (or batch of tokens) generated or processed.
+   * Latency Impact: Increases the latency of every token generation step.
+   * Examples: TTT-RNN / TTT-Linear 3, DVI.11
+   * Fit: Best for Streaming Applications (e.g., dialogue agents, infinite context monitoring) where the distribution shifts gradually over time.
+3.4 Axis 4: Compute Model and Scaling
+How does the computational cost scale? This is crucial for comparing TTT with inference-time scaling strategies like "Thinking Tokens" (Chain-of-Thought).
+* TTT Scaling Laws: The compute cost is $C_{TTT} \approx K \times N_{ctx} \times C_{backprop}$, where $K$ is the number of gradient steps and $N_{ctx}$ is the context length.
+   * Critically, this cost is paid on the input.
+* CoT Scaling Laws: The compute cost is $C_{CoT} \approx N_{gen} \times C_{forward}$, where $N_{gen}$ is the number of thinking tokens.
+   * Critically, this cost is paid on the output.
+Comparative Insight: Bansal et al. 2 demonstrate that for long-context retrieval, TTT is far more FLOP-efficient. Generating thinking tokens does not solve "score dilution" because the attention mechanism itself is flawed. TTT fixes the mechanism. Therefore, TTT scales better with Context Length ($T$), while CoT scales better with Reasoning Complexity.
+3.5 Axis 5: Target Model Modification
+* In-Place Adaptation: Modifies the weights of the target model itself. (e.g., qTTT, Tent). Risk: Corrupting the model's general capabilities.
+* External Adapter/Module: Adapts a separate module (LoRA, Adapter) or a separate model (Draft Model). (e.g., TLM, DVI, InCA). Benefit: The base model remains frozen and safe; the adapter can be discarded after inference.
+________________
+4. Historical Context and Priority
+To assess the novelty of methods proposed in 2024–2026, we must trace the genealogy of Test-Time Training.
+4.1 The Pre-Transformer Era (2019–2022)
+* The Origin: The term "Test-Time Training" was coined by Sun et al. (ICML 2020) 14 in the context of computer vision. They utilized a self-supervised auxiliary task (predicting image rotations) to update a shared feature encoder on a single test image before making a classification prediction. This established the "shared encoder, separate heads" architecture.
+* Entropy Minimization: Tent (Wang et al., ICLR 2021) 9 simplified TTT by removing the auxiliary task. Tent updated BatchNorm parameters to minimize the entropy of the classifier's output. This "Fully Test-Time Adaptation" approach became the standard baseline for vision TTA.
+* MEMO (Zhang et al., NeurIPS 2022): Proposed "Marginal Entropy Minimization with One-test point," reinforcing the idea that a single test instance (augmented via varying views) provides sufficient signal for adaptation.
+4.2 TTT Enters the LLM Context (2022–2024)
+As Transformers became dominant, TTT concepts were translated to text.
+* Prompt Tuning as TTT: Early efforts like TPT (Test-Time Prompt Tuning, 2022) 15 adapted soft prompts rather than model weights. This avoided the high cost of backpropagation through the full model.
+* Dynamic Evaluation: The concept of "dynamic evaluation" (updating language models on the test set to improve perplexity) predates modern LLMs, appearing in works by Krause et al. (2018). However, modern TTT differs by focusing on downstream task performance and OOD robustness rather than just language modeling perplexity.
+4.3 The "Query-Only" Novelty Debate
+Is qTTT (Bansal et al., 2026) 4 genuinely novel?
+* Prior Art: "Query-Only" fine-tuning has been explored in Visual Query Tuning (VQT, CVPR 2023) 16 and EfficientFSL.17 These works froze the backbone and updated query tokens or projections for parameter efficiency in downstream tasks.
+* Novelty in qTTT: The specific contribution of Bansal et al. is not the mechanism of updating queries (which is known), but the application to the "Score Dilution" problem in single-pass inference.
+   * Previous query tuning was for task adaptation (e.g., adapting to a medical dataset).
+   * qTTT is for instance adaptation (adapting to this specific long document to recover the needle).
+   * Furthermore, qTTT introduces the specific workflow of "Single Prefill + Cache Reuse + Gradient Update." This allows the heavy computation of processing the context (Keys/Values) to be done once and cached, while only the lightweight Query projections are updated. This specific computational orchestration is a novel contribution to the efficiency of long-context LLMs.
+________________
+5. Theoretical Foundations
+Why does performing a few steps of gradient descent on a test instance improve performance?
+5.1 The Score Dilution Hypothesis
+The primary theoretical justification for TTT in long-context LLMs is the Score Dilution phenomenon, formally characterized by Bansal et al..1
+Theorem (Informal): Consider an attention head computing $A = \text{softmax}(QK^T)$. Let there be one "target" token $k^*$ and $N$ "distractor" tokens. As $N \to \infty$, the attention weight $a^*$ assigned to $k^*$ approaches zero unless the logit margin $(q \cdot k^* - q \cdot k_{distractor})$ grows logarithmically with $N$.
+Implication: In a static model, the weights $W_Q, W_K$ are bounded. For a sufficiently long context, the model cannot generate a sufficient margin to distinguish the needle from the haystack, regardless of how well it was trained. The signal is "diluted" by the noise of the softmax normalization.
+TTT Solution: By updating $W_Q$ on the specific context $x$, TTT dynamically rotates the query vector $q$ to maximize the dot product with the relevant $k^*$ found in that specific context. This effectively "overfits" the attention mechanism to the current document's structure, manufacturing the necessary margin that a static model cannot provide.
+5.2 Critiques and Alternative Hypotheses
+While Score Dilution is a compelling explanation, other factors contribute to long-context failure:
+* Lost-in-the-Middle: Liu et al. (2023) observed a U-shaped performance curve where information in the middle of the context is lost. While some attribute this to positional encoding failures (e.g., RoPE extrapolation issues 18), TTT proponents argue that "Lost-in-the-Middle" is just a symptom of score dilution (middle tokens have the most distractors on both sides).
+* Positional Encoding Limitations: Some failures are due to the inability of RoPE to generalize to frequencies unseen during training. TTT can partially mitigate this by learning to ignore "confused" positional signals, but it does not fundamentally fix the frequency extrapolation issue.
+5.3 Information-Theoretic Limits (EMI)
+How much can a model learn from a single test instance?
+* Effective Mutual Information (EMI): Research 19 introduces EMI to quantify the maximum risk reduction possible under distribution shifts.
+* The Bound: There is an information-theoretic limit to adaptation. If the test instance is short or low-entropy, the gradients may contain mostly noise (overfitting to syntax rather than semantics). This explains why TTT is most effective on long contexts (high information content) and high-perplexity samples (strong error signal).6
+5.4 Meta-Learning Connection
+TTT is structurally identical to the inner loop of meta-learning algorithms like MAML (Model-Agnostic Meta-Learning).
+* Outer Loop (Pre-training): $\min_\theta \mathbb{E}_{tasks} [ \mathcal{L}_{test}(\theta - \nabla \mathcal{L}_{train}) ]$
+* Inner Loop (TTT): $\theta' = \theta - \nabla \mathcal{L}_{context}$
+* Insight: TTT-E2E 13 explicitly trains the model using this bi-level optimization. Standard LLM pre-training optimizes for zero-shot performance, which is suboptimal for TTT. TTT-E2E optimizes the initial weights specifically so that they adapt well during the test-time update.
+________________
+6. Architectural Innovations: The TTT Layer (Sun et al.)
+A radical departure from adapting standard Transformers is the proposal of Test-Time Training Layers by Sun et al. (2024–2025).3
+6.1 The Philosophy: Hidden State as Weights
+Standard Recurrent Neural Networks (RNNs) update a hidden state $h_t$ via a fixed rule: $h_t = \sigma(W h_{t-1} + U x_t)$.
+Sun et al. observe that this update rule is analogous to a gradient descent step on a linear model. If we view the "hidden state" not as a vector of activations, but as the weight matrix of a linear model attempting to predict the sequence, then the RNN update rule is a TTT step.
+6.2 TTT-Linear and TTT-RNN
+* Architecture: The model consists of a "backbone" (the TTT layer) and a "head".
+* The TTT Layer: Instead of a self-attention mechanism, it uses a Dual-Form Gradient Descent update.
+   * The "state" $W_t$ is updated to minimize the reconstruction error of the history $x_{1...t}$.
+   * Because the inner model is linear, this optimization has a closed-form or simple recursive solution that looks like an RNN update.
+* Benefit: This architecture achieves Linear Complexity $O(N)$ in terms of FLOPs for the forward pass (like Mamba/RWKV), but retains the expressivity of TTT.
+* Results: TTT-Linear outperforms Mamba and matches Transformers in perplexity at 2k–8k context, while being significantly faster (constant time per token generation).20
+6.3 TTT-E2E
+* Innovation: Extends the concept to End-to-End training. The entire model is trained meta-learning style.
+* Scaling Law: For 3B parameter models trained on 164B tokens, TTT-E2E scales with context length identically to full Attention (which is the gold standard), whereas Mamba and other linear RNNs saturate/plateau.3
+* Latency: Crucially, it maintains constant inference latency regardless of context length (2.7x speedup over Attention at 128k context).
+________________
+7. Adaptation Strategies for Standard Transformers
+For practitioners unable to pre-train new architectures like TTT-E2E, adaptation methods for standard Transformers (Llama, Qwen) are paramount.
+7.1 qTTT (Query-Only TTT)
+* Paper: Bansal et al. (2026).4
+* Workflow:
+   1. Prefill: Process $x_{context}$. Cache $K, V$.
+   2. Loss: $\mathcal{L} = -\sum \log P(x_{t+1} | x_{1...t}; W_Q)$.
+   3. Update: $\nabla_{W_Q} \mathcal{L}$ is computed. $W_Q \leftarrow W_Q - \eta \nabla$.
+   4. Generate: Decode answer using $W_Q'$ and cached $K, V$.
+* Key Advantage: It reuses the KV cache. The heavy lifting of processing the context into keys/values is done once. The gradient update only requires a backward pass through the query projections, which is computationally lightweight relative to the full model.
+* Empirical Gains: Restores performance on "needle-in-a-haystack" tasks where standard decoding fails completely.
+7.2 TLM and SyTTA (LoRA-based)
+* TLM (Tan et al., 2025): Focuses on domain adaptation. It uses LoRA to update the model. It introduces a Sample Efficient Learning Strategy, selecting only high-perplexity samples for updates to maximize information gain per FLOP.6
+* SyTTA (2025): Addresses the "prompt vs. generation" conflict. It uses a Synergistic loss combining Input Perplexity (to understand the prompt) and Output Entropy (to ensure generation confidence). This prevents the model from "overfitting" to the prompt in a way that degrades generation fluency.8
+________________
+8. Draft Models and Speculative Test-Time Training
+Speculative Decoding (SD) offers a unique venue for TTT. In SD, a small "draft" model guesses tokens, which a large "target" model verifies. The bottleneck is the Acceptance Rate of the draft model.
+8.1 DVI: Draft, Verify, Improve
+* Method: The verifier's decisions (accept/reject) provide a grounded supervision signal for the draft model.
+* TTT Mechanism: DVI 11 treats this as an online learning problem. Every time the large model rejects a token $t_{draft}$ and outputs $t_{true}$, the draft model performs a gradient update on the pair $(x, t_{true})$.
+* Result: The draft model rapidly aligns its distribution with the target model for the specific current document. If the document is technical code, the draft model learns the target's coding style on-the-fly, boosting the acceptance rate and increasing the speedup factor.
+* Distinction: This is "Supervised TTT" (using the teacher's labels) rather than "Self-Supervised TTT" (using reconstruction).
+8.2 Online Knowledge Distillation
+Similar to DVI, works like Online Speculative Decoding 12 explore using the logits of the target model (white-box distillation) to update the draft model in real-time. This is shown to outperform offline distillation by 11–25% because the adaptation is specific to the test-time distribution.
+________________
+9. Test-Time Training vs. Inference-Time Scaling
+A critical question for 2026 is: How should we spend our inference compute budget? Should we update weights (TTT), generate more tokens (CoT), or search more paths (Tree Search)?
+9.1 Conceptual Comparison
+
+
+Feature
+	Test-Time Training (TTT)
+	Chain-of-Thought (CoT)
+	Best-of-N / Search
+	RAG
+	Scaling Axis
+	Internal Scaling 22 (Optimizing $\theta$)
+	Sequential Scaling (Optimizing $x$)
+	Parallel/Tree Scaling (Exploring $y$)
+	Context Scaling (Augmenting $x$)
+	Mechanism
+	Gradient Descent (Backprop)
+	Autoregressive Generation
+	Sampling & Verification
+	Retrieval
+	Primary Cost
+	$O(K_{steps} \times N_{ctx})$ (Input-heavy)
+	$O(N_{gen})$ (Output-heavy)
+	$O(N_{samples} \times N_{gen})$
+	$O(N_{chunks})$
+	Strength
+	Long Context / Retrieval. Fixes score dilution. Adapts to syntax/style.
+	Reasoning. Breaks down complex logic into steps.
+	Hard Constraints. finding one correct path among many.
+	Knowledge. Accessing facts not in weights.
+	Weakness
+	Latency overhead (Backward pass). Hardware inefficient.
+	Score dilution. Hallucination in long chains.
+	Expensive. Requires good verifier.
+	Context window limits. Retrieval noise.
+	9.2 The "What, How, Where" Unified Framework
+The survey by Zhang et al. (2025) 22 places these methods in a unified 4-dimensional framework:
+1. What to Scale: Internal parameters (TTT) vs. Output tokens (CoT/Search).
+2. How to Scale: Tuning (Gradient updates) vs. Inference (Sampling/Stimulation).
+3. Where to Scale: Reasoning tasks vs. General Purpose tasks.
+4. How Well: Efficiency vs. Performance trade-offs.
+Key Insight: TTT and CoT are orthogonal. One can use TTT to "load" the context into the model's weights (improving retrieval accuracy), and then use CoT to reason over that information. This hybrid approach is likely the future of high-performance inference.
+________________
+10. Multi-Modal and Non-Autoregressive TTT
+10.1 Vision-Language Models (VLMs)
+* Challenge: VLMs have two modalities. TTT can adapt the vision encoder, the text encoder, or the fusion layer.
+* TT-RAA (Test-Time Retrieval-Augmented Adaptation): 24 adapts VLMs by retrieving relevant samples from a streaming memory bank (mixture of Gaussians) and optimizing a unified multimodal space. This addresses the "inter-modal gap" that static CLIP models suffer from.
+* MLMP (Multi-Level Multi-Prompt): 25 optimizes both global CLS tokens and local pixel-level features using entropy minimization on multiple prompt templates.
+10.2 Non-Autoregressive (NAR) and Block-Parallel
+* TtT (Text-to-Talk): 26 is a hybrid model combining Autoregressive text generation with Non-Autoregressive audio diffusion. TTT is used here to synchronize the modalities.
+* Block-Parallel TTT: The application of TTT to Diffusion LLMs (like LLaDA 27) is an open frontier. Diffusion models generate blocks of tokens in parallel. TTT could theoretically be applied to the "denoising" steps, adapting the noise schedule to the specific instance difficulty, but this remains largely unexplored.
+________________
+11. Systems and Hardware Implications
+The deployment of TTT faces a massive hurdle: Hardware Architecture.
+11.1 The Backward Pass Bottleneck
+* Forward-Optimization: Modern inference accelerators (e.g., vLLM, TGI, specialized LPUs) are highly optimized for the forward pass (KV caching, PagedAttention, continuous batching). They often do not support efficient backward passes.
+* Memory Wall: To perform backpropagation, the system must store activations for every layer. In standard inference, activations are discarded immediately after use. Storing them increases memory usage by orders of magnitude, competing with the KV cache for HBM (High Bandwidth Memory).
+11.2 Forward-Mode and Zeroth-Order TTT
+To mitigate this, researchers are exploring:
+* Forward-Mode Auto-Differentiation: Computes gradients alongside the forward pass. Eliminates activation storage but scales poorly with the number of parameters.
+* Zeroth-Order Optimization (MeZO): Estimates gradients by perturbing weights and measuring loss changes. Requires only forward passes but has high variance and slow convergence.
+* Solution: qTTT is a compromise. By updating only $W_Q$, we only need to store activations for the query projection layers, drastically reducing the memory footprint compared to full-model TTT.
+________________
+12. Critical Assessment and Open Problems
+12.1 Reproducibility and Venue Analysis
+* Success Stories: Papers like Tent, TTT-Linear (ICML), and InCA (NeurIPS) are well-regarded and reproducible. TLM was accepted to ICML 2025 but faced criticism regarding the causal link between perplexity minimization and downstream performance.28
+* Reproducibility Issues: Tuning the learning rate and number of steps for TTT is notoriously brittle. A step size that works for one prompt may cause divergence for another. TTT-E2E mitigates this by meta-learning the hyperparameters, but this requires expensive pre-training.
+12.2 Open Problems
+1. Safety-Constrained TTT: Does TTT break the "Refusal" safety rails of RLHF models? If a model optimizes on a malicious prompt, does it "learn" to generate hate speech? TTT methods need constrained optimization to preserve safety alignment.
+2. Hardware-Native TTT: We need inference chips (NPUs) that support "micro-training" steps natively without the massive overhead of full GPU state management.
+3. Batching Dynamics: How does TTT work with continuous batching? If every request updates the weights differently, we cannot batch them together using shared weights. TTT effectively forces batch size = 1 or requires maintaining multiple copies of weights (like LoRA adapters), complicating serving infrastructure.
+________________
+13. Conclusion
+The years 2023–2026 marked the transition of Test-Time Training from a niche domain-adaptation technique to a central pillar of Next-Generation LLM architecture. Driven by the "Score Dilution" failure of static attention in long contexts, TTT methods like qTTT and TTT-E2E have demonstrated that dynamic weight updates are a more efficient form of "compute" than expanding the context window or generating thinking tokens.
+While significant challenges remain in hardware efficiency and stability, the theoretical trajectory is clear: the future of "Inference" is actually "Ephemeral Learning." We are moving toward systems that do not merely retrieve information from a cache, but actively restructure their own internal geometry to understand the task at hand.
+________________
+Citation Index
+* 6: Tan et al., "Test-Time Learning for Large Language Models" (TLM), ICML 2025.
+* 8: SyTTA: Synergistic Test-time Adaptation, 2025.
+* 1: Bansal et al., "Let's (not) just put things in Context" (qTTT), ICLR 2026.
+* 3: Sun et al., "Learning to Model the World with Test-Time Training" / "End-to-End TTT", 2025.
+* 10: Zancato et al., "InCA: Introspective Cross-Attention", NeurIPS 2023.
+* 11: DVI: Draft, Verify, Improve, 2025.
+* 22: "What, How, Where, and How Well? A Survey on Test-Time Scaling", 2025.
+* 9: Tent / TTT General References.
+引用的著作
+1. Test-Time Training for Long-Context LLMs - Emergent Mind, 访问时间为 二月 18, 2026， https://www.emergentmind.com/papers/2512.13898
+2. arxiv.org, 访问时间为 二月 18, 2026， https://arxiv.org/html/2512.13898v1
+3. Reimagining LLM Memory: Using Context as Training Data Unlocks Models That Learn at Test-Time | NVIDIA Technical Blog, 访问时间为 二月 18, 2026， https://developer.nvidia.com/blog/reimagining-llm-memory-using-context-as-training-data-unlocks-models-that-learn-at-test-time/
+4. Let's (not) just put things in Context: Test-time Training for Long-context LLMs | OpenReview, 访问时间为 二月 18, 2026， https://openreview.net/forum?id=H0bcEdPCoc
+5. Test-Time Training Layers - Emergent Mind, 访问时间为 二月 18, 2026， https://www.emergentmind.com/topics/test-time-training-ttt-layers
+6. [2505.20633] Test-Time Learning for Large Language Models - arXiv, 访问时间为 二月 18, 2026， https://arxiv.org/abs/2505.20633
+7. (PDF) Test-Time Learning for Large Language Models - ResearchGate, 访问时间为 二月 18, 2026， https://www.researchgate.net/publication/392133432_Test-Time_Learning_for_Large_Language_Models
+8. You only need 4 extra tokens: Synergistic Test-time Adaptation for LLMs - arXiv, 访问时间为 二月 18, 2026， https://arxiv.org/html/2510.10223v1
+9. Dereck0602/Awesome_Test_Time_LLMs - GitHub, 访问时间为 二月 18, 2026， https://github.com/Dereck0602/Awesome_Test_Time_LLMs
+10. Luca Zancato - Amazon Science, 访问时间为 二月 18, 2026， https://www.amazon.science/author/luca-zancato
+11. Draft, Verify, & Improve Toward Training-Aware Speculative Decoding - arXiv, 访问时间为 二月 18, 2026， https://arxiv.org/html/2510.05421v1
+12. Training Domain Draft Models for Speculative Decoding: Best Practices and Insights - arXiv, 访问时间为 二月 18, 2026， https://arxiv.org/html/2503.07807v2
+13. [2512.23675] End-to-End Test-Time Training for Long Context - arXiv, 访问时间为 二月 18, 2026， https://arxiv.org/abs/2512.23675
+14. arxiv.org, 访问时间为 二月 18, 2026， https://arxiv.org/html/2505.20633v1
+15. NOISY TEST-TIME ADAPTATION IN VISION-LANGUAGE MODELS - ICLR Proceedings, 访问时间为 二月 18, 2026， https://proceedings.iclr.cc/paper_files/paper/2025/file/94796017d01c5a171bdac520c199d9ed-Paper-Conference.pdf
+16. CVPR Poster Visual Query Tuning: Towards Effective Usage of Intermediate Representations for Parameter and Memory Efficient Transfer Learning, 访问时间为 二月 18, 2026， https://cvpr.thecvf.com/virtual/2023/poster/21223
+17. EfficientFSL: Enhancing Few-Shot Classification via Query-Only Tuning in Vision Transformers - arXiv, 访问时间为 二月 18, 2026， https://arxiv.org/html/2601.08499v2
+18. Daily Papers - Hugging Face, 访问时间为 二月 18, 2026， https://huggingface.co/papers?q=long-range%20dependency%20capture
+19. ICML Poster Understanding Multimodal LLMs Under Distribution Shifts: An Information-Theoretic Approach, 访问时间为 二月 18, 2026， https://icml.cc/virtual/2025/poster/44373
+20. Test-Time Training (TTT): A New Approach to Sequence Modeling | by Keyur Ramoliya | The Deep Hub | Medium, 访问时间为 二月 18, 2026， https://medium.com/thedeephub/test-time-training-ttt-a-new-approach-to-sequence-modeling-8baf1ea79ed7
+21. Learning to (Learn at Test Time): RNNs with Expressive Hidden States - arXiv.org, 访问时间为 二月 18, 2026， https://arxiv.org/html/2407.04620v1
+22. What, How, Where, and How Well? A Survey on Test-Time Scaling ..., 访问时间为 二月 18, 2026， https://testtimescaling.github.io/
+23. What, How, Where, and How Well? A Survey on Test-Time Scaling in Large Language Models | Request PDF - ResearchGate, 访问时间为 二月 18, 2026， https://www.researchgate.net/publication/390405209_What_How_Where_and_How_Well_A_Survey_on_Test-Time_Scaling_in_Large_Language_Models
+24. Test-Time Retrieval-Augmented Adaptation for Vision-Language Models - CVF Open Access, 访问时间为 二月 18, 2026， https://openaccess.thecvf.com/content/ICCV2025/papers/Fan_Test-Time_Retrieval-Augmented_Adaptation_for_Vision-Language_Models_ICCV_2025_paper.pdf
+25. Test-Time Adaptation of Vision-Language Models for Open-Vocabulary Semantic Segmentation | OpenReview, 访问时间为 二月 18, 2026， https://openreview.net/forum?id=CH76rSKWZr
+26. From Text to Talk: Audio-Language Model Needs Non-Autoregressive Joint Training - arXiv, 访问时间为 二月 18, 2026， https://arxiv.org/html/2509.20072v3
+27. Speed Always Wins: A Survey on Efficient Architectures for Large Language Models - arXiv, 访问时间为 二月 18, 2026， https://arxiv.org/html/2508.09834v1
+28. Test-Time Learning for Large Language Models | OpenReview, 访问时间为 二月 18, 2026， https://openreview.net/forum?id=iCYbIaGKSR

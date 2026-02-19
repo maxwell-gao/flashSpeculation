@@ -1,0 +1,106 @@
+
+\documentclass{article} %
+\usepackage{iclr2026_conference}
+\input{math_commands.tex}
+
+\usepackage{hyperref}
+\usepackage{url}
+
+\usepackage{times}
+\usepackage{latexsym}
+\usepackage{microtype}
+\usepackage{inconsolata}
+\usepackage{graphicx}
+\usepackage[table,xcdraw]{xcolor}
+\usepackage{algorithm}
+\usepackage{algorithmic}
+\usepackage{multirow} 
+\usepackage{arydshln}
+\usepackage{amsmath} 
+\usepackage{amssymb} 
+\usepackage{cleveref} 
+\usepackage{comment}
+\usepackage{wrapfig}
+\usepackage{booktabs}
+\newcommand{\ie}{\textit{i.e., }}
+\newcommand{\eg}{\textit{e.g., }}
+\newcommand{\pchtext}[1]{\textbf{\textcolor{teal}{#1}}}
+\newcommand{\pch}[1]{{\textcolor{teal}{#1}}}
+\newcommand{\rebu}[1]{{\textcolor{blue}{#1}}}
+\newcommand{\gdtext}[1]{{\textcolor{brown}{#1}}}
+\newcommand{\yhtext}[1]{\textcolor{purple}{#1}}
+\definecolor{lightyellow}{HTML}{FFFFC7}
+\usepackage{subcaption} 
+\usepackage{pgfplots}
+\pgfplotsset{compat=1.18} 
+
+
+\title{Test-Time Alignment for Large Language Models via Textual Model Predictive Control}
+
+
+
+\author{
+\textbf{Kuang-Da Wang}\textsuperscript{1,†} 
+\textbf{Teng-Ruei Chen}\textsuperscript{1,†}
+\textbf{Yu-Heng Hung}\textsuperscript{1}
+\textbf{Guo-Xun Ko}\textsuperscript{1} 
+\textbf{Shuoyang Ding}\textsuperscript{2} \\
+\ \textbf{Yueh-Hua Wu}\textsuperscript{2}
+\textbf{Yu-Chiang Frank Wang}\textsuperscript{2}
+\textbf{Chao-Han Huck Yang}\textsuperscript{2} \\
+\ \textbf{Wen-Chih Peng}\textsuperscript{1}
+\textbf{Ping-Chun Hsieh}\textsuperscript{1} \\
+\ \textsuperscript{1}National Yang Ming Chiao Tung University, Hsinchu, Taiwan \quad
+\textsuperscript{2}NVIDIA \\
+\ \texttt{\{gdwang.cs10,pinghsieh\}@nycu.edu.tw, hucky@nvidia.com}
+}
+
+\hypersetup{hidelinks}
+
+
+
+
+\newcommand{\fix}{\marginpar{FIX}}
+\newcommand{\new}{\marginpar{NEW}}
+
+\iclrfinalcopy %
+\begin{document}
+
+
+\maketitle
+
+\footnotetext[1]{Equal contribution. Correspondence to Kuang-Da Wang \texttt{<gdwang.cs10@nycu.edu.tw>}, Ping-Chun Hsieh \texttt{<pinghsieh@nycu.edu.tw>}, and Chao-Han Huck Yang \texttt{<hucky@nvidia.com>}.}
+
+\begin{abstract}
+Aligning Large Language Models (LLMs) with human preferences through finetuning is resource-intensive, motivating lightweight alternatives at test time. We address test-time alignment through the lens of sequential decision making, a perspective that reveals two fundamental challenges. When actions are defined at the token level, as in guided decoding, alignment suffers from the \textit{curse of horizon}. Conversely, when actions are at the response level, as in traditional iterative refinement, the \textit{curse of dimensionality} emerges. To resolve this trade-off, we draw inspiration from Model Predictive Control (MPC) in control theory to propose \textbf{Textual Model Predictive Control (TMPC)}, a novel predictive planning framework adapted for aligning LLMs at inference time. A key limitation of standard MPC is its reliance on predefined, hard segment boundaries, which are often absent in text generation. TMPC overcomes this by introducing two principles inspired by hierarchical reinforcement learning: (1) \textit{Hindsight Subgoal Identification}, where TMPC analyzes generation subgoals to retrospectively identify high-reward intermediate outputs as subgoals. This allows the framework to discover meaningful, task-specific planning steps (\eg a sentence in machine translation or a bug fix in code generation.). (2) \textit{Subgoal-Conditioned Re-Generation}, where these identified subgoals are used to guide subsequent planning iterations. By conditioning on these proven, high-quality subgoals, TMPC ensures stable improvement by building upon previously validated successes. TMPC is evaluated on three tasks with distinct segmentation properties: discourse-level translation, long-form response generation, and program synthesis. The results demonstrate that TMPC consistently improves performance, highlighting the generality.
+\end{abstract}
+
+\input{1-intro}
+\input{2-related}
+\input{2-prelim}
+\input{3-method-new}
+\input{4-exp}
+
+\section{Conclusion}
+We introduced TMPC, a test-time predictive planning framework for preference alignment. Under the sequential decision-making view, existing methods suffer from two fundamental limitations: guided decoding operates at the token level and faces the {curse of horizon}, while iterative refinement operates at the response level and suffers from the {curse of dimensionality}. TMPC strikes a balance by identifying locally-optimal trajectory segments as subgoals in hindsight, and then leveraging a buffer of these subgoals to iteratively refine the full-horizon plan. This design mitigates both challenges and enables consistent improvements in long-form alignment without modifying the model parameters.
+
+
+\section*{Ethics Statement}
+This work introduces Textual Model Predictive Control (TMPC), a general framework for the test-time alignment of large language models. Our primary goal is to develop more stable and efficient methods for aligning models with beneficial human preferences, such as helpfulness and harmlessness. All experiments were conducted on publicly available and widely used academic benchmarks (HH-RLHF, WMT'24, and MBPP), and no new data involving human subjects was collected.
+
+The primary ethical consideration of our work is that the alignment outcome is determined by the provided reward signal. While we have used it for positive alignment, a malicious or biased reward signal could steer a model toward generating harmful, unfair, or toxic content. TMPC, like other alignment techniques, could potentially amplify biases present in the preference data used to train the reward model. We therefore stress the importance of careful design, auditing, and red-teaming of reward models before deploying systems using this technology in sensitive, real-world applications. We believe that by providing a more transparent and controllable test-time alignment mechanism, our work can contribute positively to the development of safer AI systems.
+
+\section*{Reproducibility Statement}
+We are committed to ensuring the reproducibility of our research. Our implementation of TMPC, along with all experimental scripts, will be made publicly available in a permissively licensed open-source repository upon publication. 
+
+The core methodology is described in Section~\ref{sec:methodology}, with a detailed, task-agnostic algorithm provided in Algorithm~\ref{alg:TMPC_unified}. All datasets used in our experiments---HH-RLHF, WMT'24, and MBPP---are public benchmarks, with details on their specific versions and preprocessing steps provided in Section~\ref{sec:experiments} and Appendix~\ref{sec:baselines_imp}. All hyperparameters, prompt templates, and task-specific implementation details necessary to replicate our results for long-form response generation, machine translation, and programmatic synthesis are documented in Appendix~\ref{sec:imple:TMPC}. We believe these resources provide a clear and sufficient basis for the community to reproduce and build upon our findings.
+
+
+\bibliography{main}
+\bibliographystyle{iclr2026_conference}
+
+\appendix
+\input{appendix}
+
+
+\end{document}

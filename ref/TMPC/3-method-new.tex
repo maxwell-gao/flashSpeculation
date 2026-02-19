@@ -1,0 +1,93 @@
+
+\section{Methodology}
+\label{sec:methodology}
+
+\subsection{Test-Time Alignment via Trajectory Optimization}
+\label{sec:TO}
+Our key idea is to take a model-based RL viewpoint to achieve test-time alignment for LLMs. Specifically, we propose to recast preference alignment as \textit{trajectory optimization} and thereby employ receding-horizon control for iterative text generation.
+
+\paragraph{Text Generation Optimization as Trajectory Optimization.} 
+Usually adopted by the model-based RL literature~\citep{chua2018deep,lowrey2019plan}, the goal of trajectory optimization is to find an optimal sequence of actions $\boldsymbol{a}^*=(a_0^*,\cdots, a_{T-1}^*)$ such that the total trajectory-wise reward is maximized. This matches the objective of LLM text generation in that the output response is generated to best align with the underlying preference.
+Recall from Section~\ref{sec:background} that we adopt a general notion of a \textit{step} as the basic unit of temporal progression, which can be a segment at various granularities or other linguistically meaningful units.
+Again, we let $s_0$ denote the initial prompt and let $\tau=(s_0,a_0,\cdots, s_{T-1},a_{T-1},s_T)$ denote a trajectory generated under an action sequence $\boldsymbol{a}_{0:T-1}:=(a_0,a_1,\dots,a_{T-1})$. 
+Given an initial prompt $s_0$, the search for an optimal sequence $\boldsymbol{a}^*(s_0)$ can be formulated by the following optimization problem
+\begin{equation}
+    \boldsymbol{a}^*(s_0):=\arg\max_{\boldsymbol{a}_{0:T-1}}\ \sum_{t=0}^{T-1} R(s_t,a_t).\label{eq:TO-main}
+\end{equation}
+Note that there is no need to take expectation in (\ref{eq:TO-main}) as the state transitions are deterministic given $\boldsymbol{a}_{0:T-1}$ in MDPs for text generation, as described in Section \ref{sec:background}.
+
+\paragraph{Textual Model Predictive Control for Text Generation.} In general, direct optimization of (\ref{eq:TO-main}) requires searching over all possible action sequences of length $T$ and is computationally intractable. As a predictive planning method, MPC planner approximately solves (\ref{eq:TO-main}) by iteratively solving \textit{local} optimization problems~\citep{hansen2022temporal}, instead of globally optimizing the total reward in one pass. Specifically, MPC planner determines the action of each step $t$ by estimating the optimal subsequence $\boldsymbol{a}^*_{t:t+H}$ on a moving horizon $H$ (usually $H$ is smaller than $T$), given the state $s_t$, \ie
+\begin{equation}
+    \boldsymbol{a}^{\text{MPC}}(s_t):=\arg\max_{\boldsymbol{a}_{t:t+H-1}}\ 
+    \sum_{i=t}^{t+H-1} R(s_t,a_t),\label{eq:MPC-main}
+\end{equation}
+and then select a subset of $\boldsymbol{a}^{\text{MPC}}(s_t)$, denoted by $\widetilde{\boldsymbol{a}}^{\text{MPC}}(s_t)$, for execution. In practice, $\widetilde{\boldsymbol{a}}^{\text{MPC}}(s_t)$ can be selected as the first $j$ contiguous actions ($1\leq j\leq H$) or as a set of non-contiguous actions~\citep{cagienard2007move}.
+As a model-based approach, MPC solves (\ref{eq:MPC-main}) by employing (i) a learned predictive dynamics model and (ii) a proposal action distribution to jointly generate multiple $H$-step predictive rollouts $\{\tau^{(i)}_t\equiv(\boldsymbol{s}_{t:t+H-1}^{(i)},\boldsymbol{a}_{t:t+H-1}^{(i)})\}_{i=1}^{K}$ and obtain an approximate maximizer based on these $K$ rollouts. 
+As a widely-used variant of MPC for continuous control, Model Predictive Path Integral (MPPI)~\citep{MPPI} determines an approximate maximizer by performing a soft, utility-weighted aggregated selection as $
+{a}_t = \big({\sum_{i=1}^K \exp(\frac{1}{\lambda} \mathcal{J}(\tau_t^{(i)})) {a}_t^{(i)}}\big)/{\sum_{i=1}^K \exp(\frac{1}{\lambda} \mathcal{J}(\tau_t^{(i)}))}
+$, where $\mathcal{J}(\tau)$ denotes the cumulative reward of a rollout $\tau$ and $\lambda > 0$ controls the exploration–exploitation trade-off. Compared to deterministic MPC that selects a single maximizer, MPPI yields smoother updates by aggregating multiple high-reward rollouts while still biasing toward higher $\mathcal{J}$.
+
+Inspired by MPPI for continuous control, to better leverage MPC in text generation (inherently with discrete actions), we propose to define an \textit{aggregation function} that determines the action sequence by aggregating multiple textual rollouts based on the corresponding cumulative rewards, \ie
+\begin{equation}
+    \boldsymbol{a}^{\text{TMPC}}(s) \leftarrow \mathcal{G}\Big(\{\tau^{(i)}\}_{i=1}^{K},\{\mathcal{J}(\tau^{(i)})\}_{i=1}^{K};s\Big),
+\end{equation}
+where $\{\tau^{(i)}\}_{i=1}^{K}$ are rollouts starting from $s$. Then, TMPC can leverage a sequence of non-contiguous actions, denoted by $\widetilde{\boldsymbol{a}}^{\text{TMPC}}(s)$, to be selected for actual use in subgoal generation. The detailed construction of $\mathcal{G}$ will be specified in Section \ref{sec:general TMPC}.
+
+
+
+Notably, TMPC enjoys two salient features that make it a particularly suitable method for test-time alignment of LLMs: (i) \textit{No additional model learning or fine-tuning needed}: Recall that MPC-like methods typically require a learned dynamics model and a proposal distribution. In TMPC, a dynamics model is already available since in text-generation MDPs, the transition from $s_t$ to $s_{t+1}$ is known and deterministic under an action $a_t$. Moreover, a pre-trained frozen LLM can naturally play the role of a good proposal distribution for generating candidate texts. Hence, TMPC does not require any fine-tuning or model learning. (ii) \textit{Addressing curse of horizon and curse of dimensionality}: TMPC addresses these two fundamental issues by iteratively solving local optimization problems. Compared to guided decoding and full-response iterative refinement, the design of TMPC can achieve a better balance between accurate credit assignment and the size of search space.
+
+\begin{figure*}
+  \centering
+  \includegraphics[width=\linewidth]{TMPC.pdf}
+  \caption{
+    TMPC adapts the MPPI framework for test-time alignment by introducing two core principles. 
+    \textbf{Hindsight Subgoal Identification:} After generating multiple rollouts, the planner's aggregation function $\mathcal{G}$ selects a subset of locally-optimal actions $\widetilde{\boldsymbol{a}}^{\text{TMPC}}$. This executed plan is retrospectively identified as a high-quality \textbf{subgoal} and stored in a buffer $\mathcal{B}$ if its utility meets a threshold $\alpha$. 
+    \textbf{Subgoal-Conditioned Re-Generation:} New rollouts are generated by sampling from and composing subgoals in the buffer $\mathcal{B}$. This allows the planner to iteratively refine the full-horizon plan by building upon the best strategies discovered in previous iterations.
+}
+\label{fig:Plan2Align}
+\end{figure*}
+
+\subsection{Textual Model Predictive Control for General Temporal Progression}
+\label{sec:general TMPC}
+In this section, we extend the TMPC framework to text generation tasks with general temporal progression.
+Inherited from the classic MPC, TMPC described in Section \ref{sec:TO} presumes that there already exists a basic unit as a discrete time step for planning. 
+This requirement indeed holds for various tasks, such as viewing one output sentence as a step in machine translation and text summarization.
+However, there also exist text generation tasks without natural boundaries, such as code generation. 
+Despite this, we present a more general version of TMPC that can achieve approximate trajectory optimization in text generation, \textit{with and without natural boundaries}, by introducing \textit{subgoals}, which can serve as a basic unit for temporal progression. 
+More specifically, subgoals provide directional guidance for the LLM’s generation, enabling efficient exploration toward the optimum.
+TMPC can be substantiated via two core principles, as illustrated in Figure~\ref{fig:Plan2Align}.
+
+
+
+
+
+
+
+
+\paragraph{Principle 1: Hindsight Subgoal Identification.}
+
+To achieve higher-quality generation, we construct meaningful subgoals from continuous text by aggregating prior high-reward actions into a buffer $\mathcal{B}$. This identification occurs \textbf{after} rollouts are evaluated, hence hindsight, the planner discovers what constitutes a successful step based on empirical outcomes. The update rule of the buffer is as follows:
+
+\begin{equation}
+\mathcal{B} \leftarrow 
+    \begin{cases} 
+        \mathcal{B} \cup \widetilde{\boldsymbol{a}}_t^{\text{TMPC}}(s), & \text{if } |\mathcal{B}| < \text{capacity}, \\[6pt]
+        \mathcal{B} \setminus \{a \in \mathcal{B} \mid R(s,a) < R(s,a') \} \cup \{a'\}, & \text{otherwise, for each } a' \in \widetilde{\boldsymbol{a}}_t^{\text{TMPC}}(s).
+    \end{cases}
+\end{equation}
+
+\paragraph{Principle 2: Subgoal-Conditioned Aggregation Function for Re-Generation.}
+
+In TMPC, the non-contiguous actions are generated from the following aggregation function:
+\begin{align}
+     \widetilde{\boldsymbol{a}}^{\text{TMPC}}_t(s) \leftarrow  \mathcal{G}\Big(\{\tau_t^{(i)}\}_{i=1}^{K}, R(\cdot) \mid s, \mathcal{B}\Big) :=  \left\{ a \mid R(s,a) \geq \alpha \text{ and } a \in \{\tau_t^{(i)}\}_{i=1}^{K} \right\}, \label{eq:sub goal compute}
+\end{align}
+where $\{\tau_t^{(i)}\}_{i=1}^{K}$ are the rollouts generated from subgoal-conditioned LLM $\pi(s,\mathcal{B})$.  
+$\widetilde{\boldsymbol{a}}_t^{\text{TMPC}}(s)$ implicitly favors higher-reward outcomes by exploiting subgoals that serve as local optimizers over planning iterations, making it a validated and locally optimal action sequence with high utility.
+
+
+This principle describes how TMPC leverages identified subgoals to refine the entire trajectory over multiple iterations. A single pass of optimization may yield a suboptimal solution. TMPC overcomes this by performing planning iteratively.
+In the subgoal identification step, the planner populates the subgoal buffer $\mathcal{B}$ using the Hindsight Subgoal Identification described above. The re-generation step constructs new rollouts by explicitly leveraging the high-reward goals accumulated in $\mathcal{B}$ as conditioning signals. Rather than exploring from a generic proposal distribution, the planner is encouraged to generate new candidate trajectories by composing and extending the high-quality subgoals from the buffer. 
+The aggregation function $\mathcal{G}$ thus plays a crucial role: it not only selects high-reward action subset $\widetilde{\boldsymbol{a}}^{\text{TMPC}}_t$ for the current iteration but also leverages the subgoal buffer $\mathcal{B}$ to inform the generation of rollouts for the next iteration. This iterative process allows TMPC to escape poor local optima and progressively construct a globally high-utility response by combining the best building blocks (subgoals) discovered across all iterations.
+

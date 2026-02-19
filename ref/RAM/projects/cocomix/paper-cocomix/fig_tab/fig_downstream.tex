@@ -1,0 +1,40 @@
+\begin{figure*}[t!]
+\centering\small
+
+\begin{subfigure}{0.245\textwidth}
+    \includegraphics[width=\textwidth,height=0.65\textwidth]{assets/bar/openwebtex.pdf}
+    \caption{OpenWebText, PPL ($\downarrow$)}
+\end{subfigure}
+\begin{subfigure}{0.245\textwidth}
+    \includegraphics[width=\textwidth,height=0.65\textwidth]{assets/bar/lambada.pdf}
+    \caption{LAMBADA, PPL ($\downarrow$)}
+\end{subfigure}
+\begin{subfigure}{0.245\textwidth}
+    \includegraphics[width=\textwidth,height=0.65\textwidth]{assets/bar/wikitext.pdf}
+    \caption{WikiText-103, PPL ($\downarrow$)}
+\end{subfigure}
+\begin{subfigure}{0.245\textwidth}
+    \includegraphics[width=\textwidth,height=0.65\textwidth]{assets/bar/hellaswag.pdf}
+    \caption{HellaSwag, Acc-n ($\uparrow$)}
+\end{subfigure}
+\begin{subfigure}{0.245\textwidth}
+    \includegraphics[width=\textwidth,height=0.65\textwidth]{assets/bar/piqa.pdf}
+    \caption{PIQA, Acc ($\uparrow$)}
+\end{subfigure}
+\begin{subfigure}{0.245\textwidth}
+    \includegraphics[width=\textwidth,height=0.65\textwidth]{assets/bar/siqa.pdf}
+    \caption{SIQA, Acc ($\uparrow$)}
+\end{subfigure}
+\begin{subfigure}{0.245\textwidth}
+    \includegraphics[width=\textwidth,height=0.65\textwidth]{assets/bar/arc_e.pdf}
+    \caption{Arc-Easy, Acc ($\uparrow$)}
+\end{subfigure}
+\begin{subfigure}{0.245\textwidth}
+    \includegraphics[width=\textwidth,height=0.65\textwidth]{assets/bar/winogrande.pdf}
+    \caption{WinoGrande, Acc ($\uparrow$)}
+\end{subfigure}
+\caption{
+\textbf{\sname vs. NTP performance at different model sizes.} We consider various model sizes, including 69M, 386M, and 1.38B parameters and train on 200B OpenWebText tokens. We evaluate the models on OpenWebText validation perplexity and downstream datasets LAMBADA, WikiText-103, HellaSwag, PIQA, SIQA, Arc-Easy, and WinoGrande.
+}
+\label{fig:downstream}
+\end{figure*}

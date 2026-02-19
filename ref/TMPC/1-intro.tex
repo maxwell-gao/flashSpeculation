@@ -1,0 +1,35 @@
+\section{Introduction}
+\label{sec:intro}
+
+The emergence of Large Language Models (LLMs), such as the GPT series~\citep{achiam2023gpt,brown2020language}, LLaMAs~\citep{touvron2023llama1,touvron2023llama}, and Gemma~\citep{team2024gemma}, has demonstrated remarkable efficacy in a wide range of NLP tasks \citep{hendrycks2021measuring,srivastava2023beyond,stiennon2020learning,yu2024kola,zhong-etal-2024-agieval}. While these models exhibit strong performance out of the box, aligning their outputs to human preferences remains critical, especially for smaller-scale LLMs. For instance, in machine translation~\citep{alves2024tower}, smaller LLMs (\eg under 10B parameters) frequently suffer from omissions and semantic drift~\citep{wu-etal-2024-word}. 
+Thus, aligning LLM outputs to preferences remains an essential yet challenging problem.  
+
+Training-time approaches such as Reinforcement Learning with Human Feedback (RLHF)~\citep{ouyang2022training} and Direct Preference Optimization (DPO)~\citep{rafailov2023direct} have achieved strong results in aligning preferences. However, these methods are resource-intensive and require costly retraining whenever preferences or tasks change. This has spurred interest in \textit{test-time alignment}, where outputs are adapted without updating model parameters, using strategies such as prompting~\citep{lin2024unlocking}, guided decoding~\citep{khanov2024args,re-control,li2024rain,wang-etal-2024-inferaligner,GenARM}, or iterative refinement~\citep{tpo}.  
+
+
+\begin{figure*}[!t]
+  \centering
+  \includegraphics[width=\linewidth]{Concept.pdf}
+  \caption{Textual Model Predictive Control (TMPC) balances the curse of horizon in guided decoding against the curse of dimensionality in naive iterative refinement. It employs Hindsight Subgoal Identification to dynamically discover promising states from  rollouts and Subgoal-Conditioned Re-Generation to guide the search from these discovered subgoals, ensuring a stable alignment.}
+\label{fig:concept}
+\end{figure*}
+
+We address test-time alignment through the lens of sequential decision making, where the generation process is framed as a sequence of actions. This perspective reveals two fundamental challenges, illustrated in Figure~\ref{fig:concept} . When actions are defined at the token level (\eg guided decoding), methods suffer from the \textit{curse of horizon}~\citep{horizon}; credit assignment becomes unreliable over long trajectories, making alignment brittle. In contrast, when actions are at the response level (\eg iterative refinement), they face the \textit{curse of dimensionality}; each step involves rewriting an entire sequence, making the search for improvements in a vast action space intractable and unstable.
+
+To address these challenges, we propose Textual Model Predictive Control (TMPC), a novel test-time alignment framework inspired by Model Predictive Control (MPC)~\citep{Camacho2007,kouvaritakis2016model}. 
+While powerful, standard MPC assumes the problem can be decomposed into predefined, hard segment boundaries, a condition that rarely holds for complex text generation.
+TMPC is uniquely adapted to overcome this limitation through two principles:
+\begin{itemize}
+\item \textbf{Hindsight Subgoal Identification:} This principle allows TMPC to discover meaningful planning steps. After generating candidate responses, TMPC retrospectively analyzes them to identify high-quality intermediate points as \textit{subgoals}. A subgoal can be a concrete unit, such as a sentence in translation, or an abstract one, such as resolving a single failed test case in program synthesis, 
+successfully addressing the problem of lacking natural boundaries.
+This hindsight-driven discovery effectively shortens the planning horizon for diverse tasks.
+\item \textbf{Subgoal-Conditioned Re-Generation:} This principle ensures stable, cumulative progress. The subgoals identified via hindsight are stored in a buffer and used to guide subsequent planning iterations. By conditioning the next generation on these subgoals, TMPC ensures that subsequent generation builds upon these validated waypoints.
+\end{itemize}
+We evaluate TMPC on three challenging tasks with different boundary characteristics: WMT'24 discourse-level machine translation, the HH-RLHF long responses subset, and MBPP program synthesis. Experiments with LLaMA-3.1-8B-Instruct show that TMPC consistently improves alignment, highlighting the generality of our approach.
+
+Our contributions are summarized as follows:
+\begin{itemize}
+\item We propose a novel formulation of test-time alignment as a sequential decision-making problem. This perspective unifies existing approaches and reveals a fundamental trade-off that governs their limitations: the \textit{curse of horizon} in guided decoding methods and the \textit{curse of dimensionality} in iterative refinement methods.
+\item We introduce Textual Model Predictive Control (TMPC), a framework that adapts concepts from control theory to language generation. TMPC is operationalized through two principles: \textit{Hindsight Subgoal Identification} to discover subgoals from rollouts, and \textit{Subgoal-Conditioned Re-Generation} to iteratively improve generation by building on subgoals.
+\item We empirically demonstrate the effectiveness of TMPC. TMPC achieves substantial improvements across three distinct domains including long-form response generation, discourse-level machine translation, and program synthesis, validating its ability to discover and leverage task-specific subgoals.
+\end{itemize}

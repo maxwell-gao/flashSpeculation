@@ -1,0 +1,25 @@
+\begin{figure*}[t]
+\centering\small
+\begin{subfigure}{0.3275\textwidth}
+    \includegraphics[width=\textwidth,height=0.75\textwidth]{assets/baseline/weak_to_strong_ppl.pdf}
+    \caption{Weak-to-strong: Avg. Perplexity}
+    \label{fig:weak_to_strong_perp}
+\end{subfigure}
+\hfill
+\begin{subfigure}{0.3275\textwidth}
+    \includegraphics[width=\textwidth,height=0.75\textwidth]{assets/baseline/weak_to_strong_acc.pdf}
+    \caption{Weak-to-strong: Avg. Accuracy}
+    \label{fig:weak_to_strong}
+\end{subfigure}
+\hfill
+\begin{subfigure}{0.3275\textwidth}
+    \includegraphics[width=\textwidth,height=0.75\textwidth]{assets/baseline/openwebmath.pdf}
+    \caption{Distribution shift (OpenWebMath)}
+    \label{fig:dist_shift}
+\end{subfigure}
+\caption{
+\textbf{\sname vs. Knowledge Distillation (KD).} 
+For our weak-to-strong supervision setup, we train a 386M model where the teacher of KD (or concept extraction for \sname) is a 124M-sized model: we report (a) average perplexity over OpenWebText, LAMABADA, and WikiText and (b) average accuracy over HellaSwag, PIQA, SIQA, Arc-Easy, and WiniGrande dataset. For (c) a distribution shift setup, we train all methods on OpenWebMath, a math specific pretraining corpus.
+}
+\label{fig:baseline}
+\end{figure*}

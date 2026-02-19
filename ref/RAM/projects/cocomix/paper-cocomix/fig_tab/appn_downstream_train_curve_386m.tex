@@ -1,0 +1,41 @@
+\begin{figure*}[t]
+\centering\small
+
+\begin{subfigure}{0.245\textwidth}
+    \includegraphics[width=\textwidth,height=0.75\textwidth]{assets/learning_curve/386m/openwebtext.pdf}
+    \caption{OpenWebText, PPL ($\downarrow$)}
+\end{subfigure}
+\begin{subfigure}{0.245\textwidth}
+    \includegraphics[width=\textwidth,height=0.75\textwidth]{assets/learning_curve/386m/lambada.pdf}
+    \caption{LAMBADA, PPL ($\downarrow$)}
+\end{subfigure}
+\begin{subfigure}{0.245\textwidth}
+    \includegraphics[width=\textwidth,height=0.75\textwidth]{assets/learning_curve/386m/wikitext.pdf}
+    \caption{WikiText-103, PPL ($\downarrow$)}
+\end{subfigure}
+\begin{subfigure}{0.245\textwidth}
+    \includegraphics[width=\textwidth,height=0.75\textwidth]{assets/learning_curve/386m/hellaswag.pdf}
+    \caption{HellaSwag, Acc-n ($\uparrow$)}
+\end{subfigure}
+\begin{subfigure}{0.245\textwidth}
+    \includegraphics[width=\textwidth,height=0.75\textwidth]{assets/learning_curve/386m/piqa.pdf}
+    \caption{PIQA, Acc ($\uparrow$)}
+\end{subfigure}
+\begin{subfigure}{0.245\textwidth}
+    \includegraphics[width=\textwidth,height=0.75\textwidth]{assets/learning_curve/386m/siqa.pdf}
+    \caption{SIQA, Acc ($\uparrow$)}
+\end{subfigure}
+\begin{subfigure}{0.245\textwidth}
+    \includegraphics[width=\textwidth,height=0.75\textwidth]{assets/learning_curve/386m/arc_e.pdf}
+    \caption{Arc-Easy, Acc ($\uparrow$)}
+\end{subfigure}
+\begin{subfigure}{0.245\textwidth}
+    \includegraphics[width=\textwidth,height=0.75\textwidth]{assets/learning_curve/386m/winogrande.pdf}
+    \caption{WinoGrande, Acc ($\uparrow$)}
+\end{subfigure}
+\caption{
+\textbf{\sname vs. NTP performance at different training checkpoints on 368M parameter model.} Each model is trained on the 200B tokens sampled from the OpenWebText dataset. The plot shows the result of (a) OpenWebText, (b) LAMBADA, (c) WikiText-103, (d) HellaSwag, (e) PIQA, (f) SIQA, (g) Arc-Easy, and (h) WinoGrande datasets. We use the concepts extracted from a 124M-sized model for training \sname.
+}
+
+\label{fig:downstream_curve_386m}
+\end{figure*}

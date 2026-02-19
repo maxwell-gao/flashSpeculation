@@ -1,0 +1,37 @@
+\begin{figure*}[t]
+\centering\small
+\begin{subfigure}{0.3275\textwidth}
+    \includegraphics[width=\textwidth,height=0.75\textwidth]{assets/analysis/attribution_effect.pdf}
+    \caption{Effectiveness of the attribution score}
+    \label{fig:attribution_effect}
+\end{subfigure}
+\begin{subfigure}{0.3275\textwidth}
+    \includegraphics[width=\textwidth,height=0.75\textwidth]{assets/analysis/concept_vs_direct_hidden.pdf}
+    \caption{Concept vs. direct hidden state}
+    \label{fig:sae_vs_direct_hidden}
+\end{subfigure}
+\begin{subfigure}{0.3275\textwidth}
+    \includegraphics[width=\textwidth,height=0.75\textwidth]{assets/analysis/histogram.pdf}
+    \caption{Compression layer's weight analysis}
+    \label{fig:compress_weight}
+\end{subfigure}
+\begin{subfigure}{0.3275\textwidth}
+    \includegraphics[width=\textwidth,height=0.75\textwidth]{assets/analysis/component.pdf}
+    \caption{Component analysis}
+    \label{fig:component}
+\end{subfigure}
+\begin{subfigure}{0.3275\textwidth}
+    \includegraphics[width=\textwidth,height=0.75\textwidth]{assets/analysis/concept_condition.pdf}
+    \caption{Design choice for concept condition}
+    \label{fig:concept_condition}
+\end{subfigure}
+\begin{subfigure}{0.3275\textwidth}
+    \includegraphics[width=\textwidth,height=0.75\textwidth]{assets/analysis/pause.pdf}
+    \caption{Comparison with Pause Token}
+    \label{fig:pause_token}
+\end{subfigure}
+\caption{
+Analysis of \sname: (a) Effectiveness of the attribution score for selecting concepts. (b) Comparison between concept prediction and direct hidden state prediction (i.e., predicting the hidden state with continuous loss rather than discretizing the hidden state with SAE). (c) The sparsity in the compression weight. (d) Component analysis by analyzing the contribution of concept prediction and mixing. (e) Design choices for concept conditioning by comparing adding the concept vector to the original hidden state and mixing (interleaving the concept vector with token hidden representation). (f) Comparison between \sname and the Pause token (i.e., adding learnable tokens). We use a 69M transformer and train on 20B tokens from the OpenWebText dataset.
+}
+\label{fig:analysis}
+\end{figure*}

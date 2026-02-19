@@ -1,0 +1,25 @@
+\begin{figure*}[t]
+\centering\small
+
+\begin{subfigure}[b]{0.3275\textwidth}
+    \centering
+    \includegraphics[width=\textwidth,height=0.75\textwidth]{assets/learning_curve/1b/openwebtext.pdf}
+    \caption{Validation perplexity}
+\end{subfigure}
+\hfill
+\begin{subfigure}[b]{0.3275\textwidth}
+    \centering
+    \includegraphics[width=\textwidth,height=0.75\textwidth]{assets/learning_curve/1b/average_ppl.pdf}
+    \caption{Average downstream task perplexity}
+\end{subfigure}
+\hfill
+\begin{subfigure}[b]{0.3275\textwidth}
+    \centering
+    \includegraphics[width=\textwidth,height=0.75\textwidth]{assets/learning_curve/1b/average_acc.pdf}
+    \caption{Average downstream task accuracy}
+\end{subfigure}
+\caption{
+\textbf{\sname vs. NTP performance at different training checkpoints.} Each model contains a total of 1.38B parameters. Each model is trained on the OpenWebText dataset. For \sname, the concepts are extracted from a 124M-sized model (10$\times$ smaller than the base model). The plots show improvements in: (a) validation perplexity, (b) average perplexity on LAMBADA, WikiText-103, and (c) average accuracy on HellaSwag, PIQA, SIQA, Arc-Easy, and WinoGrande.
+}
+\label{fig:main_curve}
+\end{figure*}

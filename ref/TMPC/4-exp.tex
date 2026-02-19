@@ -1,0 +1,187 @@
+\section{Experiments}
+\label{sec:experiments}
+
+We evaluate TMPC on three tasks with different structural properties to ensure its generality: 
+\textbf{(1) Paragraph-Level Machine Translation} represents a a task \textit{with natural boundaries}. The generated translation can be precisely aligned with the source text, allowing for sentence-level segments that are structurally anchored and easy to evaluate.
+\textbf{(2) Long-Form Response Generation} represents a task \textit{without natural boundaries}. Without a source for direct alignment, responses are segmented by content into coherent chunks (\eg groups of sentences), each preserving semantic integrity.
+\textbf{(3) Program Synthesis} challenges conventional segmentation, representing a task where structural boundaries (\eg Abstract Syntax Tree nodes) are semantically too fragmented for effective planning. Our framework addresses this by defining a segment abstractly through a functional milestone: the successful resolution of a single unit test.
+
+\subsection{Preference Dataset and Reward Model}
+\noindent\textbf{Paragraph-Level MT Dataset.} 
+To construct a suitable preference dataset for long-text MT, we use the WMT'24 Discourse-Level Literary Translation benchmark \citep{wang2024findings} for our experiments. 
+The available language pairs include: Chinese {\textrightarrow} English, Chinese {\textrightarrow} German, and Chinese {\textrightarrow} Russian.
+To fit within LLM context windows, each instance is segmented into up to 1024 tokens using GPT-4’s tokenizer, ensuring paragraph-level MT remains within model limits.
+
+The preference dataset is derived from the training set of the dataset. Each instance is segmented into paragraphs of up to 1,024 tokens. From each translation direction, we sample 2,000 paragraphs, resulting in a total of 6,000 paragraphs for constructing the preference dataset. Translation outputs are generated using LLaMA-3.1-8B-Instruct, Gemma-2-9B, and GPT-4o. The translations are then evaluated with MetricX-24-XL \citep{juraska-etal-2024-metricx} under the reference-free evaluation mode, where no reference translation is supplied as input. Following the procedure in CPO \cite{xu2024contrastive}, we assign the translation with the highest score as the \texttt{chosen} response, the one with the lowest score as the \texttt{rejected} response, and discard the middle-scoring translation. The resulting reward model achieves 88.53\% validation accuracy. Further details on the formation of preference data can be found in Appendix~\ref{sec:preference}, and detail of training can be found in Appendix~\ref{sec:training}.
+
+\noindent\textbf{Long-Form Response Dataset.} 
+We use the \texttt{Dahoas/full-hh-rlhf}\footnote{\url{https://huggingface.co/datasets/Dahoas/full-hh-rlhf}} dataset, which is widely adopted for LLM alignment. This dataset is designed to improve AI assistant behavior in terms of helpfulness and harmlessness. Each sample consists of a prompt and two responses, with one labeled as preferred based on human judgments.
+Since the response lengths in the dataset vary significantly, we select samples based on the length of the \texttt{chosen} responses. Specifically, we construct the training set using the top 6K samples with the longest \texttt{chosen} responses from training set, and using the top 1024 longest \texttt{chosen} responses from the testing set to construct test set. We use the 6k size training set to train a reward model, which achieves a validation accuracy of 83.78\%. 
+
+\noindent\textbf{Program Synthesis Dataset.}
+We evaluate performance on the official testing set of the Mostly Basic Python Programming (MBPP) dataset~\citep{mbpp}, which comprises 500 problems (Task IDs 11-510). As discussed, code generation offers a direct reward signal. The resulting pass rate serves as the direct reward signal, eliminating the need for a separate reward model.
+
+\subsection{Evaluation Metrics}
+\noindent\textbf{Paragraph-Level MT.}
+We use SEGALE~\citep{wang2025segale}, a framework that extends existing metrics to long-text translation. Following CPO~\citep{xu2024contrastive}, we apply COMET\footnote{\texttt{Unbabel/wmt22-comet-da}} within the SEGALE framework, thereby extending COMET to the paragraph level. 
+To better capture contextual quality, rather than feeding only source, translation, and reference sentences into COMET, we follow \citet{vernikos-etal-2022-embarrassingly} and incorporate three concatenated sentences as inputs. We refer to this context-augmented version as \textbf{$\text{SEGALE}_\text{comet}$}.
+SEGALE further reports the \textbf{Null Alignment (NA) Ratio}, the proportion of source or translation sentences that fail to align, often due to over- or under-translation. 
+
+\noindent\textbf{Long-Form Responses.}
+We evaluate response quality using two complementary metrics:  
+\textbf{Average Reward} measures the mean score assigned by the reward model. This reflects the degree of alignment with helpfulness and harmlessness preferences. 
+We introduce this metric to directly test whether TMPC achieves stronger alignment when the reward model and evaluation are consistent.
+To avoid the potential for “cheating” in reward-based scoring, we also report \textbf{Win Rate}, which captures the proportion of pairwise comparisons in which a model’s response is preferred over a reference response by GPT-4~\citep{openai2024gpt4technicalreport}. Following the ARGS evaluation protocol~\citep{khanov2024args}, GPT-4 is prompted to assess overall response quality, considering helpfulness, harmlessness, relevance, accuracy, depth, creativity, and detail. The full evaluation prompt is provided in Appendix~\ref{sec:gptevalprompt}.  
+
+\noindent\textbf{Program Synthesis.}
+Following standard practice, we directly report the \textbf{Pass Rate}, defined as the proportion of problems for which all associated test cases are passed.
+
+\subsection{Baselines}
+We evaluate all training-time alignment methods on LLaMA-3.1-8B-Instruct and also adopt it as the backbone for all test-time alignment methods, including TMPC. 
+Implementation details of TMPC, including parameters and prompt design, are provided in Appendix~\ref{sec:imple:TMPC}.  
+
+\noindent\textbf{Test-Time Alignment Methods.}
+We compare TMPC against the following representative approaches. 
+(1) \textbf{ARGS}~\citep{khanov2024args}, a token-level decoding method that incorporates reward model guidance during inference. 
+(2) \textbf{RAIN}~\citep{li2024rain}, which leverages tree-structured self-evaluation without relying on an external reward model. 
+(3) \textbf{RE-Control}~\citep{re-control}, which modifies internal representations by training a value function on hidden states with the Bellman equation and applying gradient-based optimization to align preferences. 
+(4) \textbf{GenARM}~\citep{GenARM}, an approach that trains an autoregressive reward model to assign token-level rewards conditioned on past tokens, and combines these reward scores with next-token probabilities during inference. 
+(5) \textbf{TPO}~\cite{tpo}, which translates reward signals into textual critiques and uses an LLM to provide feedback for iterative refinement.
+(6) \textbf{Best-of-N Sampling}, a widely adopted baseline that generates multiple candidates and selects the highest-scoring one. 
+
+To ensure fair comparison, ARGS and RE-Control are equipped with the same reward model as TMPC. RAIN requires neither a reward model nor additional training data. 
+GenARM trains its own autoregressive reward model using the same training data employed for TMPC's reward model. 
+For TPO, we set the number of iterations to 4 to ensure it generates no fewer responses than TMPC, although this involves more LLM calls for textual losses and gradients. Further implementation details for all baselines, including a breakdown of TPO's LLM calls, are provided in Appendix~\ref{sec:test-time imp}.
+
+\noindent\textbf{Training-Time Alignment Methods.}
+We further compare TMPC with training-time alignment methods. We include supervised fine-tuning (SFT) on the same preference dataset, which often serves as a strong baseline in translation. In addition, we evaluate SimPO~\citep{meng2024simpo} and DPO~\citep{rafailov2023direct}, which represent recent and mainstream approaches to preference-based training-time alignment, respectively. Details of training procedures are reported in Appendix~\ref{sec:training}.  
+
+\noindent\textbf{Task-Specific Settings.}
+For paragraph-level MT, we include two high-performance models for additional context: \textbf{GPT-4o}, which serves as a strong upper bound despite not being specialized for translation~\citep{shahriar2024putting}, and \textbf{Qwen-2.5-14B}, a competitive open-source alternative for Chinese language tasks. For program synthesis, our comparison focuses on Best-of-N sampling and TPO. Token-level guided decoding methods are excluded as functional correctness is a holistic property of the entire code sequence, making them ill-suited for this task.
+
+\subsection{Quantitative Results}
+\noindent\textbf{Results on Paragraph-Level MT.} 
+As shown in Table~\ref{tab:main}, TMPC consistently outperforms all test-time alignment baselines. It notably surpasses a strong Best-of-60 baseline with a fraction of the computational budget, underscoring the efficiency of predictive planning over naive sampling. For the zh→en direction, TMPC's performance even exceeds GPT-4o, highlighting its effectiveness on complex alignment tasks. TMPC's success stems from mitigating the failure modes of other paradigms. For instance, TPO exhibits inconsistent performance; while competitive in zh→ru, it is prone to factual inconsistencies in zh→en and zh→de, reflected in high NA Ratios.  Similarly, while RE-Control is more stable than myopic methods like ARGS and RAIN, it still underperforms and lacks a strategic refinement mechanism. TMPC inherits the stability of response-level refinement while avoiding the compounding errors of token-level guidance, striking a more effective balance.
+
+
+
+
+\begin{table*}[t]
+\centering
+\begin{center}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{lccccccccc}
+\toprule
+\hline
+\addlinespace
+ & & \multicolumn{2}{c}{zh $\rightarrow$ en} & \multicolumn{2}{c}{zh $\rightarrow$ ru}  & \multicolumn{2}{c}{zh $\rightarrow$ de} \\
+\cmidrule(lr){3-4} \cmidrule(lr){5-6} \cmidrule(lr){7-8} 
+\multirow{-2}{*}{Methods}&\multirow{-2}{*}{\small Test-Time} & {\small  $\text{SEGALE}_\text{comet}$~$\uparrow$} & {\small NA Ratio~$\downarrow$} &  {\small $\text{SEGALE}_\text{comet}$~$\uparrow$} & {\small NA Ratio~$\downarrow$} & {\small $\text{SEGALE}_\text{comet}$~$\uparrow$}  & {\small NA Ratio~$\downarrow$}\\
+\addlinespace
+\midrule
+\hline
+\addlinespace
+GPT-4o$_{\text{~2024-08-06}}$ & - & 94.58 & 0.10 & 93.74 & 0.00 & 94.54 & 0.00 \\
+Qwen-2.5 (14B) & - & 94.43 & 0.18 & 90.47 & 3.08 & 92.98 & 1.24 \\
+Llama-3.1 (8B) & $\times$& 84.36 & 10.47 & 86.28  & 4.19 & 88.97 & 4.43 \\
+\addlinespace
+\hline
+\addlinespace
+\cellcolor[HTML]{EFEFEF}Llama-3.1$_{\text{SFT}}$& \cellcolor[HTML]{EFEFEF}$\times$ & \cellcolor[HTML]{EFEFEF}93.54 & \cellcolor[HTML]{EFEFEF}0.34 & \cellcolor[HTML]{EFEFEF}89.11 & \cellcolor[HTML]{EFEFEF}1.92 & \cellcolor[HTML]{EFEFEF}93.47 & \cellcolor[HTML]{EFEFEF}0.19 \\
+\cellcolor[HTML]{EFEFEF}Llama-3.1$_{\text{SimPO}}$& \cellcolor[HTML]{EFEFEF}$\times$ &\cellcolor[HTML]{EFEFEF}91.74 &\cellcolor[HTML]{EFEFEF}1.66 & \cellcolor[HTML]{EFEFEF}84.56 & \cellcolor[HTML]{EFEFEF}2.53  & \cellcolor[HTML]{EFEFEF}93.40 & \cellcolor[HTML]{EFEFEF}0.00\\
+\cellcolor[HTML]{EFEFEF}Llama-3.1$_{\text{DPO}}$& \cellcolor[HTML]{EFEFEF}$\times$ & \cellcolor[HTML]{EFEFEF}90.23 & \cellcolor[HTML]{EFEFEF}1.33 & \cellcolor[HTML]{EFEFEF}82.15 & \cellcolor[HTML]{EFEFEF}6.62 & \cellcolor[HTML]{EFEFEF}93.48 & \cellcolor[HTML]{EFEFEF}0.00 \\
+\addlinespace
+\hline
+\addlinespace
+Llama-3.1$_{\text{ARGS}}$& \checkmark & 63.99 & 31.53 & 43.03 & 32.96 & 51.97 & 40.01\\
+Llama-3.1$_{\text{RAIN}}$& \checkmark & 58.52 & 37.18 & 66.29 & 27.79 & 67.43 & 27.15 \\
+Llama-3.1$_{\text{RE-Control}}$& \checkmark & 86.39 & 7.06 & 84.97 & 5.83 & 87.16 & \underline{5.96} \\
+Llama-3.1$_{\text{GenARM}}$& \checkmark & 61.18 & 34.73 & 55.67 & 39.52 & 60.96 & 34.58 \\
+Llama-3.1$_{\text{TPO}}$& \checkmark & 88.81 & 5.63 & \textbf{92.63} & \textbf{0.67} & \underline{87.67} & 6.79 \\
+Llama-3.1$_{\text{Best-of-60}}$& \checkmark & \underline{90.97} & \underline{3.58} & 84.86 & 3.89 & 82.74 & 10.78\\
+\cellcolor[HTML]{FFFFC7}Llama-3.1$_{\text{TMPC}}$ &\cellcolor[HTML]{FFFFC7} \checkmark & \cellcolor[HTML]{FFFFC7}\textbf{94.62} & \cellcolor[HTML]{FFFFC7}\textbf{0.00}  & \cellcolor[HTML]{FFFFC7}\underline{91.53} & \cellcolor[HTML]{FFFFC7}\underline{1.19} & \cellcolor[HTML]{FFFFC7}\textbf{91.73} & \cellcolor[HTML]{FFFFC7}\textbf{2.40} \\
+\addlinespace
+\bottomrule
+\hline
+\end{tabular}
+}
+\end{center}
+\caption{Results on the WMT'24 literary translation shared task (\texttt{zh}$\rightarrow$\texttt{xx} directions). Results are grouped into SoTA and base models, training-time alignment methods, and test-time alignment methods. For test-time methods, the best-performing results are \textbf{bold}, and the second-best are \underline{\textbf{underlined}}.  Proposed methods are \colorbox{lightyellow}{highlighted}.}
+\label{tab:main}
+\end{table*}
+
+
+\begin{figure}[h]
+\centering
+\begin{subfigure}[t]{0.58\textwidth}
+\centering
+\includegraphics[width=\linewidth]{figures/avg_reward_methods.pdf}
+\end{subfigure}\hfill
+\begin{subfigure}[t]{0.38\textwidth}
+\centering
+\includegraphics[width=\linewidth]{figures/win_rate_short.png}
+\end{subfigure}
+\caption{Results on the long-form responses.
+\textbf{Left}: Average reward across the base model, training-time baselines, and test-time alignment methods. 
+\textbf{Right}: GPT-4 win rate of TMPC against DPO and Best-of-20.
+All methods use LLaMA-3.1-8B-Instruct as the backbone for fair comparison.}
+\label{fig:win_rate}
+\end{figure}
+
+\noindent\textbf{Results on Long-Form Responses.} 
+We present the results in Figure~\ref{fig:win_rate}. 
+TMPC outperforms the strongest training-time (DPO) and test-time (Best-of-20) baselines in head-to-head comparisons judged by GPT-4. The efficiency of TMPC is particularly notable: TMPC requires only 3 iterations with 3 rollouts each, in addition to the initial LLM output, totaling 10 generations. In contrast, Best-of-20 produces twice as many outputs but still underperforms, showing that its advantage stems from TMPC rather than sheer sampling volume. 
+Furthermore, TMPC provides a more stable alignment path than other test-time paradigms\footnote{TPO results are reported at iteration=2 in HH-RLHF dataset, as iteration=4 led to out-of-memory errors.}. TMPC bypasses fragile textual critiques and mitigates error accumulation by iteratively planning from a buffer of validated subgoals.
+
+
+
+\begin{wrapfigure}{r}{0.35\textwidth} %
+    \centering
+    \includegraphics[width=\linewidth]{figures/passrate_methods.pdf}
+    \caption{The pass rates on MBPP. }
+    \label{fig:code_gen_results}
+\end{wrapfigure}
+
+
+\noindent\textbf{Results on Program Synthesis.} 
+As shown in Figure~\ref{fig:code_gen_results}, TMPC achieves a 61\% pass rate, outperforming all baselines. This result highlights the limitations of unstructured approaches. Best-of-N sampling, even with a large budget ($N=35$), is constrained by the model's initial capabilities and relies on sampling chance. 
+TPO shows only marginal gains with more iterations, reaching a pass rate of just 48\% after 4 iterations.
+In contrast, TMPC systematically explores solution pathways by building upon partially correctness. 
+Instead of merely hoping for a correct answer, TMPC maximizes the possibility of constructing one, allowing it to completely solve problems.
+
+\begin{figure}[h]
+\centering
+    \begin{subfigure}[t]{0.25\textwidth}
+        \centering
+        \includegraphics[width=\linewidth]{figures/hyper_iter3.pdf}
+        \caption{Hyperparameter effect}
+        \label{fig:longform_grouped}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[t]{0.25\textwidth}
+        \centering
+        \includegraphics[width=\linewidth]{figures/rm_iter3.pdf}
+        \caption{Reward model impact}
+        \label{fig:longform_grouped_2}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[t]{0.45\textwidth}
+        \centering
+        \includegraphics[width=\linewidth]{figures/translation_grouped_iclr.pdf}
+        \caption{Translation zh$\rightarrow$en, $\text{SEGALE}_\text{comet}$.}
+        \label{fig:translation_grouped}
+    \end{subfigure}
+\caption{
+    Robustness and sensitivity analysis of TMPC. 
+    \textbf{(a)} Robustness to hyperparameter choices, with performance varying by less than 0.1 points across different buffer and segment sizes. 
+    \textbf{(b)} Robustness to imperfections in the reward signal, including both injected noise and lower accuracy. 
+    \textbf{(c)} SEGALE\textsubscript{comet} scores across iterations on zh→en translation. The standard TMPC steadily improves with more iterations, while a degraded version mimicking naive iterative refinement stagnates.
+}
+\label{fig:iter_trends}
+\end{figure}
+
+\subsection{Robustness and Sensitivity Analysis}
+\label{sec:robustness}
+Figure~\ref{fig:iter_trends} illustrates TMPC's robustness and sensitivity on long-form responses (full numerical results are in Appendix~\ref{sec:robustness}). As shown in Figure~\ref{fig:longform_grouped}, the framework is insensitive to its core hyperparameter choices; variations in buffer and segment size alter the average reward by less than 0.1 points, with performance consistently remaining superior to other test-time alignment methods. Figure~\ref{fig:longform_grouped_2} further tests the framework's robustness to reward model quality. Using a weaker reward model has a limited negative impact despite disturbing the optimization direction, while injected reward noise has a much smaller effect. We employ GRM~\citep{grm} as the weaker RM, using the \texttt{Ray2333/GRM\_Llama3.1\_8B\_rewardmodel-ft} checkpoint, which achieves 77.54\% validation accuracy. This resilience to noise stems from TMPC's subgoal buffer, which progressively filters out low-quality subgoals.
+For paragraph-level MT, we analyze the zh$\rightarrow$en direction to reduce confounds from the base model’s familiarity with specific languages. Figure~\ref{fig:translation_grouped} reports iteration-wise performance to illustrate the trend of improvement over time 
+The results show that TMPC performance steadily improves up to three iteration, after which extra iterations lead to a slight decline. In contrast, reducing TMPC to naive iterative refinement (\texttt{buf=1}, \texttt{seg=1}) yields no initial gains and fails to improve with more iterations, highlighting the importance of TMPC’s two principles.
